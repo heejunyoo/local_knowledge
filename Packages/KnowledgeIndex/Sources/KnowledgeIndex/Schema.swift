@@ -2,7 +2,9 @@ import Foundation
 
 /// Schema version and migrations for knowledge.db.
 public enum IndexSchema {
-    public static let currentVersion = 1
+    /// v2: connected sources + knowledge units/chunks for corpus/RAG.
+    /// v3: local hash embeddings for hybrid retrieval (no external model).
+    public static let currentVersion = 3
 
     public static let migrationV1 = """
     CREATE TABLE IF NOT EXISTS schema_version (
@@ -86,14 +88,68 @@ public enum IndexSchema {
 
     CREATE INDEX IF NOT EXISTS idx_events_meeting ON pipeline_events(meeting_id);
 
-    -- FTS over search documents. Meeting body SoT remains vault markdown (S06).
-    -- content is DERIVED index text only (title + summary one-liner + action texts).
     CREATE VIRTUAL TABLE IF NOT EXISTS fts_docs USING fts5(
       doc_id UNINDEXED,
       source_type UNINDEXED,
       title,
       body,
       tokenize = 'unicode61'
+    );
+    """
+
+    public static let migrationV2 = """
+    CREATE TABLE IF NOT EXISTS connected_source (
+      id TEXT PRIMARY KEY NOT NULL,
+      source_type TEXT NOT NULL,
+      root_path TEXT,
+      label TEXT,
+      enabled INTEGER NOT NULL DEFAULT 1,
+      last_sync_at TEXT,
+      last_error TEXT,
+      unit_count INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_connected_type ON connected_source(source_type);
+
+    CREATE TABLE IF NOT EXISTS knowledge_unit (
+      unit_id TEXT PRIMARY KEY NOT NULL,
+      source_type TEXT NOT NULL,
+      title TEXT,
+      scope TEXT NOT NULL DEFAULT 'personal',
+      sot_kind TEXT NOT NULL,
+      sot_ref TEXT NOT NULL,
+      content_hash TEXT,
+      meeting_status TEXT,
+      in_corpus INTEGER NOT NULL DEFAULT 1,
+      rag_eligible INTEGER NOT NULL DEFAULT 1,
+      updated_at TEXT NOT NULL
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_unit_type ON knowledge_unit(source_type);
+    CREATE INDEX IF NOT EXISTS idx_unit_rag ON knowledge_unit(rag_eligible, in_corpus);
+
+    CREATE TABLE IF NOT EXISTS knowledge_chunk (
+      chunk_id TEXT PRIMARY KEY NOT NULL,
+      unit_id TEXT NOT NULL,
+      ordinal INTEGER NOT NULL,
+      text TEXT NOT NULL,
+      t_start_ms INTEGER,
+      t_end_ms INTEGER,
+      content_hash TEXT,
+      FOREIGN KEY(unit_id) REFERENCES knowledge_unit(unit_id) ON DELETE CASCADE
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_chunk_unit ON knowledge_chunk(unit_id);
+    """
+
+    public static let migrationV3 = """
+    CREATE TABLE IF NOT EXISTS chunk_vector (
+      chunk_id TEXT PRIMARY KEY NOT NULL,
+      dim INTEGER NOT NULL,
+      embedding BLOB NOT NULL,
+      FOREIGN KEY(chunk_id) REFERENCES knowledge_chunk(chunk_id) ON DELETE CASCADE
     );
     """
 }

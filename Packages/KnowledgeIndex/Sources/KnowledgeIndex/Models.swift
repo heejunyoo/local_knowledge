@@ -129,4 +129,183 @@ public struct FTSHit: Equatable, Sendable {
     public var sourceType: String
     public var title: String?
     public var snippet: String?
+
+    public init(docId: String, sourceType: String, title: String?, snippet: String?) {
+        self.docId = docId
+        self.sourceType = sourceType
+        self.title = title
+        self.snippet = snippet
+    }
+}
+
+/// Derived search mirror for Apple Notes (SoT remains Notes.app).
+public struct NoteMirrorRecord: Equatable, Sendable {
+    public var notesId: String
+    public var folder: String?
+    public var title: String?
+    public var bodyText: String?
+    public var contentHash: String?
+    public var bodyStatus: String
+    public var mirrorNotSot: Bool
+    public var updatedAt: String
+
+    public init(
+        notesId: String,
+        folder: String? = nil,
+        title: String? = nil,
+        bodyText: String? = nil,
+        contentHash: String? = nil,
+        bodyStatus: String = "ok",
+        mirrorNotSot: Bool = true,
+        updatedAt: String = ISO8601DateFormatter().string(from: Date())
+    ) {
+        self.notesId = notesId
+        self.folder = folder
+        self.title = title
+        self.bodyText = bodyText
+        self.contentHash = contentHash
+        self.bodyStatus = bodyStatus
+        self.mirrorNotSot = mirrorNotSot
+        self.updatedAt = updatedAt
+    }
+}
+
+/// Pointer to an external knowledge unit (notes / obsidian / file).
+public struct SourcePointerRecord: Equatable, Sendable {
+    public var id: String
+    public var sourceType: String
+    public var externalId: String
+    public var title: String?
+    public var scope: String
+    public var meetingId: String?
+    public var notesId: String?
+    public var vaultRelPath: String?
+    public var updatedAt: String
+
+    public init(
+        id: String,
+        sourceType: String,
+        externalId: String,
+        title: String? = nil,
+        scope: String = "personal",
+        meetingId: String? = nil,
+        notesId: String? = nil,
+        vaultRelPath: String? = nil,
+        updatedAt: String = ISO8601DateFormatter().string(from: Date())
+    ) {
+        self.id = id
+        self.sourceType = sourceType
+        self.externalId = externalId
+        self.title = title
+        self.scope = scope
+        self.meetingId = meetingId
+        self.notesId = notesId
+        self.vaultRelPath = vaultRelPath
+        self.updatedAt = updatedAt
+    }
+}
+
+public struct ConnectedSourceRecord: Equatable, Sendable {
+    public var id: String
+    public var sourceType: String
+    public var rootPath: String?
+    public var label: String?
+    public var enabled: Bool
+    public var lastSyncAt: String?
+    public var lastError: String?
+    public var unitCount: Int
+    public var createdAt: String
+    public var updatedAt: String
+
+    public init(
+        id: String,
+        sourceType: String,
+        rootPath: String? = nil,
+        label: String? = nil,
+        enabled: Bool = true,
+        lastSyncAt: String? = nil,
+        lastError: String? = nil,
+        unitCount: Int = 0,
+        createdAt: String = ISO8601DateFormatter().string(from: Date()),
+        updatedAt: String = ISO8601DateFormatter().string(from: Date())
+    ) {
+        self.id = id
+        self.sourceType = sourceType
+        self.rootPath = rootPath
+        self.label = label
+        self.enabled = enabled
+        self.lastSyncAt = lastSyncAt
+        self.lastError = lastError
+        self.unitCount = unitCount
+        self.createdAt = createdAt
+        self.updatedAt = updatedAt
+    }
+}
+
+public struct KnowledgeUnitRecord: Equatable, Sendable {
+    public var unitId: String
+    public var sourceType: String
+    public var title: String?
+    public var scope: String
+    public var sotKind: String
+    public var sotRef: String
+    public var contentHash: String?
+    public var meetingStatus: String?
+    public var inCorpus: Bool
+    public var ragEligible: Bool
+    public var updatedAt: String
+
+    public init(
+        unitId: String,
+        sourceType: String,
+        title: String? = nil,
+        scope: String = "personal",
+        sotKind: String,
+        sotRef: String,
+        contentHash: String? = nil,
+        meetingStatus: String? = nil,
+        inCorpus: Bool = true,
+        ragEligible: Bool = true,
+        updatedAt: String = ISO8601DateFormatter().string(from: Date())
+    ) {
+        self.unitId = unitId
+        self.sourceType = sourceType
+        self.title = title
+        self.scope = scope
+        self.sotKind = sotKind
+        self.sotRef = sotRef
+        self.contentHash = contentHash
+        self.meetingStatus = meetingStatus
+        self.inCorpus = inCorpus
+        self.ragEligible = ragEligible
+        self.updatedAt = updatedAt
+    }
+}
+
+public struct KnowledgeChunkRecord: Equatable, Sendable {
+    public var chunkId: String
+    public var unitId: String
+    public var ordinal: Int
+    public var text: String
+    public var tStartMs: Int?
+    public var tEndMs: Int?
+    public var contentHash: String?
+
+    public init(
+        chunkId: String,
+        unitId: String,
+        ordinal: Int,
+        text: String,
+        tStartMs: Int? = nil,
+        tEndMs: Int? = nil,
+        contentHash: String? = nil
+    ) {
+        self.chunkId = chunkId
+        self.unitId = unitId
+        self.ordinal = ordinal
+        self.text = text
+        self.tStartMs = tStartMs
+        self.tEndMs = tEndMs
+        self.contentHash = contentHash
+    }
 }

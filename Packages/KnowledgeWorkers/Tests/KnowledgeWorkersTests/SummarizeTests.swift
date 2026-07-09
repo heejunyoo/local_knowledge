@@ -50,6 +50,16 @@ final class SummarizeTests: XCTestCase {
         XCTAssertTrue(md.contains("## 액션 아이템"))
     }
 
+    func testCoalesceWordSegments() {
+        let crumbs = (0..<20).map { i in
+            TranscriptSegment(index: i, tStartMs: i * 200, tEndMs: i * 200 + 180, text: "가")
+        }
+        let merged = TranscriptCoalesce.coalesce(crumbs)
+        XCTAssertLessThan(merged.count, crumbs.count)
+        XCTAssertFalse(merged.isEmpty)
+        XCTAssertTrue(merged[0].text.count > 1)
+    }
+
     func testVaultCommitWritesFile() throws {
         let dir = FileManager.default.temporaryDirectory
             .appendingPathComponent("vault-\(UUID().uuidString)", isDirectory: true)

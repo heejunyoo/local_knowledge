@@ -11,7 +11,7 @@
     "engine": "llama.cpp",
     "binary_rel": "tools/llama.cpp/b0/llama-cli",
     "model_rel": "tools/models/llm/Qwen2.5-7B-Instruct-Q4_K_M.gguf",
-    "cloud_enabled": false
+    "cloud_enabled": true
   },
   "notes": {
     "folder_allowlist": [],
@@ -19,5 +19,13 @@
   },
   "ipc": {
     "socket_rel": "cache/daemon.sock"
+  },
+  "retention": {
+    "abandoned_days": 14,
+    "audio_after_commit_days": 0,
+    "purge_on_launch": true
+  },
+  "rag": {
+    "use_llama": true
   }
 }

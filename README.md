@@ -83,17 +83,35 @@ UI (Toss-inspired):
 
 **백그라운드 엔진(`knowledged`)은 앱이 자동 기동합니다.** CLI로 데몬을 켤 필요 없습니다.
 
+### 제품 설치 (Field SoT)
+
+```bash
+cd ~/IdeaProjects/KnowledgeApp
+./scripts/package-app.sh
+open ~/Applications/Knowledge.app
+```
+
+| 항목 | 값 |
+|------|-----|
+| 실행 경로 | **`~/Applications/Knowledge.app` only** (터미널 `swift run` 은 TCC 디버그용) |
+| 서명 | 로그인 키체인 **Apple Development** (또는 `KNOWLEDGE_CODESIGN_IDENTITY`) — **ad-hoc(`-`) 금지** |
+| 데이터 | `~/Knowledge/` (audio, index, logs…) |
+| Vault | `config/app.json` → `vault_path` (기본 `~/Obsidian/Main`) |
+| 구현 계획 | `docs/implementation_plan_field.md` |
+
+**Field 루프:** 시스템 오디오 녹음 → ASR → 요약 → 확인 → `{vault}/Meetings/YYYY/MM/{id}.md`  
+외부 서버(Heejun 등) **불필요**. admin **불필요**.
+
 ### 권한 (Mac mini / 시스템 오디오)
 
 | 권한 | 어디에 | 왜 |
 |------|--------|-----|
-| **화면 기록** | 시스템 설정 → 개인정보 보호 → **화면 기록** → **Knowledge** | 시스템 오디오 캡처 (ScreenCaptureKit) |
+| **화면 기록** | 시스템 설정 → 개인정보 보호 → **화면 기록** → **Knowledge** | 시스템 오디오 (ScreenCaptureKit) |
 | 음성 인식 | 같은 패널 → 음성 인식 | 받아쓰기 |
 
-- **터미널로 실행**하면 Terminal.app에 이미 화면 기록이 켜져 있어 “되는 것처럼” 보일 수 있습니다.  
-  그건 Terminal 권한을 빌린 것이고, **제품 경로는 `Knowledge.app`에 권한을 주는 것**입니다.
-- `package-app.sh`는 bundle id `local.knowledge.app` 로 ad-hoc 서명해, 빌드마다 권한이 초기화되는 일을 줄입니다.
-- 권한 변경 후에는 **Knowledge를 완전히 종료 후 다시 실행**하세요.
+- 터미널 실행은 Terminal TCC를 빌릴 수 있음 → **제품 검증은 항상 .app**
+- 동일 Development identity로 재서명하면 화면 기록을 **매번 다시 켤 필요 없음**
+- 설정 ON인데 런타임 거부 → 예전 ad-hoc CDHash 잔재일 수 있음 (`tccutil reset ScreenCapture local.knowledge.app` 후 1회 허용)
 
 Design: `docs/ui/toss_design.md`
 

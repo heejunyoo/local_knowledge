@@ -7,7 +7,7 @@ Local-first personal PKM. Meeting audio may contain sensitive corporate content.
 | Path | Default | Notes |
 |------|---------|--------|
 | ASR | Local `whisper.cpp` | Cloud STT only if `features.cloud_stt` |
-| LLM | Local `llama.cpp` | Cloud only if `features.cloud_llm` + per-meeting confirm recommended |
+| LLM | **Cloud free-tier first** (Gemini→Groq→OpenRouter via `llm_providers.json`), then local **7B**, then extractive | Keys in `config/secrets.json` (mode 600). Transcript/snippet leaves machine when cloud answers. Toggle `llm.cloud_enabled` to force local. |
 | Audio storage | `~/Knowledge/audio` machine-local | **Not** iCloud Drive / Obsidian Sync |
 | Disk encryption | FileVault | App warns if FileVault off; no passphrase crypto in MVP |
 | Notifications | Quiet | No success noise; no transcript body in notifications |

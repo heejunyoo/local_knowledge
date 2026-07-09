@@ -42,9 +42,9 @@ struct KnowledgeAppMain: App {
         // Always-visible main window (fixes "swift run 했는데 아무 변화 없음")
         WindowGroup("Knowledge") {
             HomeView(model: model)
-                .frame(minWidth: 400, idealWidth: 420, minHeight: 560, idealHeight: 620)
+                .frame(minWidth: 420, idealWidth: 460, minHeight: 600, idealHeight: 680)
         }
-        .defaultSize(width: 420, height: 620)
+        .defaultSize(width: 460, height: 680)
         .commands {
             CommandGroup(replacing: .newItem) {}
         }
@@ -55,7 +55,7 @@ struct KnowledgeAppMain: App {
         } label: {
             MenuBarLabel(
                 isRecording: model.isRecording,
-                badge: model.reviewCount + model.failedCount
+                badge: model.reviewCount + model.failedCount + model.dueActionCount
             )
         }
         .menuBarExtraStyle(.window)

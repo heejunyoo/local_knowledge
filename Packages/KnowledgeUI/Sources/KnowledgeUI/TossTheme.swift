@@ -102,21 +102,89 @@ public struct TossSecondaryButton: View {
 
 public struct TossCard<Content: View>: View {
     public var content: () -> Content
+    public var padded: Bool
 
-    public init(@ViewBuilder content: @escaping () -> Content) {
+    public init(padded: Bool = true, @ViewBuilder content: @escaping () -> Content) {
+        self.padded = padded
         self.content = content
     }
 
     public var body: some View {
-        content()
-            .padding(TossSpace.x5)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(TossColor.white)
-            .clipShape(RoundedRectangle(cornerRadius: TossRadius.card, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: TossRadius.card, style: .continuous)
-                    .stroke(TossColor.grey200, lineWidth: 1)
-            )
+        Group {
+            if padded {
+                content().padding(TossSpace.x5)
+            } else {
+                content().padding(.horizontal, TossSpace.x5)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(TossColor.white)
+        .clipShape(RoundedRectangle(cornerRadius: TossRadius.card, style: .continuous))
+        // Soft card: no heavy border — Toss home uses white on grey, light separation
+        .shadow(color: Color.black.opacity(0.04), radius: 8, x: 0, y: 2)
+    }
+}
+
+/// Settings-style row: icon + title + subtitle + chevron. One tap target.
+public struct TossListRow: View {
+    public var title: String
+    public var subtitle: String?
+    public var systemImage: String
+    public var trailing: String?
+    public var action: () -> Void
+
+    public init(
+        title: String,
+        subtitle: String? = nil,
+        systemImage: String,
+        trailing: String? = nil,
+        action: @escaping () -> Void
+    ) {
+        self.title = title
+        self.subtitle = subtitle
+        self.systemImage = systemImage
+        self.trailing = trailing
+        self.action = action
+    }
+
+    public var body: some View {
+        Button(action: action) {
+            HStack(spacing: TossSpace.x3) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .fill(TossColor.blue50)
+                        .frame(width: 40, height: 40)
+                    Image(systemName: systemImage)
+                        .font(.system(size: 17, weight: .semibold))
+                        .foregroundStyle(TossColor.blue500)
+                }
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title)
+                        .font(TossFont.body())
+                        .fontWeight(.medium)
+                        .foregroundStyle(TossColor.grey900)
+                    if let subtitle, !subtitle.isEmpty {
+                        Text(subtitle)
+                            .font(TossFont.caption())
+                            .foregroundStyle(TossColor.grey500)
+                            .lineLimit(1)
+                    }
+                }
+                Spacer(minLength: TossSpace.x2)
+                if let trailing, !trailing.isEmpty {
+                    Text(trailing)
+                        .font(TossFont.caption())
+                        .fontWeight(.semibold)
+                        .foregroundStyle(TossColor.blue500)
+                }
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(TossColor.grey200)
+            }
+            .padding(.vertical, TossSpace.x3)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
     }
 }
 
@@ -154,6 +222,42 @@ public struct TossBadge: View {
         case .info: return TossColor.blue50
         case .danger: return TossColor.red50
         case .neutral: return TossColor.grey100
+        }
+    }
+}
+
+/// Shared top bar for pushed screens: title + optional subtitle + 홈.
+public struct TossScreenHeader: View {
+    public var title: String
+    public var subtitle: String?
+    public var onHome: () -> Void
+
+    public init(title: String, subtitle: String? = nil, onHome: @escaping () -> Void) {
+        self.title = title
+        self.subtitle = subtitle
+        self.onHome = onHome
+    }
+
+    public var body: some View {
+        HStack(alignment: .top) {
+            VStack(alignment: .leading, spacing: TossSpace.x2) {
+                Text(title)
+                    .font(TossFont.title())
+                    .foregroundStyle(TossColor.grey900)
+                if let subtitle, !subtitle.isEmpty {
+                    Text(subtitle)
+                        .font(TossFont.body())
+                        .foregroundStyle(TossColor.grey700)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            Spacer(minLength: TossSpace.x3)
+            Button("홈", action: onHome)
+                .font(TossFont.body())
+                .fontWeight(.semibold)
+                .foregroundStyle(TossColor.blue500)
+                .buttonStyle(.plain)
+                .padding(.top, 6)
         }
     }
 }

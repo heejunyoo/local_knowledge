@@ -68,12 +68,72 @@ public final class PipelineService: @unchecked Sendable {
         case .health:
             let recording = try store.countActiveRecordings()
             let review = try store.meetings(withStatus: .reviewNeeded).count
+            let engines = ToolBootstrap(knowledgeRoot: knowledgeRoot).fieldEngineStatus()
+            let vaultOK = FileManager.default.fileExists(atPath: vaultPath.path)
             return .object([
                 "ok": .bool(true),
                 "version": .string(Self.version),
                 "db_path": .string(store.path),
                 "recording_count": .number(Double(recording)),
                 "review_needed_count": .number(Double(review)),
+                "vault_path": .string(vaultPath.path),
+                "vault_ok": .bool(vaultOK),
+                "asr_engine": .string(engines.asr),
+                "llm_engine": .string(engines.llm),
+                "whisper_ready": .bool(engines.whisperReady),
+                "llama_ready": .bool(engines.llamaReady),
+            ])
+
+        case .search:
+            return try handleSearch(params: params)
+
+        case .searchReindex:
+            let n = try reindexCommittedFTS()
+            // Also rebuild meeting corpus units/chunks
+            let corpus = makeCorpus()
+            let m = try corpus.syncMeetings()
+            return .object([
+                "reindexed": .number(Double(n)),
+                "meetings_corpus": .number(Double(m)),
+            ])
+
+        case .corpusSync:
+            let corpus = makeCorpus()
+            try corpus.ensureDefaultConnections()
+            let report = try corpus.syncAll(notesProvider: nil)
+            return .object([
+                "meetings": .number(Double(report.meetings)),
+                "obsidian": .number(Double(report.obsidian)),
+                "notes": .number(Double(report.notes)),
+                "files": .number(Double(report.files)),
+                "message": .string(report.message),
+            ])
+
+        case .corpusStatus:
+            return try corpusStatusJSON()
+
+        case .meetingDelete:
+            guard let id = params?["id"]?.stringValue else { throw JSONRPCError.invalidParams }
+            let r = try MeetingCleanup.deleteMeeting(
+                id: id,
+                store: store,
+                knowledgeRoot: knowledgeRoot,
+                deleteLocalFiles: true
+            )
+            return .object([
+                "deleted_meetings": .number(Double(r.deletedMeetings)),
+                "deleted_files": .number(Double(r.deletedFiles)),
+                "freed_bytes": .number(Double(r.freedBytes)),
+                "message": .string(r.message),
+            ])
+
+        case .meetingPurgeAbandoned:
+            let r = try MeetingCleanup.purgeAbandoned(store: store, knowledgeRoot: knowledgeRoot)
+            return .object([
+                "deleted_meetings": .number(Double(r.deletedMeetings)),
+                "deleted_files": .number(Double(r.deletedFiles)),
+                "freed_bytes": .number(Double(r.freedBytes)),
+                "message": .string(r.message),
             ])
 
         case .meetingList:
@@ -157,6 +217,16 @@ public final class PipelineService: @unchecked Sendable {
                 m.stageAttempts = 0
                 m.errorCode = nil
                 try store.upsertMeeting(m)
+            } else if (m.status == .reviewNeeded || m.status == .summarizedCandidate),
+                      m.transcriptPath != nil {
+                // Re-summarize from existing transcript (improved extractive / coalesce)
+                m.status = .transcribed
+                m.stageAttempts = 0
+                m.errorCode = nil
+                m.candidatePath = nil
+                m.stage1OK = false
+                m.stage2Outcome = nil
+                try store.upsertMeeting(m)
             }
             return meetingJSON(m)
 
@@ -166,6 +236,70 @@ public final class PipelineService: @unchecked Sendable {
         case .none:
             throw JSONRPCError.methodNotFound
         }
+    }
+
+    private func handleSearch(params: JSONValue?) throws -> JSONValue {
+        let q = (params?["q"]?.stringValue ?? params?["query"]?.stringValue ?? "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !q.isEmpty else {
+            return .object(["hits": .array([]), "q": .string(q)])
+        }
+        let limit: Int
+        if case let .number(n) = params?["limit"] {
+            limit = max(1, min(50, Int(n)))
+        } else {
+            limit = 20
+        }
+        // FTS5: simple token query; strip characters that break MATCH
+        let safe = q
+            .replacingOccurrences(of: "\"", with: " ")
+            .replacingOccurrences(of: "*", with: " ")
+            .split(whereSeparator: { $0.isWhitespace })
+            .map(String.init)
+            .filter { !$0.isEmpty }
+            .joined(separator: " ")
+        guard !safe.isEmpty else {
+            return .object(["hits": .array([]), "q": .string(q)])
+        }
+        let hits = try store.searchFTS(query: safe, limit: limit)
+        return .object([
+            "q": .string(q),
+            "hits": .array(hits.map { h in
+                .object([
+                    "doc_id": .string(h.docId),
+                    "source_type": .string(h.sourceType),
+                    "title": h.title.map { .string($0) } ?? .null,
+                    "snippet": h.snippet.map { .string($0) } ?? .null,
+                ])
+            }),
+        ])
+    }
+
+    /// Rebuild FTS rows for committed meetings from candidate JSON / title.
+    @discardableResult
+    private func reindexCommittedFTS() throws -> Int {
+        let committed = try store.meetings(withStatus: .committed)
+        var n = 0
+        for m in committed {
+            let title = m.title ?? "미팅"
+            var body = title
+            if let rel = m.candidatePath {
+                let url = knowledgeRoot.appendingPathComponent(rel)
+                if let data = try? Data(contentsOf: url),
+                   let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+                    let parts: [String] = [
+                        obj["one_line_summary"] as? String,
+                        ((obj["key_discussion_points"] as? [[String: Any]]) ?? []).compactMap { $0["text"] as? String }.joined(separator: " "),
+                        ((obj["decisions"] as? [[String: Any]]) ?? []).compactMap { $0["text"] as? String }.joined(separator: " "),
+                        ((obj["action_items"] as? [[String: Any]]) ?? []).compactMap { $0["text"] as? String }.joined(separator: " "),
+                    ].compactMap { $0 }
+                    body = parts.joined(separator: "\n")
+                }
+            }
+            try store.upsertFTS(docId: m.id, sourceType: "meeting", title: title, body: body)
+            n += 1
+        }
+        return n
     }
 
     /// Idempotent: from recorded|transcribing|transcribe_failed → transcribed with artifacts.
@@ -366,9 +500,58 @@ public final class PipelineService: @unchecked Sendable {
             rec.acceptedAt = acceptedAt
         }
 
+        // Action items index for due notifications
+        let actions = summary.actionItems.enumerated().map { i, a in
+            (
+                id: "\(id)-a\(i)",
+                text: a.text,
+                owner: a.owner,
+                dueOn: a.dueOn
+            )
+        }
+        try? store.replaceActionItems(meetingId: id, items: actions)
+
+        // Meeting is first-class knowledge — always enter corpus on commit (no manual import).
+        try? makeCorpus().indexMeeting(committed)
+
         return .object([
             "meeting": meetingJSON(committed),
             "vault_rel": .string(rel),
+            "action_count": .number(Double(actions.count)),
+        ])
+    }
+
+    private func makeCorpus() -> KnowledgeCorpus {
+        KnowledgeCorpus(store: store, knowledgeRoot: knowledgeRoot, vaultURL: vaultPath)
+    }
+
+    private func corpusStatusJSON() throws -> JSONValue {
+        let corpus = makeCorpus()
+        try corpus.ensureDefaultConnections()
+        let sources = try store.listConnectedSources()
+        let unitsMeeting = try store.countKnowledgeUnits(sourceType: "meeting")
+        let unitsNotes = try store.countKnowledgeUnits(sourceType: "notes")
+        let unitsObs = try store.countKnowledgeUnits(sourceType: "obsidian")
+        let unitsFile = try store.countKnowledgeUnits(sourceType: "file")
+        let total = try store.countKnowledgeUnits()
+        return .object([
+            "total_units": .number(Double(total)),
+            "meetings": .number(Double(unitsMeeting)),
+            "notes": .number(Double(unitsNotes)),
+            "obsidian": .number(Double(unitsObs)),
+            "files": .number(Double(unitsFile)),
+            "sources": .array(sources.map { s in
+                .object([
+                    "id": .string(s.id),
+                    "source_type": .string(s.sourceType),
+                    "label": s.label.map { .string($0) } ?? .null,
+                    "root_path": s.rootPath.map { .string($0) } ?? .null,
+                    "enabled": .bool(s.enabled),
+                    "last_sync_at": s.lastSyncAt.map { .string($0) } ?? .null,
+                    "last_error": s.lastError.map { .string($0) } ?? .null,
+                    "unit_count": .number(Double(s.unitCount)),
+                ])
+            }),
         ])
     }
 

@@ -14,17 +14,35 @@ public struct FeatureFlags: Codable, Equatable, Sendable {
     public var audioDirPassphrase: Bool
 
     public static let mvpDefaults = FeatureFlags(
-        cloudLlm: false,
+        cloudLlm: true,
         cloudStt: false,
-        critic: false,
+        critic: true,
         criticSecondModel: false,
-        vectorSearch: false,
+        vectorSearch: true,
         blackholeFallback: false,
-        notesIngest: false,
+        notesIngest: true,
         writeActionIndexMd: false,
         embedTranscriptInVault: false,
         audioDirPassphrase: false
     )
+
+    /// Load `config/features.json` (missing → field defaults).
+    public static func load(knowledgeRoot: URL) -> FeatureFlags {
+        let url = knowledgeRoot.appendingPathComponent("config/features.json")
+        guard let data = try? Data(contentsOf: url) else { return .mvpDefaults }
+        return (try? JSONDecoder().decode(FeatureFlags.self, from: data)) ?? .mvpDefaults
+    }
+
+    public func save(knowledgeRoot: URL) throws {
+        let url = knowledgeRoot.appendingPathComponent("config/features.json")
+        try FileManager.default.createDirectory(
+            at: url.deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
+        let enc = JSONEncoder()
+        enc.outputFormatting = [.prettyPrinted, .sortedKeys]
+        try enc.encode(self).write(to: url, options: .atomic)
+    }
 
     public init(
         cloudLlm: Bool,

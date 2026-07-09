@@ -51,4 +51,18 @@ else
   echo "Keep existing config/tools_manifest.json"
 fi
 
-echo "Done. Next: set vault_path in $ROOT/config/app.json, then PR-02 state machine."
+# Ensure default vault dir exists (user can change vault_path anytime)
+VAULT="${HOME}/Obsidian/Main"
+if [[ -f "$ROOT/config/app.json" ]]; then
+  # shellcheck disable=SC2002
+  VP=$(python3 -c "import json,os; p=json.load(open(os.path.expanduser('$ROOT/config/app.json'))); print(os.path.expanduser(p.get('vault_path','~/Obsidian/Main')))" 2>/dev/null || echo "$VAULT")
+  mkdir -p "$VP"
+  echo "Vault dir ready: $VP"
+else
+  mkdir -p "$VAULT"
+fi
+
+echo "Done."
+echo "  config:  $ROOT/config/app.json  (vault_path)"
+echo "  package: $REPO_ROOT/scripts/package-app.sh && open ~/Applications/Knowledge.app"
+echo "  plan:    $REPO_ROOT/docs/implementation_plan_field.md"

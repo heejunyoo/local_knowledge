@@ -191,9 +191,18 @@ public final class OfflinePipelineRunner: @unchecked Sendable {
         }
         let tURL = knowledgeRoot.appendingPathComponent(tRel)
         guard let data = try? Data(contentsOf: tURL),
-              let transcript = try? JSONDecoder().decode(TranscriptDocument.self, from: data) else {
+              var transcript = try? JSONDecoder().decode(TranscriptDocument.self, from: data) else {
             _ = try failSummary(id: id, code: "transcript_unreadable")
             return
+        }
+
+        // Persist coalesced segments so Stage2 quotes match corpus (word-level ASR).
+        let before = transcript.segments.count
+        transcript = TranscriptCoalesce.apply(to: transcript)
+        if transcript.segments.count != before {
+            let enc = JSONEncoder()
+            enc.outputFormatting = [.prettyPrinted, .sortedKeys]
+            try? enc.encode(transcript).write(to: tURL, options: .atomic)
         }
 
         var summary = ExtractiveSummarizer.summarize(
@@ -201,6 +210,35 @@ public final class OfflinePipelineRunner: @unchecked Sendable {
             transcript: transcript,
             titleHint: meeting.title
         )
+
+        // Optional one-line polish: cloud free only (skip local 7B — cold load blocks pipeline for minutes).
+        // Local 7B remains for RAG ask. Set KNOWLEDGE_SKIP_LLM_POLISH=1 to skip entirely.
+        if ProcessInfo.processInfo.environment["KNOWLEDGE_SKIP_LLM_POLISH"] != "1" {
+            let polishPrompt = """
+            다음 회의 한 줄 요약을 한국어로 더 자연스럽게 다듬으세요.
+            사실 추가 금지. 40자 이내. 설명 없이 결과만.
+
+            원문: \(summary.oneLineSummary)
+
+            한 줄:
+            """
+            if let polished = LLMRouter.complete(
+                prompt: polishPrompt,
+                knowledgeRoot: knowledgeRoot,
+                maxTokens: 64,
+                preferCloud: true,
+                preferLocal7B: false
+            ) {
+                let line = polished.text
+                    .components(separatedBy: .newlines)
+                    .map { $0.trimmingCharacters(in: .whitespaces) }
+                    .first { !$0.isEmpty } ?? polished.text
+                if line.count >= 4 && line.count <= 120 {
+                    summary.oneLineSummary = line
+                    summary.modelId = polished.engine
+                }
+            }
+        }
 
         let issues = MeetingSummaryValidator.validate(summary, thresholds: thresholds)
         if !issues.isEmpty {
@@ -221,13 +259,29 @@ public final class OfflinePipelineRunner: @unchecked Sendable {
             return
         }
 
-        let candRel = try writeCandidate(id: id, summary: summary)
+        var finalSummary = summary
+        let flags = FeatureFlags.load(knowledgeRoot: knowledgeRoot)
+        let criticOn = flags.critic
+
+        // Optional Mode B critic
+        if criticOn {
+            let critic = SummaryCritic.evaluate(summary: finalSummary, transcript: transcript)
+            var warns = finalSummary.stage2Warnings ?? []
+            warns.append(contentsOf: critic.warnings.map { "critic:\($0)" })
+            finalSummary.stage2Warnings = warns.isEmpty ? nil : warns
+            if critic.hardFail {
+                // Still write candidate for human review, but mark via warning
+                _ = try writeCandidate(id: id, summary: finalSummary)
+            }
+        }
+
+        let candRel = try writeCandidate(id: id, summary: finalSummary)
         let okCtx = GuardContext(
             transcriptSegmentCount: meeting.transcriptSegmentCount,
             hasTranscriptPath: true,
             stage1OK: true,
             stage2: report.outcome,
-            criticEnabled: false,
+            criticEnabled: criticOn,
             workerSlotFree: true
         )
         _ = try store.transition(
@@ -242,13 +296,64 @@ public final class OfflinePipelineRunner: @unchecked Sendable {
             rec.errorCode = nil
         }
 
-        let reviewCtx = GuardContext(stage1OK: true, stage2: report.outcome, criticEnabled: false)
-        _ = try store.transition(
-            meetingId: id,
-            to: .reviewNeeded,
-            ctx: reviewCtx,
-            event: "pipeline.review_needed"
-        )
+        if criticOn {
+            let runCtx = GuardContext(
+                stage1OK: true,
+                stage2: report.outcome,
+                criticEnabled: true,
+                criticDone: false
+            )
+            _ = try store.transition(
+                meetingId: id,
+                to: .criticRunning,
+                ctx: runCtx,
+                event: "pipeline.critic.start"
+            )
+            let critic = SummaryCritic.evaluate(summary: finalSummary, transcript: transcript)
+            let doneCtx = GuardContext(
+                stage1OK: true,
+                stage2: report.outcome,
+                criticEnabled: true,
+                criticDone: true
+            )
+            if critic.hardFail {
+                // critic_error path then always → review so human can still accept
+                _ = try store.transition(
+                    meetingId: id,
+                    to: .criticFailed,
+                    ctx: GuardContext(criticEnabled: true, errorCode: "critic_hard_fail"),
+                    errorCode: critic.warnings.first ?? "critic_hard_fail",
+                    event: "pipeline.critic.fail"
+                )
+                _ = try store.transition(
+                    meetingId: id,
+                    to: .reviewNeeded,
+                    ctx: GuardContext(),
+                    event: "pipeline.critic.to_review"
+                )
+            } else {
+                _ = try store.transition(
+                    meetingId: id,
+                    to: .reviewNeeded,
+                    ctx: doneCtx,
+                    event: "pipeline.critic.ok"
+                )
+            }
+        } else {
+            let reviewCtx = GuardContext(stage1OK: true, stage2: report.outcome, criticEnabled: false)
+            _ = try store.transition(
+                meetingId: id,
+                to: .reviewNeeded,
+                ctx: reviewCtx,
+                event: "pipeline.review_needed"
+            )
+        }
+
+        let reviewed = try store.getMeeting(id: id) ?? meeting
+        // Draft knowledge unit (transcript+summary in corpus; RAG eligible only after commit)
+        let vault = AppConfig.load(knowledgeRoot: knowledgeRoot).vaultURL
+        try? KnowledgeCorpus(store: store, knowledgeRoot: knowledgeRoot, vaultURL: vault)
+            .indexMeeting(reviewed)
     }
 
     private func writeCandidate(id: String, summary: MeetingSummaryV1) throws -> String {

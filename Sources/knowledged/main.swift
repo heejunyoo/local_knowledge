@@ -55,15 +55,9 @@ let runtime = DaemonRuntime(
     socketPath: socketPath
 )
 
-// Language from app.json if present
-var language = "ko"
-let appJSON = rootURL.appendingPathComponent("config/app.json")
-if let data = try? Data(contentsOf: appJSON),
-   let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-   let asr = obj["asr"] as? [String: Any],
-   let lang = asr["language"] as? String {
-    language = lang
-}
+// Config from app.json (language + retention)
+let appConfig = AppConfig.load(knowledgeRoot: rootURL)
+let language = appConfig.asrLanguage
 
 let runner = OfflinePipelineRunner(
     store: store,
@@ -74,6 +68,22 @@ let runner = OfflinePipelineRunner(
 signal(SIGINT) { _ in
     fputs("knowledged: shutting down\n", stderr)
     exit(0)
+}
+
+// Quiet retention once at launch (before accept loop)
+if appConfig.retentionPurgeOnLaunch {
+    do {
+        let r = try MeetingCleanup.runRetentionPolicy(
+            store: store,
+            knowledgeRoot: rootURL,
+            config: appConfig
+        )
+        if r.deletedMeetings > 0 || r.deletedFiles > 0 {
+            fputs("knowledged: retention \(r.message)\n", stderr)
+        }
+    } catch {
+        fputs("knowledged: retention skip \(error)\n", stderr)
+    }
 }
 
 try runtime.startListening()

@@ -50,6 +50,14 @@ public enum VaultCommit {
             lines.append("")
             lines.append("## 소스")
             lines.append("- transcript: `\(transcriptRel)`")
+            lines.append("- meeting_id: `\(meetingId)`")
+        }
+        if let warnings = summary.warnings, !warnings.isEmpty {
+            lines.append("")
+            lines.append("## 경고")
+            for w in warnings {
+                lines.append("- \(w)")
+            }
         }
         lines.append("")
         return lines.joined(separator: "\n")

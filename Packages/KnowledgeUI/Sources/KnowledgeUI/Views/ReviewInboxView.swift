@@ -1,5 +1,6 @@
 import SwiftUI
 
+/// Review inbox — focus on what needs a decision, with structured summary cards.
 public struct ReviewInboxView: View {
     @ObservedObject public var model: AppModel
     @Environment(\.dismiss) private var dismiss
@@ -8,156 +9,183 @@ public struct ReviewInboxView: View {
         self.model = model
     }
 
-    private var reviewItems: [AppModel.MeetingRow] {
+    private var pending: [AppModel.MeetingRow] {
         model.meetings.filter { $0.status == "review_needed" }
     }
 
-    private var failedItems: [AppModel.MeetingRow] {
+    private var failed: [AppModel.MeetingRow] {
         model.meetings.filter { $0.status.contains("fail") }
-    }
-
-    private var committedItems: [AppModel.MeetingRow] {
-        model.meetings.filter { $0.status == "committed" }.prefix(5).map { $0 }
     }
 
     public var body: some View {
         ZStack {
-            TossColor.grey50.ignoresSafeArea()
+            TossColor.grey100.ignoresSafeArea()
             VStack(spacing: 0) {
-                HStack {
-                    Text("확인함")
-                        .font(TossFont.title())
-                        .foregroundStyle(TossColor.grey900)
-                    Spacer()
-                    Button("닫기") { dismiss() }
-                        .font(TossFont.body())
-                        .foregroundStyle(TossColor.blue500)
-                        .buttonStyle(.plain)
-                }
-                .padding(TossSpace.x6)
-
-                ScrollView {
+                nav
+                ScrollView(showsIndicators: false) {
                     VStack(alignment: .leading, spacing: TossSpace.x6) {
-                        sectionReview
-                        sectionFailed
-                        if !committedItems.isEmpty {
-                            sectionCommitted
+                        title
+                        if pending.isEmpty && failed.isEmpty {
+                            empty
                         }
-                        Text("확인을 누르면 Obsidian vault에 미팅 노트가 저장돼요.")
-                            .font(TossFont.caption())
-                            .foregroundStyle(TossColor.grey500)
+                        ForEach(pending) { row in
+                            pendingCard(row)
+                        }
+                        ForEach(failed) { row in
+                            failedCard(row)
+                        }
+                        if let rel = model.lastVaultRel {
+                            Button("방금 저장한 노트 보기") {
+                                model.openMeetingInFinder(vaultRel: rel)
+                            }
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundStyle(TossColor.blue500)
+                            .buttonStyle(.plain)
+                        }
                     }
                     .padding(.horizontal, TossSpace.x6)
                     .padding(.bottom, TossSpace.x8)
                 }
             }
         }
-        .frame(minWidth: 420, minHeight: 520)
         .onAppear { model.refresh() }
     }
 
-    private var sectionReview: some View {
-        VStack(alignment: .leading, spacing: TossSpace.x3) {
-            Text("확인이 필요해요")
-                .font(TossFont.section())
-                .foregroundStyle(TossColor.grey900)
-            if reviewItems.isEmpty {
-                TossCard {
-                    Text("확인할 미팅이 없어요")
-                        .font(TossFont.body())
-                        .foregroundStyle(TossColor.grey500)
-                }
-            } else {
-                ForEach(reviewItems) { row in
-                    TossCard {
-                        VStack(alignment: .leading, spacing: TossSpace.x3) {
-                            HStack {
-                                Text(row.title)
-                                    .font(TossFont.body())
-                                    .fontWeight(.semibold)
-                                    .foregroundStyle(TossColor.grey900)
-                                Spacer()
-                                TossBadge("확인 필요", kind: .info)
-                            }
-                            TossPrimaryButton("확인 후 저장") {
-                                model.acceptReview(meetingId: row.id)
-                            }
-                        }
-                    }
-                }
+    private var nav: some View {
+        HStack {
+            Button { dismiss() } label: {
+                Image(systemName: "chevron.left")
+                    .font(.system(size: 17, weight: .semibold))
+                    .foregroundStyle(TossColor.grey900)
+                    .frame(width: 44, height: 44)
             }
+            .buttonStyle(.plain)
+            Spacer()
+        }
+        .padding(.horizontal, TossSpace.x2)
+    }
+
+    private var title: some View {
+        VStack(alignment: .leading, spacing: TossSpace.x3) {
+            Text(pending.isEmpty ? "확인함" : "확인이 필요해요")
+                .font(.system(size: 32, weight: .bold))
+                .foregroundStyle(TossColor.grey900)
+            Text(pending.isEmpty
+                 ? "지금은 볼 일이 없어요."
+                 : "저장하면 노트에 남고, 물어보기에도 쓰여요.")
+                .font(.system(size: 17))
+                .foregroundStyle(TossColor.grey700)
+                .lineSpacing(3)
         }
     }
 
-    private var sectionFailed: some View {
-        VStack(alignment: .leading, spacing: TossSpace.x3) {
-            Text("문제가 있었어요")
-                .font(TossFont.section())
-                .foregroundStyle(TossColor.grey900)
-            if failedItems.isEmpty {
-                TossCard {
-                    Text("실패한 작업이 없어요")
-                        .font(TossFont.body())
-                        .foregroundStyle(TossColor.grey500)
-                }
-            } else {
-                ForEach(failedItems) { row in
-                    TossCard {
-                        VStack(alignment: .leading, spacing: TossSpace.x3) {
-                            HStack {
-                                Text(row.title)
-                                    .font(TossFont.body())
-                                    .fontWeight(.semibold)
-                                    .foregroundStyle(TossColor.grey900)
-                                Spacer()
-                                TossBadge(StatusCopy.label(row.status), kind: .danger)
-                            }
-                            if let code = row.errorCode {
-                                Text(friendlyError(code))
-                                    .font(TossFont.caption())
-                                    .foregroundStyle(TossColor.grey500)
-                            }
-                            TossSecondaryButton("다시 시도") {
-                                model.retryMeeting(meetingId: row.id)
-                            }
-                        }
-                    }
-                }
-            }
+    private var empty: some View {
+        VStack(spacing: TossSpace.x3) {
+            Image(systemName: "checkmark.circle")
+                .font(.system(size: 48, weight: .light))
+                .foregroundStyle(TossColor.grey200)
+            Text("확인할 미팅이 없어요")
+                .font(.system(size: 17, weight: .semibold))
+                .foregroundStyle(TossColor.grey700)
         }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, TossSpace.x8)
     }
 
-    private var sectionCommitted: some View {
-        VStack(alignment: .leading, spacing: TossSpace.x3) {
-            Text("저장됨")
-                .font(TossFont.section())
+    private func pendingCard(_ row: AppModel.MeetingRow) -> some View {
+        let display = MeetingSummaryLoader.load(
+            knowledgeRoot: model.knowledgeRoot,
+            candidateRel: row.candidatePath
+        )
+        return VStack(alignment: .leading, spacing: TossSpace.x5) {
+            Text(row.title)
+                .font(.system(size: 20, weight: .bold))
                 .foregroundStyle(TossColor.grey900)
-            ForEach(committedItems) { row in
-                TossCard {
-                    HStack {
-                        Text(row.title)
-                            .font(TossFont.body())
+
+            if let display, !display.isEmpty {
+                if !display.oneLine.isEmpty {
+                    Text(display.oneLine)
+                        .font(.system(size: 16))
+                        .foregroundStyle(TossColor.grey700)
+                        .lineSpacing(4)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                sectionBlock(title: "이야기한 것", items: display.discussion)
+                sectionBlock(title: "결정", items: display.decisions)
+                sectionBlock(title: "할 일", items: display.actions)
+                sectionBlock(title: "남은 이슈", items: display.open)
+            } else if let one = row.oneLine, !one.isEmpty {
+                Text(one)
+                    .font(.system(size: 16))
+                    .foregroundStyle(TossColor.grey700)
+                    .lineSpacing(4)
+                    .fixedSize(horizontal: false, vertical: true)
+            } else {
+                Text("요약을 불러오지 못했어요. 그래도 저장할 수 있어요.")
+                    .font(.system(size: 15))
+                    .foregroundStyle(TossColor.grey500)
+            }
+
+            TossPrimaryButton("저장하기") {
+                model.acceptReview(meetingId: row.id)
+            }
+        }
+        .padding(TossSpace.x5)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(TossColor.white)
+        .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+    }
+
+    @ViewBuilder
+    private func sectionBlock(title: String, items: [String]) -> some View {
+        if !items.isEmpty {
+            VStack(alignment: .leading, spacing: TossSpace.x2) {
+                Text(title)
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(TossColor.grey500)
+                ForEach(Array(items.prefix(6).enumerated()), id: \.offset) { _, text in
+                    HStack(alignment: .top, spacing: TossSpace.x2) {
+                        Text("·")
+                            .font(.system(size: 15, weight: .bold))
+                            .foregroundStyle(TossColor.blue500)
+                        Text(text)
+                            .font(.system(size: 15))
                             .foregroundStyle(TossColor.grey900)
-                        Spacer()
-                        TossBadge("저장됨", kind: .neutral)
+                            .fixedSize(horizontal: false, vertical: true)
                     }
                 }
+                if items.count > 6 {
+                    Text("외 \(items.count - 6)개")
+                        .font(.system(size: 13))
+                        .foregroundStyle(TossColor.grey500)
+                }
             }
+            .padding(.top, TossSpace.x1)
         }
     }
 
-    private func friendlyError(_ code: String) -> String {
-        switch code {
-        case "asr_tools_missing", "asr_binary_missing", "asr_model_missing":
-            return "받아쓰기를 시스템 음성 인식으로 다시 시도할 수 있어요"
-        case "speech_permission":
-            return "시스템 설정에서 음성 인식 권한을 허용해 주세요"
-        case "timeout":
-            return "시간이 초과됐어요. 다시 시도해 주세요"
-        case "stage2_fail", "stage1_fail":
-            return "요약 검증에 실패했어요"
-        default:
-            return code
+    private func failedCard(_ row: AppModel.MeetingRow) -> some View {
+        VStack(alignment: .leading, spacing: TossSpace.x4) {
+            Text(row.title)
+                .font(.system(size: 17, weight: .semibold))
+                .foregroundStyle(TossColor.grey900)
+            Text("처리 중 문제가 생겼어요.")
+                .font(.system(size: 15))
+                .foregroundStyle(TossColor.grey500)
+            TossSecondaryButton("다시 시도") {
+                model.retryMeeting(meetingId: row.id)
+            }
+            Button("삭제하기") {
+                model.deleteMeeting(id: row.id)
+            }
+            .font(.system(size: 15, weight: .semibold))
+            .foregroundStyle(TossColor.grey500)
+            .buttonStyle(.plain)
+            .frame(maxWidth: .infinity)
         }
+        .padding(TossSpace.x5)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(TossColor.white)
+        .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
     }
 }

@@ -1,11 +1,11 @@
 {
-  "cloud_llm": false,
+  "cloud_llm": true,
   "cloud_stt": false,
-  "critic": false,
+  "critic": true,
   "critic_second_model": false,
-  "vector_search": false,
+  "vector_search": true,
   "blackhole_fallback": false,
-  "notes_ingest": false,
+  "notes_ingest": true,
   "write_action_index_md": false,
   "embed_transcript_in_vault": false,
   "audio_dir_passphrase": false

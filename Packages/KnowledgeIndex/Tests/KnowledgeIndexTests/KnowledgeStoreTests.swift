@@ -22,7 +22,7 @@ final class KnowledgeStoreTests: XCTestCase {
     }
 
     func testMigrateAndSchemaVersion() throws {
-        XCTAssertEqual(try store.schemaVersion(), 1)
+        XCTAssertEqual(try store.schemaVersion(), IndexSchema.currentVersion)
         try store.assertMeetingHasNoBodySOTColumn()
     }
 

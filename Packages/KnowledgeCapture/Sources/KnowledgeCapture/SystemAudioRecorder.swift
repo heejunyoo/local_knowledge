@@ -7,8 +7,10 @@ import AudioToolbox
 
 /// System audio via ScreenCaptureKit (display mix). Default for Mac mini.
 ///
-/// TCC note: Screen Recording is granted per **app identity** (bundle id + path),
-/// not "admin". CGPreflight can lag; we treat SCShareableContent / SCStream as source of truth.
+/// Critical implementation details (macOS 13–26):
+/// 1. Register **both** `.screen` and `.audio` outputs — audio-only often yields zero buffers.
+/// 2. Extract PCM with `CMSampleBufferCopyPCMDataIntoAudioBufferList` (fixed `AudioBufferList` fails).
+/// 3. Write via `MonoWavWriter` — `AVAudioFile` left `data` chunk size=0 so ASR saw empty files.
 @available(macOS 13.0, *)
 public final class SystemAudioRecorder: NSObject, @unchecked Sendable {
     public private(set) var isRecording = false
@@ -16,16 +18,21 @@ public final class SystemAudioRecorder: NSObject, @unchecked Sendable {
     public private(set) var outputURL: URL?
 
     private var stream: SCStream?
-    private var audioFile: AVAudioFile?
+    private var wav: MonoWavWriter?
+    private var converter: AVAudioConverter?
+    private var outFormat: AVAudioFormat!
     private var startedAt: Date?
     private var heartbeatTimer: Timer?
     private let knowledgeRoot: URL
     private let heartbeatInterval: TimeInterval
     private let writeQueue = DispatchQueue(label: "knowledge.systemaudio.write")
     private var sampleCount: Int64 = 0
+    private var buffersReceived: Int = 0
+    private var buffersWritten: Int = 0
+    private var buffersDropped: Int = 0
+    private var peakAbs: Int32 = 0
     private let targetSampleRate: Double = 16_000
     private var lastError: Error?
-    private let stateLock = NSLock()
 
     public init(knowledgeRoot: URL, heartbeatInterval: TimeInterval = 5) {
         self.knowledgeRoot = knowledgeRoot
@@ -33,7 +40,6 @@ public final class SystemAudioRecorder: NSObject, @unchecked Sendable {
         super.init()
     }
 
-    /// Soft prompt only — never treat CGPreflight false as hard failure (can lag after grant).
     public static func requestScreenAccessIfNeeded() {
         if !CGPreflightScreenCaptureAccess() {
             _ = CGRequestScreenCaptureAccess()
@@ -52,16 +58,15 @@ public final class SystemAudioRecorder: NSObject, @unchecked Sendable {
     }
 
     public func start(meetingId: String) async throws {
-        stateLock.lock()
-        if isRecording {
-            stateLock.unlock()
-            try? cancel()
-        } else {
-            stateLock.unlock()
-        }
+        if isRecording { try? cancel() }
 
         lastError = nil
         sampleCount = 0
+        buffersReceived = 0
+        buffersWritten = 0
+        buffersDropped = 0
+        peakAbs = 0
+        converter = nil
         Self.requestScreenAccessIfNeeded()
 
         let url = AudioArtifactBuilder.rawURL(
@@ -73,11 +78,7 @@ public final class SystemAudioRecorder: NSObject, @unchecked Sendable {
             at: url.deletingLastPathComponent(),
             withIntermediateDirectories: true
         )
-        if FileManager.default.fileExists(atPath: url.path) {
-            try FileManager.default.removeItem(at: url)
-        }
 
-        // Source of truth: actual SCK call (not CGPreflight alone)
         let content: SCShareableContent
         do {
             content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true)
@@ -94,32 +95,36 @@ public final class SystemAudioRecorder: NSObject, @unchecked Sendable {
         config.excludesCurrentProcessAudio = true
         config.sampleRate = 48_000
         config.channelCount = 2
-        config.width = 2
-        config.height = 2
-        config.minimumFrameInterval = CMTime(value: 1, timescale: 1)
+        config.width = 32
+        config.height = 32
+        config.minimumFrameInterval = CMTime(value: 1, timescale: 5)
         config.queueDepth = 8
+        config.showsCursor = false
 
-        let outFormat = AVAudioFormat(
+        outFormat = AVAudioFormat(
             commonFormat: .pcmFormatInt16,
             sampleRate: targetSampleRate,
             channels: 1,
             interleaved: true
         )!
-        let file = try AVAudioFile(forWriting: url, settings: outFormat.settings)
+        let writer = try MonoWavWriter(url: url, sampleRate: Int(targetSampleRate))
 
         if let old = stream {
-            old.stopCapture { _ in }
+            let sem = DispatchSemaphore(value: 0)
+            old.stopCapture { _ in sem.signal() }
+            _ = sem.wait(timeout: .now() + 2)
             stream = nil
         }
 
         let stream = SCStream(filter: filter, configuration: config, delegate: self)
         do {
+            try stream.addStreamOutput(self, type: .screen, sampleHandlerQueue: writeQueue)
             try stream.addStreamOutput(self, type: .audio, sampleHandlerQueue: writeQueue)
         } catch {
             throw mapSCKError(error, phase: "addStreamOutput")
         }
 
-        self.audioFile = file
+        self.wav = writer
         self.stream = stream
         self.meetingId = meetingId
         self.outputURL = url
@@ -129,15 +134,14 @@ public final class SystemAudioRecorder: NSObject, @unchecked Sendable {
             try await stream.startCapture()
         } catch {
             self.stream = nil
-            self.audioFile = nil
+            try? self.wav?.close()
+            self.wav = nil
             self.meetingId = nil
             self.outputURL = nil
             throw mapSCKError(error, phase: "startCapture")
         }
 
-        stateLock.lock()
-        self.isRecording = true
-        stateLock.unlock()
+        isRecording = true
         try writeHeartbeat()
         startHeartbeatTimer()
     }
@@ -145,22 +149,14 @@ public final class SystemAudioRecorder: NSObject, @unchecked Sendable {
     private func mapSCKError(_ error: Error, phase: String) -> CaptureError {
         let ns = error as NSError
         let desc = error.localizedDescription
-        // SCStreamErrorDomain -3801 = user denied TCC
         if ns.domain.contains("ScreenCaptureKit") || ns.domain.contains("SCStream") || ns.code == -3801
             || desc.contains("TCC") || desc.contains("거절") || desc.localizedCaseInsensitiveContains("denied")
             || desc.localizedCaseInsensitiveContains("not authorized") {
-            let id = Self.identityDescription()
             return .engine(
                 """
-                화면 기록(TCC)이 이 앱에 허용되지 않았습니다. (phase=\(phase), code=\(ns.code))
+                시스템 오디오 캡처 거부 (phase=\(phase), code=\(ns.code)).
                 \(desc)
-
-                허용해야 할 앱 정체:
-                \(id)
-
-                조치: 시스템 설정 → 개인정보 보호 및 보안 → 화면 기록 에서 위 path 의 Knowledge를 켠 뒤,
-                앱을 완전히 종료(⌘Q)하고 ~/Applications/Knowledge.app 을 다시 실행하세요.
-                터미널 실행은 다른 TCC 클라이언트라서 설정과 어긋날 수 있습니다.
+                런타임 정체: \(Self.identityDescription())
                 """
             )
         }
@@ -168,10 +164,7 @@ public final class SystemAudioRecorder: NSObject, @unchecked Sendable {
     }
 
     public func stop() throws -> AudioArtifact {
-        stateLock.lock()
-        let was = isRecording
-        stateLock.unlock()
-        guard was, let meetingId, let url = outputURL else {
+        guard isRecording, let meetingId, let url = outputURL else {
             throw CaptureError.notRecording
         }
 
@@ -185,13 +178,22 @@ public final class SystemAudioRecorder: NSObject, @unchecked Sendable {
         }
         stream = nil
         stopHeartbeatTimer()
-        stateLock.lock()
         isRecording = false
-        stateLock.unlock()
         try CaptureHeartbeat.clear(knowledgeRoot: knowledgeRoot)
 
-        writeQueue.sync { self.audioFile = nil }
-        Thread.sleep(forTimeInterval: 0.15)
+        var finalSamples: Int64 = 0
+        var finalPeak: Int32 = 0
+        var recv = 0, written = 0, drop = 0
+        try writeQueue.sync {
+            try self.wav?.close()
+            finalSamples = self.sampleCount
+            finalPeak = self.peakAbs
+            recv = self.buffersReceived
+            written = self.buffersWritten
+            drop = self.buffersDropped
+            self.wav = nil
+            self.converter = nil
+        }
 
         if let lastError {
             throw mapSCKError(lastError, phase: "stop")
@@ -199,9 +201,22 @@ public final class SystemAudioRecorder: NSObject, @unchecked Sendable {
 
         let attrs = try FileManager.default.attributesOfItem(atPath: url.path)
         let size = (attrs[.size] as? NSNumber)?.intValue ?? 0
-        if size < 1600 || sampleCount < 800 {
+        if size < 1600 || finalSamples < 800 {
             throw CaptureError.engine(
-                "시스템 소리가 거의 캡처되지 않았어요 (bytes=\(size), samples=\(sampleCount)). 회의 소리가 실제로 재생 중인지 확인해 주세요."
+                """
+                시스템 소리가 거의 캡처되지 않았어요 \
+                (bytes=\(size), samples=\(finalSamples), peak=\(finalPeak), \
+                recv=\(recv), written=\(written), drop=\(drop)).
+                """
+            )
+        }
+        if finalPeak < 8 {
+            // Captured only digital silence — likely wrong display/device or muted output.
+            throw CaptureError.engine(
+                """
+                녹음 버퍼는 채워졌지만 소리가 무음입니다 (samples=\(finalSamples), peak=\(finalPeak)). \
+                시스템 출력 볼륨·재생 앱 음소거·다른 출력 장치(HDMI 등) 여부를 확인해 주세요.
+                """
             )
         }
 
@@ -209,7 +224,7 @@ public final class SystemAudioRecorder: NSObject, @unchecked Sendable {
         if let startedAt {
             durationMs = max(1, Int(Date().timeIntervalSince(startedAt) * 1000))
         } else {
-            durationMs = Int(Double(sampleCount) / targetSampleRate * 1000)
+            durationMs = Int(Double(finalSamples) / targetSampleRate * 1000)
         }
 
         return try AudioArtifactBuilder.build(
@@ -221,23 +236,21 @@ public final class SystemAudioRecorder: NSObject, @unchecked Sendable {
     }
 
     public func cancel() throws {
-        stateLock.lock()
-        let was = isRecording
-        stateLock.unlock()
-        if !was && stream == nil { return }
-
+        if !isRecording && stream == nil { return }
         let sem = DispatchSemaphore(value: 0)
         stream?.stopCapture { _ in sem.signal() }
         _ = sem.wait(timeout: .now() + 2)
         stream = nil
-        writeQueue.sync { self.audioFile = nil }
+        writeQueue.sync {
+            try? self.wav?.close()
+            self.wav = nil
+            self.converter = nil
+        }
         if let url = outputURL {
             try? FileManager.default.removeItem(at: url)
         }
         stopHeartbeatTimer()
-        stateLock.lock()
         isRecording = false
-        stateLock.unlock()
         meetingId = nil
         outputURL = nil
         try? CaptureHeartbeat.clear(knowledgeRoot: knowledgeRoot)
@@ -268,80 +281,92 @@ public final class SystemAudioRecorder: NSObject, @unchecked Sendable {
     }
 
     private func appendAudio(sampleBuffer: CMSampleBuffer) {
-        guard let audioFile else { return }
-        guard CMSampleBufferIsValid(sampleBuffer),
-              let formatDesc = CMSampleBufferGetFormatDescription(sampleBuffer) else { return }
-
-        var audioBufferList = AudioBufferList()
-        var blockBuffer: CMBlockBuffer?
+        buffersReceived += 1
+        guard let wav else {
+            buffersDropped += 1
+            return
+        }
+        guard CMSampleBufferIsValid(sampleBuffer) else {
+            buffersDropped += 1
+            return
+        }
         let frames = CMSampleBufferGetNumSamples(sampleBuffer)
-        guard frames > 0 else { return }
-
-        let status = CMSampleBufferGetAudioBufferListWithRetainedBlockBuffer(
-            sampleBuffer,
-            bufferListSizeNeededOut: nil,
-            bufferListOut: &audioBufferList,
-            bufferListSize: MemoryLayout<AudioBufferList>.size,
-            blockBufferAllocator: nil,
-            blockBufferMemoryAllocator: nil,
-            flags: kCMSampleBufferFlag_AudioBufferList_Assure16ByteAlignment,
-            blockBufferOut: &blockBuffer
-        )
-        guard status == noErr else { return }
-
-        guard let asbdPtr = CMAudioFormatDescriptionGetStreamBasicDescription(formatDesc) else { return }
+        guard frames > 0,
+              let formatDesc = CMSampleBufferGetFormatDescription(sampleBuffer),
+              let asbdPtr = CMAudioFormatDescriptionGetStreamBasicDescription(formatDesc)
+        else {
+            buffersDropped += 1
+            return
+        }
         var asbd = asbdPtr.pointee
-        guard let inFormat = AVAudioFormat(streamDescription: &asbd) else { return }
-        guard let inBuffer = AVAudioPCMBuffer(pcmFormat: inFormat, frameCapacity: AVAudioFrameCount(frames)) else { return }
+        guard let inFormat = AVAudioFormat(streamDescription: &asbd),
+              let inBuffer = AVAudioPCMBuffer(pcmFormat: inFormat, frameCapacity: AVAudioFrameCount(frames))
+        else {
+            buffersDropped += 1
+            return
+        }
         inBuffer.frameLength = AVAudioFrameCount(frames)
 
-        let absList = UnsafeMutableAudioBufferListPointer(&audioBufferList)
-        if inFormat.isInterleaved {
-            if let src = absList[0].mData, let dst = inBuffer.audioBufferList.pointee.mBuffers.mData {
-                memcpy(dst, src, Int(absList[0].mDataByteSize))
-            }
-        } else if let channels = inBuffer.floatChannelData {
-            for i in 0..<min(Int(inFormat.channelCount), absList.count) {
-                if let src = absList[i].mData {
-                    memcpy(channels[i], src, Int(absList[i].mDataByteSize))
-                }
-            }
-        } else if let channels = inBuffer.int16ChannelData {
-            for i in 0..<min(Int(inFormat.channelCount), absList.count) {
-                if let src = absList[i].mData {
-                    memcpy(channels[i], src, Int(absList[i].mDataByteSize))
-                }
-            }
-        }
-
-        let outFormat = audioFile.processingFormat
-        if inFormat.sampleRate == outFormat.sampleRate
-            && inFormat.channelCount == outFormat.channelCount
-            && inFormat.commonFormat == outFormat.commonFormat {
-            try? audioFile.write(from: inBuffer)
-            sampleCount += Int64(inBuffer.frameLength)
+        let copyStatus = CMSampleBufferCopyPCMDataIntoAudioBufferList(
+            sampleBuffer,
+            at: 0,
+            frameCount: Int32(frames),
+            into: inBuffer.mutableAudioBufferList
+        )
+        guard copyStatus == noErr else {
+            buffersDropped += 1
             return
         }
 
-        guard let converter = AVAudioConverter(from: inFormat, to: outFormat) else { return }
+        // Convert → mono int16 @ 16 kHz
+        if converter == nil || converter?.inputFormat != inFormat {
+            converter = AVAudioConverter(from: inFormat, to: outFormat)
+            converter?.downmix = true
+        }
+        guard let converter else {
+            buffersDropped += 1
+            return
+        }
+
         let ratio = outFormat.sampleRate / max(inFormat.sampleRate, 1)
-        let outFrames = AVAudioFrameCount(Double(frames) * ratio) + 64
-        guard let outBuffer = AVAudioPCMBuffer(pcmFormat: outFormat, frameCapacity: outFrames) else { return }
-        var error: NSError?
+        let outFrames = AVAudioFrameCount(Double(frames) * ratio) + 32
+        guard let outBuffer = AVAudioPCMBuffer(pcmFormat: outFormat, frameCapacity: outFrames) else {
+            buffersDropped += 1
+            return
+        }
+
+        var convError: NSError?
         var consumed = false
-        let block: AVAudioConverterInputBlock = { _, outStatus in
+        let result = converter.convert(to: outBuffer, error: &convError) { _, status in
             if consumed {
-                outStatus.pointee = .noDataNow
+                status.pointee = .noDataNow
                 return nil
             }
             consumed = true
-            outStatus.pointee = .haveData
+            status.pointee = .haveData
             return inBuffer
         }
-        converter.convert(to: outBuffer, error: &error, withInputFrom: block)
-        if error == nil, outBuffer.frameLength > 0 {
-            try? audioFile.write(from: outBuffer)
-            sampleCount += Int64(outBuffer.frameLength)
+        if convError != nil || result == .error || outBuffer.frameLength == 0 {
+            buffersDropped += 1
+            return
+        }
+
+        guard let ch = outBuffer.int16ChannelData else {
+            buffersDropped += 1
+            return
+        }
+        let n = Int(outBuffer.frameLength)
+        let ptr = UnsafeBufferPointer(start: ch[0], count: n)
+        for s in ptr {
+            let a = Int32(abs(Int(s)))
+            if a > peakAbs { peakAbs = a }
+        }
+        do {
+            try wav.write(int16Samples: ptr)
+            sampleCount += Int64(n)
+            buffersWritten += 1
+        } catch {
+            buffersDropped += 1
         }
     }
 }
@@ -360,7 +385,8 @@ extension SystemAudioRecorder: SCStreamOutput {
         didOutputSampleBuffer sampleBuffer: CMSampleBuffer,
         of type: SCStreamOutputType
     ) {
-        guard type == .audio else { return }
-        appendAudio(sampleBuffer: sampleBuffer)
+        if type == .audio {
+            appendAudio(sampleBuffer: sampleBuffer)
+        }
     }
 }

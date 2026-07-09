@@ -9,3 +9,7 @@ DerivedData/
 *.bin
 ~/Knowledge/
 .env
+
+# local secrets / runtime
+**/secrets.json
+config/secrets.json

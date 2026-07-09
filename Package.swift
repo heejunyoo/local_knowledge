@@ -15,6 +15,8 @@ let package = Package(
         .library(name: "KnowledgeUI", targets: ["KnowledgeUI"]),
         .executable(name: "knowledged", targets: ["knowledged"]),
         .executable(name: "KnowledgeApp", targets: ["KnowledgeApp"]),
+        .executable(name: "KnowledgeAudioHelper", targets: ["KnowledgeAudioHelper"]),
+        .executable(name: "knowledge-dogfood", targets: ["knowledge-dogfood"]),
     ],
     targets: [
         .target(
@@ -103,6 +105,19 @@ let package = Package(
             ],
             path: "Sources/KnowledgeApp",
             exclude: ["Info.plist"]
+        ),
+        .executableTarget(
+            name: "KnowledgeAudioHelper",
+            path: "Sources/KnowledgeAudioHelper"
+        ),
+        .executableTarget(
+            name: "knowledge-dogfood",
+            dependencies: [
+                "KnowledgeCore",
+                "KnowledgeIndex",
+                "KnowledgeWorkers",
+            ],
+            path: "Sources/knowledge-dogfood"
         ),
     ]
 )

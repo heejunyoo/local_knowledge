@@ -1,0 +1,57 @@
+{
+  "version": 1,
+  "as_of": "2026-07",
+  "notes": "Free-tier catalog. Edit model/base_url/order here (or ~/Knowledge/config/llm_providers.json) to swap providers without rebuilding the app. Rate limits change often — prefer Flash/fast free models.",
+  "order": [
+    "gemini",
+    "groq",
+    "openrouter"
+  ],
+  "providers": {
+    "gemini": {
+      "kind": "gemini",
+      "label": "Google Gemini free",
+      "base_url": "https://generativelanguage.googleapis.com/v1beta",
+      "model": "gemini-2.5-flash",
+      "fallback_models": [
+        "gemini-3.5-flash",
+        "gemini-2.0-flash"
+      ],
+      "api_key_secret": "gemini_api_key",
+      "env_fallback": "GEMINI_API_KEY",
+      "docs_url": "https://aistudio.google.com/apikey",
+      "timeout_sec": 45
+    },
+    "groq": {
+      "kind": "openai_compatible",
+      "label": "Groq free",
+      "base_url": "https://api.groq.com/openai/v1",
+      "model": "llama-3.3-70b-versatile",
+      "fallback_models": [
+        "llama-3.1-8b-instant",
+        "qwen/qwen3-32b"
+      ],
+      "api_key_secret": "groq_api_key",
+      "env_fallback": "GROQ_API_KEY",
+      "docs_url": "https://console.groq.com/keys",
+      "timeout_sec": 45
+    },
+    "openrouter": {
+      "kind": "openai_compatible",
+      "label": "OpenRouter free",
+      "base_url": "https://openrouter.ai/api/v1",
+      "model": "google/gemini-2.0-flash-exp:free",
+      "fallback_models": [
+        "meta-llama/llama-3.3-70b-instruct:free"
+      ],
+      "api_key_secret": "openrouter_api_key",
+      "env_fallback": "OPENROUTER_API_KEY",
+      "docs_url": "https://openrouter.ai/keys",
+      "timeout_sec": 60,
+      "extra_headers": {
+        "HTTP-Referer": "https://local.knowledge.app",
+        "X-Title": "Knowledge"
+      }
+    }
+  }
+}

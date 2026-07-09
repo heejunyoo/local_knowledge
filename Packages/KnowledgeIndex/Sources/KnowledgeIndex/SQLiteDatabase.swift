@@ -122,6 +122,16 @@ public enum SQLiteBind {
             sqlite3_bind_null(stmt, index)
         }
     }
+
+    public static func blob(_ stmt: OpaquePointer, _ index: Int32, _ value: Data?) {
+        guard let value, !value.isEmpty else {
+            sqlite3_bind_null(stmt, index)
+            return
+        }
+        _ = value.withUnsafeBytes { raw in
+            sqlite3_bind_blob(stmt, index, raw.baseAddress, Int32(value.count), unsafeBitCast(-1, to: sqlite3_destructor_type.self))
+        }
+    }
 }
 
 public enum SQLiteColumn {
@@ -132,5 +142,12 @@ public enum SQLiteColumn {
 
     public static func int(_ stmt: OpaquePointer, _ index: Int32) -> Int {
         Int(sqlite3_column_int64(stmt, index))
+    }
+
+    public static func blob(_ stmt: OpaquePointer, _ index: Int32) -> Data? {
+        guard let ptr = sqlite3_column_blob(stmt, index) else { return nil }
+        let n = Int(sqlite3_column_bytes(stmt, index))
+        guard n > 0 else { return nil }
+        return Data(bytes: ptr, count: n)
     }
 }

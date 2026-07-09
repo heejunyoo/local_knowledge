@@ -61,3 +61,13 @@ Personal PKM UI does **not** copy TDS assets. It adopts Toss product philosophy:
 - 성공마다 팝업  
 - 한 화면에 설정·검색·녹음 전부  
 - 기술 상태 문자열 그대로 노출 (`summarized_candidate` → "요약 검토")
+- **동일 비중 2×N 기능 그리드** (설정 앱 대시보드 느낌)  
+- **코퍼스·vault·엔진** 같은 엔지니어 용어를 홈 1뎁스에 노출  
+- Primary CTA 없이 “바로가기 카드”만 나열  
+
+## Hub Home pattern
+
+1. 인사/상태 한 문장 (한국어, 친절)  
+2. **상황별 Primary CTA 하나** (녹음 / 확인 / 녹음 중 열기)  
+3. 나머지는 **리스트 행** (아이콘 + 제목 + chevron)  
+4. 최근 활동은 선택, Quiet  

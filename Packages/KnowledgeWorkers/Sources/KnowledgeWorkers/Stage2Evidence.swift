@@ -19,7 +19,11 @@ public enum Stage2Evidence {
         thresholds: Thresholds = .default
     ) -> Stage2Report {
         var warnings: [String] = []
-        let corpus = transcript.segments.map(\.text).joined(separator: "\n").lowercased()
+        // Space + no-space corpora: Korean ASR often has no whitespace between tokens.
+        let parts = transcript.segments.map(\.text)
+        let corpusSpaced = parts.joined(separator: " ").lowercased()
+        let corpusPacked = parts.joined(separator: "").lowercased()
+        let corpus = corpusSpaced + "\n" + corpusPacked
         let durationMax = transcript.segments.map(\.tEndMs).max() ?? Int.max
 
         func checkBullet(_ path: String, text: String, evidence: [EvidenceSpan]) {

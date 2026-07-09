@@ -81,7 +81,8 @@ public enum AppleSpeechASR {
 
         switch result {
         case let .success(speech):
-            var segments = segmentsFrom(result: speech)
+            let raw = segmentsFrom(result: speech)
+            let segments = TranscriptCoalesce.coalesce(raw)
             if segments.isEmpty {
                 return try writeSilencePlaceholder(
                     meetingId: meetingId,

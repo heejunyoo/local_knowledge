@@ -16,17 +16,19 @@ final class KnowledgeCoreTests: XCTestCase {
         XCTAssertEqual(t.asrTimeoutSeconds(audioDurationSeconds: 100), 400)
     }
 
-    func testFeatureFlagsMvpAllOff() throws {
+    func testFeatureFlagsFieldDefaultsOn() throws {
         let flags = FeatureFlags.mvpDefaults
-        XCTAssertFalse(flags.critic)
-        XCTAssertFalse(flags.vectorSearch)
-        XCTAssertFalse(flags.cloudLlm)
-        XCTAssertFalse(flags.notesIngest)
+        // Field complete defaults (2026-07): critic + vector hybrid + cloud opt-in path
+        XCTAssertTrue(flags.critic)
+        XCTAssertTrue(flags.vectorSearch)
+        XCTAssertTrue(flags.cloudLlm)
+        XCTAssertTrue(flags.notesIngest)
 
         let data = try JSONEncoder().encode(flags)
         let obj = try JSONSerialization.jsonObject(with: data) as! [String: Any]
-        XCTAssertEqual(obj["cloud_llm"] as? Bool, false)
-        XCTAssertEqual(obj["vector_search"] as? Bool, false)
+        XCTAssertEqual(obj["cloud_llm"] as? Bool, true)
+        XCTAssertEqual(obj["vector_search"] as? Bool, true)
+        XCTAssertEqual(obj["critic"] as? Bool, true)
     }
 
     func testMeetingSummaryStage1ValidMinimal() {
