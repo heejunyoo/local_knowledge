@@ -280,30 +280,13 @@ public struct HomeView: View {
 
     private var menuBlock: some View {
         VStack(alignment: .leading, spacing: TossSpace.x3) {
-            Text("바로가기")
+            Text("이어서")
                 .font(.system(size: 15, weight: .semibold))
                 .foregroundStyle(TossColor.grey500)
                 .padding(.leading, TossSpace.x1)
 
+            // 홈은 Primary + 확인함만. 물어보기·식단은 하단 탭.
             VStack(spacing: 0) {
-                menuRow(
-                    title: "물어보기",
-                    subtitle: "모아 둔 지식에 질문",
-                    icon: "bubble.left.and.bubble.right.fill",
-                    trailing: nil
-                ) { path.append(AppRoute.chat) }
-
-                rowDivider
-
-                menuRow(
-                    title: "식단 · 운동",
-                    subtitle: "기록 · 분석 · 진행률",
-                    icon: "fork.knife.circle.fill",
-                    trailing: nil
-                ) { path.append(AppRoute.diet) }
-
-                rowDivider
-
                 menuRow(
                     title: "확인함",
                     subtitle: model.reviewCount > 0 ? "저장 전 살펴보기" : "비어 있어요",
@@ -314,33 +297,20 @@ public struct HomeView: View {
                 rowDivider
 
                 menuRow(
-                    title: "찾아보기",
-                    subtitle: "키워드로 검색",
-                    icon: "magnifyingglass",
+                    title: "녹음 화면",
+                    subtitle: model.isRecording ? "지금 듣고 있어요" : "자세히 보기",
+                    icon: "waveform.circle.fill",
                     trailing: nil
-                ) { path.append(AppRoute.search) }
-
-                rowDivider
-
-                menuRow(
-                    title: "지식 연결",
-                    subtitle: "메모·폴더 가져오기",
-                    icon: "folder.fill",
-                    trailing: model.corpusTotalUnits > 0 ? "\(model.corpusTotalUnits)" : nil
-                ) { path.append(AppRoute.library) }
-
-                rowDivider
-
-                menuRow(
-                    title: "설정",
-                    subtitle: "보관·저장 위치",
-                    icon: "gearshape.fill",
-                    trailing: nil
-                ) { path.append(AppRoute.settings) }
+                ) { path.append(AppRoute.record) }
             }
             .padding(.horizontal, TossSpace.x4)
             .background(TossColor.white)
             .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+
+            Text("검색·지식 연결·설정은 「더보기」 탭에 있어요.")
+                .font(.system(size: 13))
+                .foregroundStyle(TossColor.grey500)
+                .padding(.leading, TossSpace.x1)
         }
     }
 

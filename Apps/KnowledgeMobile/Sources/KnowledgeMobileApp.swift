@@ -8,6 +8,7 @@ struct KnowledgeMobileApp: App {
         WindowGroup {
             RootView()
                 .environmentObject(core)
+                .tint(KColor.blue500)
         }
     }
 }
@@ -27,6 +28,7 @@ struct RootView: View {
     }
 }
 
+/// 홈 · 물어보기 · 식단 · 더보기
 struct MainTabs: View {
     @EnvironmentObject var core: CoreClient
 
@@ -34,20 +36,13 @@ struct MainTabs: View {
         TabView {
             HomeMobileView()
                 .tabItem { Label("홈", systemImage: "house.fill") }
-            DietMobileView()
-                .tabItem { Label("식단", systemImage: "fork.knife.circle.fill") }
             AskMobileView()
                 .tabItem { Label("물어보기", systemImage: "bubble.left.and.bubble.right.fill") }
-            SearchMobileView()
-                .tabItem { Label("검색", systemImage: "magnifyingglass") }
-            ReviewMobileView()
-                .tabItem {
-                    Label("확인함", systemImage: "tray.full.fill")
-                }
+            DietMobileView()
+                .tabItem { Label("식단", systemImage: "fork.knife.circle.fill") }
+            MoreMobileView()
+                .tabItem { Label("더보기", systemImage: "ellipsis.circle.fill") }
                 .badge(core.reviewCount > 0 ? core.reviewCount : 0)
-            SettingsMobileView()
-                .tabItem { Label("설정", systemImage: "gearshape.fill") }
         }
-        .tint(Color(red: 0.19, green: 0.51, blue: 0.96))
     }
 }

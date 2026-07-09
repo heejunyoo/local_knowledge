@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Dedicated Diet tab: progress, week chart, analysis, inputs (via Core gateway).
+/// Depth 1: today + one CTA. Sheets for log / week / goals.
 struct DietMobileView: View {
     @EnvironmentObject var core: CoreClient
 
@@ -8,8 +8,10 @@ struct DietMobileView: View {
     @State private var busy = false
     @State private var err: String?
     @State private var flash: String?
+    @State private var showLog = false
+    @State private var showWeek = false
+    @State private var showGoals = false
 
-    // forms
     @State private var mealItems = ""
     @State private var mealKcal = ""
     @State private var mealProtein = ""
@@ -17,274 +19,232 @@ struct DietMobileView: View {
     @State private var workoutMin = "30"
     @State private var weightKg = ""
     @State private var sleepH = ""
-
-    @State private var showGoals = false
     @State private var goalKcal = "2000"
     @State private var goalProtein = "100"
     @State private var goalWeekly = "4"
     @State private var goalDayMin = "30"
 
-    private let accent = Color(red: 0.19, green: 0.51, blue: 0.96)
-    private let green = Color(red: 0.01, green: 0.70, blue: 0.42)
-
     var body: some View {
         NavigationStack {
-            List {
-                if let err {
-                    Section { Text(err).foregroundStyle(.red).font(.caption) }
-                }
-                if let flash {
-                    Section { Text(flash).foregroundStyle(accent).font(.subheadline) }
-                }
-
-                progressSection
-                weekSection
-                analysisSection
-                mealSection
-                workoutSection
-                metricSection
-                todaySection
-            }
-            .navigationTitle("식단 · 운동")
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button("목표") {
-                        loadGoalsFromDash()
-                        showGoals = true
+            ZStack {
+                KPageBackground()
+                ScrollView {
+                    VStack(alignment: .leading, spacing: KSpace.x6) {
+                        header
+                        todayHero
+                        if let tip = analysisFirst {
+                            insight(tip)
+                        }
+                        KPrimaryButton(title: "기록 남기기") { showLog = true }
+                        HStack(spacing: KSpace.x3) {
+                            secondaryBtn("주간") { showWeek = true }
+                            secondaryBtn("목표") {
+                                loadGoals()
+                                showGoals = true
+                            }
+                        }
+                        todayList
+                        if let flash {
+                            Text(flash).font(.caption).fontWeight(.semibold).foregroundStyle(KColor.blue500)
+                        }
+                        if let err {
+                            Text(err).font(.caption).foregroundStyle(KColor.red500)
+                        }
                     }
-                }
-                ToolbarItem(placement: .topBarLeading) {
-                    Button {
-                        Task { await reload() }
-                    } label: {
-                        Image(systemName: "arrow.clockwise")
-                    }
+                    .padding(.horizontal, KSpace.x6)
+                    .padding(.vertical, KSpace.x4)
                 }
             }
+            .navigationBarTitleDisplayMode(.inline)
             .refreshable { await reload() }
             .task { await reload() }
+            .sheet(isPresented: $showLog) { logSheet }
+            .sheet(isPresented: $showWeek) { weekSheet }
             .sheet(isPresented: $showGoals) { goalsSheet }
         }
     }
 
-    // MARK: Sections
+    private var header: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text("식단")
+                .font(.system(size: 28, weight: .bold))
+                .foregroundStyle(KColor.grey900)
+            Text("오늘만 보면 돼요")
+                .font(.system(size: 15))
+                .foregroundStyle(KColor.grey500)
+        }
+    }
 
-    private var progressSection: some View {
-        Section("오늘 진행") {
-            let prog = dashboard["progress"] as? [String: Any] ?? [:]
-            let goals = dashboard["goals"] as? [String: Any] ?? [:]
-            let day = dashboard["day"] as? [String: Any] ?? [:]
-            let totals = day["totals"] as? [String: Any] ?? [:]
+    private var todayHero: some View {
+        let prog = dashboard["progress"] as? [String: Any] ?? [:]
+        let goals = dashboard["goals"] as? [String: Any] ?? [:]
+        let day = dashboard["day"] as? [String: Any] ?? [:]
+        let totals = day["totals"] as? [String: Any] ?? [:]
+        let week = dashboard["week"] as? [String: Any] ?? [:]
 
-            HStack(spacing: 12) {
-                ring(
-                    title: "kcal",
-                    value: intVal(totals["kcal"]),
-                    target: intVal(goals["target_kcal"]),
-                    progress: doubleVal(prog["kcal"]),
-                    color: accent
-                )
-                ring(
-                    title: "단백질",
-                    value: intVal(totals["protein_g"]),
-                    target: intVal(goals["target_protein_g"]),
-                    progress: doubleVal(prog["protein"]),
-                    color: green
-                )
-                ring(
-                    title: "운동분",
-                    value: intVal(totals["workout_minutes"]),
-                    target: intVal(goals["target_workout_minutes_per_day"]),
-                    progress: doubleVal(prog["workout"]),
-                    color: Color.orange
-                )
-            }
-            .padding(.vertical, 4)
-
-            let week = dashboard["week"] as? [String: Any] ?? [:]
-            let wp = doubleVal(prog["weekly_workouts"])
-            VStack(alignment: .leading, spacing: 6) {
-                HStack {
-                    Text("주간 운동")
-                    Spacer()
-                    Text("\(intVal(week["workout_count"])) / \(intVal(goals["weekly_workouts"]))회")
-                        .foregroundStyle(.secondary)
-                }
-                .font(.subheadline)
-                ProgressView(value: min(1, max(0, wp)))
-                    .tint(accent)
-            }
-            if let w = dashboard["latest_weight_kg"] as? Double {
-                Text("최근 체중 \(String(format: "%.1f", w)) kg")
+        return KCard {
+            VStack(alignment: .leading, spacing: KSpace.x4) {
+                Text((day["date"] as? String) ?? "")
                     .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-        }
-    }
-
-    private func ring(title: String, value: Int, target: Int, progress: Double, color: Color) -> some View {
-        VStack(spacing: 6) {
-            ZStack {
-                Circle().stroke(Color(.systemGray5), lineWidth: 7)
-                Circle()
-                    .trim(from: 0, to: CGFloat(min(1, max(0, progress))))
-                    .stroke(color, style: StrokeStyle(lineWidth: 7, lineCap: .round))
-                    .rotationEffect(.degrees(-90))
-                VStack(spacing: 0) {
-                    Text("\(value)")
-                        .font(.system(size: 14, weight: .bold))
-                    Text("\(Int((progress * 100).rounded()))%")
-                        .font(.system(size: 10))
-                        .foregroundStyle(.secondary)
+                    .foregroundStyle(KColor.grey500)
+                HStack {
+                    pill("칼로리", "\(intVal(totals["kcal"]))", "\(intVal(goals["target_kcal"]))", doubleVal(prog["kcal"]))
+                    pill("단백질", "\(intVal(totals["protein_g"]))g", "\(intVal(goals["target_protein_g"]))g", doubleVal(prog["protein"]))
+                    pill("운동", "\(intVal(totals["workout_minutes"]))분", "\(intVal(goals["target_workout_minutes_per_day"]))분", doubleVal(prog["workout"]))
+                }
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack {
+                        Text("이번 주 운동").font(.caption).foregroundStyle(KColor.grey700)
+                        Spacer()
+                        Text("\(intVal(week["workout_count"]))/\(intVal(goals["weekly_workouts"]))회")
+                            .font(.caption).foregroundStyle(KColor.grey500)
+                    }
+                    ProgressView(value: min(1, max(0, doubleVal(prog["weekly_workouts"]))))
+                        .tint(KColor.blue500)
                 }
             }
-            .frame(width: 72, height: 72)
-            Text(title)
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-            Text("/ \(target)")
-                .font(.caption2)
-                .foregroundStyle(.tertiary)
         }
-        .frame(maxWidth: .infinity)
     }
 
-    private var weekSection: some View {
-        Section("7일 칼로리") {
-            let week = dashboard["week"] as? [String: Any] ?? [:]
-            let bars = week["bars"] as? [[String: Any]] ?? []
-            let maxK = max(bars.map { doubleVal($0["kcal"]) }.max() ?? 1, 1)
-            if bars.isEmpty {
-                Text("데이터 없음").foregroundStyle(.secondary)
-            } else {
-                HStack(alignment: .bottom, spacing: 6) {
-                    ForEach(Array(bars.enumerated()), id: \.offset) { _, b in
-                        let k = doubleVal(b["kcal"])
-                        VStack(spacing: 4) {
-                            RoundedRectangle(cornerRadius: 4)
-                                .fill(accent.opacity(k > 0 ? 1 : 0.25))
-                                .frame(height: max(6, CGFloat(k / maxK) * 80))
-                            Text((b["label"] as? String) ?? "")
-                                .font(.system(size: 10))
-                                .foregroundStyle(.secondary)
+    private func pill(_ title: String, _ value: String, _ target: String, _ p: Double) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(title).font(.caption2).foregroundStyle(KColor.grey500)
+            Text(value).font(.system(size: 16, weight: .bold)).foregroundStyle(KColor.grey900)
+            Text("\(Int(min(1.5, max(0, p)) * 100))% · \(target)")
+                .font(.system(size: 10)).foregroundStyle(KColor.grey500).lineLimit(2)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var analysisFirst: String? {
+        (dashboard["analysis"] as? [String])?.first
+    }
+
+    private func insight(_ t: String) -> some View {
+        HStack(alignment: .top, spacing: 10) {
+            Image(systemName: "lightbulb.fill").foregroundStyle(KColor.blue500)
+            Text(t).font(.system(size: 15)).foregroundStyle(KColor.grey900)
+        }
+        .padding(KSpace.x4)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(KColor.blue50)
+        .clipShape(RoundedRectangle(cornerRadius: 16))
+    }
+
+    private func secondaryBtn(_ t: String, _ a: @escaping () -> Void) -> some View {
+        Button(action: a) {
+            Text(t)
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundStyle(KColor.grey900)
+                .frame(maxWidth: .infinity)
+                .frame(height: 48)
+                .background(KColor.white)
+                .clipShape(RoundedRectangle(cornerRadius: 12))
+        }
+    }
+
+    private var todayList: some View {
+        let day = dashboard["day"] as? [String: Any] ?? [:]
+        let meals = day["meals"] as? [[String: Any]] ?? []
+        let workouts = day["workouts"] as? [[String: Any]] ?? []
+        return VStack(alignment: .leading, spacing: KSpace.x3) {
+            Text("오늘 기록")
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(KColor.grey500)
+            KCard {
+                if meals.isEmpty && workouts.isEmpty {
+                    Text("아직 없어요.").foregroundStyle(KColor.grey500).font(.subheadline)
+                } else {
+                    VStack(alignment: .leading, spacing: 10) {
+                        ForEach(Array(meals.enumerated()), id: \.offset) { _, m in
+                            let items = (m["items"] as? [String])?.joined(separator: ", ") ?? "식사"
+                            Text(items).font(.system(size: 15, weight: .medium))
                         }
-                        .frame(maxWidth: .infinity)
-                    }
-                }
-                .frame(height: 110)
-            }
-        }
-    }
-
-    private var analysisSection: some View {
-        Section("분석") {
-            let lines = dashboard["analysis"] as? [String] ?? []
-            if lines.isEmpty {
-                Text("기록을 남기면 분석이 생겨요.").foregroundStyle(.secondary)
-            } else {
-                ForEach(Array(lines.enumerated()), id: \.offset) { _, line in
-                    Text(line)
-                        .font(.subheadline)
-                }
-            }
-        }
-    }
-
-    private var mealSection: some View {
-        Section("식사 기록") {
-            TextField("음식 (쉼표 구분)", text: $mealItems)
-            HStack {
-                TextField("kcal", text: $mealKcal)
-                    .keyboardType(.decimalPad)
-                TextField("단백질 g", text: $mealProtein)
-                    .keyboardType(.decimalPad)
-            }
-            Button {
-                Task { await saveMeal() }
-            } label: {
-                if busy { ProgressView() } else { Text("식사 저장").fontWeight(.semibold) }
-            }
-            .disabled(busy || mealItems.trimmingCharacters(in: .whitespaces).isEmpty)
-        }
-    }
-
-    private var workoutSection: some View {
-        Section("운동 기록") {
-            TextField("종류", text: $workoutKind)
-            TextField("분", text: $workoutMin)
-                .keyboardType(.numberPad)
-            Button {
-                Task { await saveWorkout() }
-            } label: {
-                Text("운동 저장").fontWeight(.semibold)
-            }
-            .disabled(busy)
-        }
-    }
-
-    private var metricSection: some View {
-        Section("체중 · 수면") {
-            HStack {
-                TextField("체중 kg", text: $weightKg).keyboardType(.decimalPad)
-                TextField("수면 h", text: $sleepH).keyboardType(.decimalPad)
-            }
-            Button {
-                Task { await saveMetric() }
-            } label: {
-                Text("지표 저장").fontWeight(.semibold)
-            }
-            .disabled(busy || (weightKg.isEmpty && sleepH.isEmpty))
-        }
-    }
-
-    private var todaySection: some View {
-        Section("오늘 기록") {
-            let day = dashboard["day"] as? [String: Any] ?? [:]
-            let meals = day["meals"] as? [[String: Any]] ?? []
-            let workouts = day["workouts"] as? [[String: Any]] ?? []
-            if meals.isEmpty && workouts.isEmpty {
-                Text("아직 없어요").foregroundStyle(.secondary)
-            }
-            ForEach(Array(meals.enumerated()), id: \.offset) { _, m in
-                let items = (m["items"] as? [String])?.joined(separator: ", ") ?? "식사"
-                let kcal = m["kcal"] as? Double
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(items).font(.headline)
-                    if let kcal {
-                        Text("\(Int(kcal)) kcal").font(.caption).foregroundStyle(.secondary)
+                        ForEach(Array(workouts.enumerated()), id: \.offset) { _, w in
+                            Text("\((w["kind"] as? String) ?? "운동") · \(w["minutes"] as? Int ?? 0)분")
+                                .font(.system(size: 15, weight: .medium))
+                        }
                     }
                 }
             }
-            ForEach(Array(workouts.enumerated()), id: \.offset) { _, w in
-                let kind = w["kind"] as? String ?? "운동"
-                let min = w["minutes"] as? Int ?? 0
-                Text("\(kind) · \(min)분")
-            }
         }
+    }
+
+    private var logSheet: some View {
+        NavigationStack {
+            Form {
+                Section("식사") {
+                    TextField("음식", text: $mealItems)
+                    TextField("kcal", text: $mealKcal).keyboardType(.decimalPad)
+                    TextField("단백질 g", text: $mealProtein).keyboardType(.decimalPad)
+                    Button("식사 저장") { Task { await saveMeal() } }
+                }
+                Section("운동") {
+                    TextField("종류", text: $workoutKind)
+                    TextField("분", text: $workoutMin).keyboardType(.numberPad)
+                    Button("운동 저장") { Task { await saveWorkout() } }
+                }
+                Section("체중 · 수면") {
+                    TextField("kg", text: $weightKg).keyboardType(.decimalPad)
+                    TextField("수면 h", text: $sleepH).keyboardType(.decimalPad)
+                    Button("지표 저장") { Task { await saveMetric() } }
+                }
+            }
+            .navigationTitle("기록")
+            .toolbar { ToolbarItem(placement: .cancellationAction) { Button("닫기") { showLog = false } } }
+        }
+        .presentationDetents([.medium, .large])
+    }
+
+    private var weekSheet: some View {
+        NavigationStack {
+            List {
+                let week = dashboard["week"] as? [String: Any] ?? [:]
+                let bars = week["bars"] as? [[String: Any]] ?? []
+                if !bars.isEmpty {
+                    Section("7일 칼로리") {
+                        HStack(alignment: .bottom, spacing: 6) {
+                            let maxK = max(bars.map { doubleVal($0["kcal"]) }.max() ?? 1, 1)
+                            ForEach(Array(bars.enumerated()), id: \.offset) { _, b in
+                                let k = doubleVal(b["kcal"])
+                                VStack(spacing: 4) {
+                                    RoundedRectangle(cornerRadius: 4)
+                                        .fill(KColor.blue500.opacity(k > 0 ? 1 : 0.25))
+                                        .frame(height: max(6, CGFloat(k / maxK) * 80))
+                                    Text((b["label"] as? String) ?? "").font(.system(size: 10))
+                                }
+                                .frame(maxWidth: .infinity)
+                            }
+                        }
+                        .frame(height: 100)
+                    }
+                }
+                Section("분석") {
+                    ForEach(Array((dashboard["analysis"] as? [String] ?? []).enumerated()), id: \.offset) { _, line in
+                        Text(line).font(.subheadline)
+                    }
+                }
+            }
+            .navigationTitle("주간")
+            .toolbar { ToolbarItem(placement: .cancellationAction) { Button("닫기") { showWeek = false } } }
+        }
+        .presentationDetents([.medium, .large])
     }
 
     private var goalsSheet: some View {
         NavigationStack {
             Form {
                 TextField("하루 kcal", text: $goalKcal).keyboardType(.numberPad)
-                TextField("하루 단백질 g", text: $goalProtein).keyboardType(.numberPad)
+                TextField("단백질 g", text: $goalProtein).keyboardType(.numberPad)
                 TextField("주간 운동 횟수", text: $goalWeekly).keyboardType(.numberPad)
                 TextField("하루 운동 분", text: $goalDayMin).keyboardType(.numberPad)
-                Button("저장") {
-                    Task { await saveGoals() }
-                }
+                Button("저장") { Task { await saveGoals() } }
             }
             .navigationTitle("목표")
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("닫기") { showGoals = false }
-                }
-            }
+            .toolbar { ToolbarItem(placement: .cancellationAction) { Button("닫기") { showGoals = false } } }
         }
         .presentationDetents([.medium])
     }
-
-    // MARK: Actions
 
     private func reload() async {
         busy = true
@@ -299,54 +259,37 @@ struct DietMobileView: View {
     }
 
     private func saveMeal() async {
-        busy = true
-        defer { busy = false }
         let items = mealItems.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
+        guard !items.isEmpty else { return }
         do {
-            try await core.dietLogMeal(
-                items: items,
-                kcal: Double(mealKcal),
-                proteinG: Double(mealProtein),
-                note: nil
-            )
+            try await core.dietLogMeal(items: items, kcal: Double(mealKcal), proteinG: Double(mealProtein), note: nil)
             mealItems = ""; mealKcal = ""; mealProtein = ""
             flash = "식사 저장"
+            showLog = false
             await reload()
-        } catch {
-            err = error.localizedDescription
-        }
+        } catch { err = error.localizedDescription }
     }
 
     private func saveWorkout() async {
-        busy = true
-        defer { busy = false }
         do {
-            try await core.dietLogWorkout(
-                kind: workoutKind,
-                minutes: Int(workoutMin) ?? 0,
-                intensity: nil
-            )
+            try await core.dietLogWorkout(kind: workoutKind, minutes: Int(workoutMin) ?? 0, intensity: nil)
             flash = "운동 저장"
+            showLog = false
             await reload()
-        } catch {
-            err = error.localizedDescription
-        }
+        } catch { err = error.localizedDescription }
     }
 
     private func saveMetric() async {
-        busy = true
-        defer { busy = false }
         do {
             try await core.dietLogMetric(weightKg: Double(weightKg), sleepH: Double(sleepH))
             weightKg = ""; sleepH = ""
             flash = "지표 저장"
+            showLog = false
             await reload()
-        } catch {
-            err = error.localizedDescription
-        }
+        } catch { err = error.localizedDescription }
     }
 
-    private func loadGoalsFromDash() {
+    private func loadGoals() {
         let g = dashboard["goals"] as? [String: Any] ?? [:]
         goalKcal = "\(intVal(g["target_kcal"]))"
         goalProtein = "\(intVal(g["target_protein_g"]))"
@@ -365,22 +308,18 @@ struct DietMobileView: View {
             showGoals = false
             flash = "목표 저장"
             await reload()
-        } catch {
-            err = error.localizedDescription
-        }
+        } catch { err = error.localizedDescription }
     }
 
     private func intVal(_ any: Any?) -> Int {
         if let i = any as? Int { return i }
         if let d = any as? Double { return Int(d) }
-        if let s = any as? String, let i = Int(s) { return i }
         return 0
     }
 
     private func doubleVal(_ any: Any?) -> Double {
         if let d = any as? Double { return d }
         if let i = any as? Int { return Double(i) }
-        if let s = any as? String, let d = Double(s) { return d }
         return 0
     }
 }

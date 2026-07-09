@@ -71,3 +71,14 @@ Personal PKM UI does **not** copy TDS assets. It adopts Toss product philosophy:
 2. **상황별 Primary CTA 하나** (녹음 / 확인 / 녹음 중 열기)  
 3. 나머지는 **리스트 행** (아이콘 + 제목 + chevron)  
 4. 최근 활동은 선택, Quiet  
+
+## Top-level IA (2026-07-10)
+
+| Tab | Job |
+|-----|-----|
+| 홈 | Primary CTA + 확인함 진입 |
+| 물어보기 | 지식 Q&A only |
+| 식단 | 오늘 요약 + 기록 시트 (주간/목표는 2뎁스) |
+| 더보기 | 확인함 · 검색 · 연결 · 설정 |
+
+Anti: 6-tab dump, 식단 한 화면에 폼 전부.

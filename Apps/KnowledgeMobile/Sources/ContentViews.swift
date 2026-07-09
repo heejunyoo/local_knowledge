@@ -9,46 +9,70 @@ struct PairingView: View {
     @State private var busy = false
 
     var body: some View {
-        NavigationStack {
-            Form {
-                Section {
-                    Text("Mac에서 게이트웨이를 켠 뒤 6자리 코드를 입력하세요.\n설정 → 모바일 연결, 또는 knowledged --pair")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                }
-                Section("Core URL") {
-                    Text("Mac 설정 → 모바일 연결에 있는 주소를 그대로 넣으세요. http:// 로 시작해야 해요.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    TextField("http://100.x.y.z:8741", text: $core.baseURL)
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled()
-                        .keyboardType(.URL)
-                        .textContentType(.URL)
-                }
-                Section("페어링") {
-                    TextField("6자리 코드", text: $code)
-                        .keyboardType(.numberPad)
-                    TextField("기기 이름", text: $name)
-                    Button {
+        ZStack {
+            KPageBackground()
+            ScrollView {
+                VStack(alignment: .leading, spacing: KSpace.x6) {
+                    Text("Knowledge 연결")
+                        .font(.system(size: 28, weight: .bold))
+                        .foregroundStyle(KColor.grey900)
+                        .padding(.top, KSpace.x8)
+
+                    Text("Mac 설정 → 모바일 연결에 있는 주소와 6자리 코드를 입력하세요.")
+                        .font(.system(size: 15))
+                        .foregroundStyle(KColor.grey700)
+                        .fixedSize(horizontal: false, vertical: true)
+
+                    KCard {
+                        VStack(alignment: .leading, spacing: KSpace.x4) {
+                            fieldLabel("Core URL")
+                            TextField("http://100.x.x.x:8741", text: $core.baseURL)
+                                .textInputAutocapitalization(.never)
+                                .autocorrectionDisabled()
+                                .keyboardType(.URL)
+                                .padding(12)
+                                .background(KColor.grey100)
+                                .clipShape(RoundedRectangle(cornerRadius: 12))
+
+                            fieldLabel("페어링 코드")
+                            TextField("6자리", text: $code)
+                                .keyboardType(.numberPad)
+                                .padding(12)
+                                .background(KColor.grey100)
+                                .clipShape(RoundedRectangle(cornerRadius: 12))
+
+                            fieldLabel("이 기기 이름")
+                            TextField("iPhone", text: $name)
+                                .padding(12)
+                                .background(KColor.grey100)
+                                .clipShape(RoundedRectangle(cornerRadius: 12))
+                        }
+                    }
+
+                    if let err = core.lastError {
+                        Text(err)
+                            .font(.system(size: 14))
+                            .foregroundStyle(KColor.red500)
+                    }
+
+                    KPrimaryButton(title: busy ? "연결 중…" : "연결하기", enabled: !busy && code.count >= 4 && !core.baseURL.isEmpty) {
                         Task {
                             busy = true
                             await core.completePair(code: code, deviceName: name)
                             busy = false
                         }
-                    } label: {
-                        if busy { ProgressView() } else { Text("연결") }
-                    }
-                    .disabled(code.count < 4 || core.baseURL.isEmpty || busy)
-                }
-                if let err = core.lastError {
-                    Section {
-                        Text(err).foregroundStyle(.red)
                     }
                 }
+                .padding(.horizontal, KSpace.x6)
+                .padding(.bottom, KSpace.x8)
             }
-            .navigationTitle("Knowledge 연결")
         }
+    }
+
+    private func fieldLabel(_ t: String) -> some View {
+        Text(t)
+            .font(.system(size: 13, weight: .semibold))
+            .foregroundStyle(KColor.grey500)
     }
 }
 
@@ -56,55 +80,129 @@ struct PairingView: View {
 
 struct HomeMobileView: View {
     @EnvironmentObject var core: CoreClient
+    @State private var goReview = false
+    @State private var goDiet = false
+    @State private var goAsk = false
 
     var body: some View {
         NavigationStack {
-            List {
-                Section {
-                    HStack {
-                        Circle()
-                            .fill(core.connected ? Color.green : Color.orange)
-                            .frame(width: 10, height: 10)
-                        Text(core.connected ? "연결됨 · \(core.coreName.isEmpty ? "Core" : core.coreName)" : "연결 확인 중…")
+            ZStack {
+                KPageBackground()
+                ScrollView {
+                    VStack(alignment: .leading, spacing: KSpace.x6) {
+                        VStack(alignment: .leading, spacing: KSpace.x2) {
+                            Text(greetingTitle)
+                                .font(.system(size: 28, weight: .bold))
+                                .foregroundStyle(KColor.grey900)
+                            Text(greetingBody)
+                                .font(.system(size: 16))
+                                .foregroundStyle(KColor.grey700)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                        .padding(.top, KSpace.x4)
+
+                        connectionChip
+
+                        KPrimaryButton(title: primaryTitle, enabled: true) {
+                            primaryAction()
+                        }
+
+                        if !core.dietLine.isEmpty {
+                            KCard {
+                                VStack(alignment: .leading, spacing: 6) {
+                                    Text("오늘 식단")
+                                        .font(.system(size: 13, weight: .semibold))
+                                        .foregroundStyle(KColor.grey500)
+                                    Text(core.dietLine)
+                                        .font(.system(size: 15))
+                                        .foregroundStyle(KColor.grey900)
+                                }
+                            }
+                        }
+
+                        KCard(padded: false) {
+                            VStack(spacing: 0) {
+                                KListRow(
+                                    title: "확인함",
+                                    subtitle: core.reviewCount > 0 ? "저장 대기 \(core.reviewCount)건" : "비어 있어요",
+                                    systemImage: "checkmark.circle.fill",
+                                    trailing: core.reviewCount > 0 ? "\(core.reviewCount)" : nil
+                                ) { goReview = true }
+                                Divider().padding(.leading, 56)
+                                KListRow(
+                                    title: "물어보기",
+                                    subtitle: "지식에 질문",
+                                    systemImage: "bubble.left.and.bubble.right.fill"
+                                ) { goAsk = true }
+                            }
+                            .padding(.horizontal, KSpace.x4)
+                        }
                     }
-                }
-                Section("확인함") {
-                    HStack {
-                        Text("저장 대기")
-                        Spacer()
-                        Text("\(core.reviewCount)")
-                            .foregroundStyle(core.reviewCount > 0 ? Color(red: 0.19, green: 0.51, blue: 0.96) : .secondary)
-                            .fontWeight(.semibold)
-                    }
-                }
-                if !core.dietLine.isEmpty {
-                    Section("오늘 (식단)") {
-                        Text(core.dietLine)
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-                    }
-                }
-                Section("안내") {
-                    Text("물어보기에서 지식·식단을 물어보세요. 답은 Mac Core가 만듭니다.")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
+                    .padding(.horizontal, KSpace.x6)
+                    .padding(.bottom, KSpace.x8)
                 }
             }
-            .navigationTitle("홈")
+            .navigationBarTitleDisplayMode(.inline)
             .refreshable { await core.refreshStatus() }
             .task { await core.refreshStatus() }
+            .navigationDestination(isPresented: $goReview) { ReviewMobileView() }
+            .navigationDestination(isPresented: $goDiet) { DietMobileView() }
+            .navigationDestination(isPresented: $goAsk) { AskMobileView() }
         }
+    }
+
+    private var connectionChip: some View {
+        HStack(spacing: 8) {
+            Circle()
+                .fill(core.connected ? KColor.green500 : Color.orange)
+                .frame(width: 8, height: 8)
+            Text(core.connected ? "Mac 연결됨" : "연결 확인 중…")
+                .font(.system(size: 13, weight: .medium))
+                .foregroundStyle(KColor.grey700)
+            if !core.coreName.isEmpty {
+                Text("· \(core.coreName)")
+                    .font(.system(size: 13))
+                    .foregroundStyle(KColor.grey500)
+                    .lineLimit(1)
+            }
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .background(KColor.white)
+        .clipShape(Capsule())
+    }
+
+    private var greetingTitle: String {
+        if core.reviewCount > 0 { return "확인할 게 있어요" }
+        if !core.connected { return "연결을 확인해요" }
+        if core.dietLine.isEmpty { return "오늘도 남겨 볼까요" }
+        return "준비됐어요"
+    }
+
+    private var greetingBody: String {
+        if core.reviewCount > 0 {
+            return "저장 전에 요약 \(core.reviewCount)건을 보면 좋아요."
+        }
+        if !core.connected {
+            return "Mac과 Tailscale이 켜져 있는지 확인해 주세요."
+        }
+        return "녹음은 Mac에서, 질문·식단은 여기서 이어가요."
+    }
+
+    private var primaryTitle: String {
+        if core.reviewCount > 0 { return "확인함 열기 (\(core.reviewCount))" }
+        if core.dietLine.isEmpty { return "오늘 식단 남기기" }
+        return "지식에 물어보기"
+    }
+
+    private func primaryAction() {
+        if core.reviewCount > 0 { goReview = true }
+        else if core.dietLine.isEmpty { goDiet = true }
+        else { goAsk = true }
     }
 }
 
 // MARK: - Ask
-
-private struct ChatBubble: Identifiable {
-    let id = UUID()
-    var role: String
-    var text: String
-    var meta: String
-}
 
 struct AskMobileView: View {
     @EnvironmentObject var core: CoreClient
@@ -113,78 +211,70 @@ struct AskMobileView: View {
     @State private var busy = false
     @State private var status = ""
 
-    private let accent = Color(red: 0.19, green: 0.51, blue: 0.96)
-
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
-                messageList
-                composer
-            }
-            .navigationTitle("물어보기")
-        }
-    }
-
-    private var messageList: some View {
-        ScrollView {
-            LazyVStack(alignment: .leading, spacing: 12) {
-                if messages.isEmpty {
-                    Text("근거를 먼저 보여 주고, 가능하면 AI가 문장을 다듬어요.")
-                        .foregroundStyle(.secondary)
-                        .padding()
-                }
-                ForEach(messages) { m in
-                    bubbleRow(m)
-                }
-                if busy {
-                    HStack(spacing: 8) {
-                        ProgressView()
-                        Text(status.isEmpty ? "찾는 중…" : status)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
+                ScrollView {
+                    LazyVStack(alignment: .leading, spacing: 12) {
+                        if messages.isEmpty {
+                            Text("근거를 먼저 보여 주고, 가능하면 문장을 다듬어요.")
+                                .foregroundStyle(KColor.grey500)
+                                .padding()
+                        }
+                        ForEach(messages) { m in
+                            bubble(m)
+                        }
+                        if busy {
+                            HStack(spacing: 8) {
+                                ProgressView()
+                                Text(status.isEmpty ? "찾는 중…" : status)
+                                    .font(.caption)
+                                    .foregroundStyle(KColor.grey500)
+                            }
+                            .padding()
+                        }
                     }
-                    .padding()
+                    .padding(.vertical)
                 }
+                HStack(alignment: .bottom, spacing: 10) {
+                    TextField("메시지", text: $draft, axis: .vertical)
+                        .lineLimit(1...4)
+                        .padding(12)
+                        .background(KColor.grey100)
+                        .clipShape(RoundedRectangle(cornerRadius: 20))
+                    Button(action: send) {
+                        Image(systemName: "arrow.up.circle.fill")
+                            .font(.system(size: 34))
+                            .foregroundStyle(KColor.blue500)
+                    }
+                    .disabled(busy || draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                }
+                .padding()
+                .background(KColor.white)
             }
-            .padding(.vertical)
+            .background(KColor.grey100)
+            .navigationTitle("물어보기")
+            .navigationBarTitleDisplayMode(.inline)
         }
     }
 
-    private func bubbleRow(_ m: ChatBubble) -> some View {
+    private func bubble(_ m: ChatBubble) -> some View {
         let isUser = m.role == "user"
         return HStack {
             if isUser { Spacer(minLength: 40) }
             VStack(alignment: isUser ? .trailing : .leading, spacing: 4) {
                 Text(m.text)
                     .padding(12)
-                    .background(isUser ? accent : Color(.secondarySystemBackground))
-                    .foregroundStyle(isUser ? Color.white : Color.primary)
+                    .background(isUser ? KColor.blue500 : KColor.white)
+                    .foregroundStyle(isUser ? Color.white : KColor.grey900)
                     .clipShape(RoundedRectangle(cornerRadius: 16))
                 if !m.meta.isEmpty {
-                    Text(m.meta)
-                        .font(.caption2)
-                        .foregroundStyle(.tertiary)
+                    Text(m.meta).font(.caption2).foregroundStyle(KColor.grey500)
                 }
             }
             if !isUser { Spacer(minLength: 40) }
         }
         .padding(.horizontal)
-    }
-
-    private var composer: some View {
-        HStack(alignment: .bottom, spacing: 10) {
-            TextField("메시지", text: $draft, axis: .vertical)
-                .lineLimit(1...4)
-                .padding(12)
-                .background(Color(.secondarySystemBackground))
-                .clipShape(RoundedRectangle(cornerRadius: 20))
-            Button(action: send) {
-                Image(systemName: "arrow.up.circle.fill")
-                    .font(.system(size: 34))
-            }
-            .disabled(busy || draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-        }
-        .padding()
     }
 
     private func send() {
@@ -197,9 +287,8 @@ struct AskMobileView: View {
         Task {
             do {
                 let fast = try await core.askFast(q: q)
-                let meta = fast.engine.isEmpty ? "빠른 답" : fast.engine
-                messages.append(ChatBubble(role: "assistant", text: fast.answer, meta: meta))
-                status = "AI로 다듬는 중…"
+                messages.append(ChatBubble(role: "assistant", text: fast.answer, meta: fast.engine.isEmpty ? "빠른 답" : fast.engine))
+                status = "다듬는 중…"
                 if let chat = try? await core.chat(message: q),
                    !chat.answer.isEmpty,
                    chat.answer != fast.answer,
@@ -217,7 +306,14 @@ struct AskMobileView: View {
     }
 }
 
-// MARK: - Search
+private struct ChatBubble: Identifiable {
+    let id = UUID()
+    var role: String
+    var text: String
+    var meta: String
+}
+
+// MARK: - Search / Review / Settings (More)
 
 struct SearchMobileView: View {
     @EnvironmentObject var core: CoreClient
@@ -227,49 +323,34 @@ struct SearchMobileView: View {
     @State private var err: String?
 
     var body: some View {
-        NavigationStack {
-            List {
-                Section {
-                    HStack {
-                        TextField("검색", text: $q)
-                            .textInputAutocapitalization(.never)
-                            .onSubmit { Task { await run() } }
-                        if busy { ProgressView() }
-                        else {
-                            Button("찾기") { Task { await run() } }
-                                .disabled(q.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                        }
-                    }
-                }
-                if let err {
-                    Section { Text(err).foregroundStyle(.red).font(.caption) }
-                }
-                ForEach(Array(hits.enumerated()), id: \.offset) { _, h in
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(titleOf(h))
-                            .font(.headline)
-                        Text(snippetOf(h))
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .lineLimit(3)
+        List {
+            Section {
+                HStack {
+                    TextField("검색", text: $q)
+                        .textInputAutocapitalization(.never)
+                        .onSubmit { Task { await run() } }
+                    if busy { ProgressView() }
+                    else {
+                        Button("찾기") { Task { await run() } }
+                            .disabled(q.trimmingCharacters(in: .whitespaces).isEmpty)
                     }
                 }
             }
-            .navigationTitle("검색")
+            if let err {
+                Section { Text(err).foregroundStyle(KColor.red500).font(.caption) }
+            }
+            ForEach(Array(hits.enumerated()), id: \.offset) { _, h in
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(h["title"] as? String ?? h["doc_title"] as? String ?? "(제목 없음)")
+                        .font(.headline)
+                    Text(h["snippet"] as? String ?? h["body"] as? String ?? "")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(3)
+                }
+            }
         }
-    }
-
-    private func titleOf(_ h: [String: Any]) -> String {
-        h["title"] as? String
-            ?? h["doc_title"] as? String
-            ?? "(제목 없음)"
-    }
-
-    private func snippetOf(_ h: [String: Any]) -> String {
-        h["snippet"] as? String
-            ?? h["body"] as? String
-            ?? h["text"] as? String
-            ?? ""
+        .navigationTitle("검색")
     }
 
     private func run() async {
@@ -286,8 +367,6 @@ struct SearchMobileView: View {
     }
 }
 
-// MARK: - Review
-
 struct ReviewMobileView: View {
     @EnvironmentObject var core: CoreClient
     @State private var items: [[String: Any]] = []
@@ -296,51 +375,40 @@ struct ReviewMobileView: View {
     @State private var acceptingId: String?
 
     var body: some View {
-        NavigationStack {
-            List {
-                if let err {
-                    Section { Text(err).foregroundStyle(.red).font(.caption) }
-                }
-                if items.isEmpty && !busy {
-                    Section {
-                        Text("확인할 요약이 없어요. Mac에서 회의를 처리하면 여기에 나타나요.")
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-                    }
-                }
-                ForEach(Array(items.enumerated()), id: \.offset) { _, m in
-                    let id = (m["id"] as? String) ?? ""
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text((m["title"] as? String).flatMap { $0.isEmpty ? nil : $0 } ?? "제목 없음")
-                            .font(.headline)
-                        Text(m["status"] as? String ?? "")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                        if let one = m["one_line"] as? String, !one.isEmpty {
-                            Text(one).font(.subheadline)
-                        }
-                        Button {
-                            Task { await accept(id: id) }
-                        } label: {
-                            if acceptingId == id {
-                                ProgressView()
-                            } else {
-                                Text("노트에 저장")
-                                    .fontWeight(.semibold)
-                            }
-                        }
-                        .disabled(id.isEmpty || acceptingId != nil)
-                    }
-                    .padding(.vertical, 4)
+        List {
+            if let err {
+                Section { Text(err).foregroundStyle(KColor.red500).font(.caption) }
+            }
+            if items.isEmpty && !busy {
+                Section {
+                    Text("확인할 요약이 없어요.")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
                 }
             }
-            .navigationTitle("확인함")
-            .refreshable { await load() }
-            .overlay {
-                if busy && items.isEmpty { ProgressView() }
+            ForEach(Array(items.enumerated()), id: \.offset) { _, m in
+                let id = (m["id"] as? String) ?? ""
+                VStack(alignment: .leading, spacing: 8) {
+                    Text((m["title"] as? String).flatMap { $0.isEmpty ? nil : $0 } ?? "제목 없음")
+                        .font(.headline)
+                    Text(m["status"] as? String ?? "")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Button {
+                        Task { await accept(id: id) }
+                    } label: {
+                        if acceptingId == id { ProgressView() }
+                        else { Text("노트에 저장").fontWeight(.semibold) }
+                    }
+                    .disabled(id.isEmpty || acceptingId != nil)
+                }
+                .padding(.vertical, 4)
             }
-            .task { await load() }
         }
+        .navigationTitle("확인함")
+        .refreshable { await load() }
+        .overlay { if busy && items.isEmpty { ProgressView() } }
+        .task { await load() }
     }
 
     private func load() async {
@@ -367,48 +435,41 @@ struct ReviewMobileView: View {
     }
 }
 
-// MARK: - Settings
-
 struct SettingsMobileView: View {
     @EnvironmentObject var core: CoreClient
     @State private var revoking = false
 
     var body: some View {
-        NavigationStack {
-            Form {
-                Section("Core") {
-                    TextField("Base URL", text: $core.baseURL)
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled()
-                        .keyboardType(.URL)
-                    LabeledContent("기기", value: core.deviceId.isEmpty ? "—" : String(core.deviceId.prefix(8)) + "…")
-                    LabeledContent("상태", value: core.connected ? "연결됨" : "끊김")
-                    LabeledContent("Core 이름", value: core.coreName.isEmpty ? "—" : core.coreName)
-                }
-                Section {
-                    Button("연결 상태 새로고침") {
-                        Task { await core.refreshStatus() }
+        Form {
+            Section("Core") {
+                TextField("Base URL", text: $core.baseURL)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                    .keyboardType(.URL)
+                LabeledContent("기기", value: core.deviceId.isEmpty ? "—" : String(core.deviceId.prefix(8)) + "…")
+                LabeledContent("상태", value: core.connected ? "연결됨" : "끊김")
+            }
+            Section {
+                Button("연결 새로고침") { Task { await core.refreshStatus() } }
+                Button(role: .destructive) {
+                    Task {
+                        revoking = true
+                        await core.revokeRemote()
+                        revoking = false
                     }
-                    Button(role: .destructive) {
-                        Task {
-                            revoking = true
-                            await core.revokeRemote()
-                            revoking = false
-                        }
-                    } label: {
-                        if revoking { ProgressView() } else { Text("페어링 해제") }
-                    }
-                }
-                Section("안내") {
-                    Text("Free Apple ID는 약 7일마다 재설치가 필요할 수 있어요. 데이터는 Mac에 있습니다.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-                if let err = core.lastError {
-                    Section { Text(err).foregroundStyle(.red) }
+                } label: {
+                    if revoking { ProgressView() } else { Text("페어링 해제") }
                 }
             }
-            .navigationTitle("설정")
+            Section {
+                Text("데이터는 Mac에 있어요. Free 계정은 약 7일마다 재설치가 필요할 수 있어요.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            if let err = core.lastError {
+                Section { Text(err).foregroundStyle(KColor.red500) }
+            }
         }
+        .navigationTitle("설정")
     }
 }

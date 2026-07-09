@@ -12,6 +12,8 @@
 		A10000000000000000000016 /* ContentViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000012 /* ContentViews.swift */; };
 		A10000000000000000000019 /* DietMobileView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000018 /* DietMobileView.swift */; };
 		A1000000000000000000001B /* CleartextHTTP.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000001A /* CleartextHTTP.swift */; };
+		A1000000000000000000001D /* Design.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000001C /* Design.swift */; };
+		A1000000000000000000001F /* MoreMobileView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000001E /* MoreMobileView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -22,6 +24,8 @@
 		A10000000000000000000013 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		A10000000000000000000018 /* DietMobileView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DietMobileView.swift; sourceTree = "<group>"; };
 		A1000000000000000000001A /* CleartextHTTP.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CleartextHTTP.swift; sourceTree = "<group>"; };
+		A1000000000000000000001C /* Design.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Design.swift; sourceTree = "<group>"; };
+		A1000000000000000000001E /* MoreMobileView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MoreMobileView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -48,10 +52,12 @@
 			isa = PBXGroup;
 			children = (
 				A10000000000000000000010 /* KnowledgeMobileApp.swift */,
+				A1000000000000000000001C /* Design.swift */,
 				A10000000000000000000011 /* CoreClient.swift */,
 				A1000000000000000000001A /* CleartextHTTP.swift */,
 				A10000000000000000000012 /* ContentViews.swift */,
 				A10000000000000000000018 /* DietMobileView.swift */,
+				A1000000000000000000001E /* MoreMobileView.swift */,
 			);
 			path = Sources;
 			sourceTree = "<group>";
@@ -134,10 +140,12 @@
 			buildActionMask = 2147483647;
 			files = (
 				A10000000000000000000014 /* KnowledgeMobileApp.swift in Sources */,
+				A1000000000000000000001D /* Design.swift in Sources */,
 				A10000000000000000000015 /* CoreClient.swift in Sources */,
 				A1000000000000000000001B /* CleartextHTTP.swift in Sources */,
 				A10000000000000000000016 /* ContentViews.swift in Sources */,
 				A10000000000000000000019 /* DietMobileView.swift in Sources */,
+				A1000000000000000000001F /* MoreMobileView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -184,7 +192,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 5;
+				CURRENT_PROJECT_VERSION = 6;
 				DEVELOPMENT_TEAM = 7QXGG66FG5;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = NO;
@@ -196,7 +204,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 0.1.3;
+				MARKETING_VERSION = 0.2.0;
 				PRODUCT_BUNDLE_IDENTIFIER = local.knowledge.mobile.heejun;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
@@ -212,7 +220,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 5;
+				CURRENT_PROJECT_VERSION = 6;
 				DEVELOPMENT_TEAM = 7QXGG66FG5;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = NO;
@@ -224,7 +232,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 0.1.3;
+				MARKETING_VERSION = 0.2.0;
 				PRODUCT_BUNDLE_IDENTIFIER = local.knowledge.mobile.heejun;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
