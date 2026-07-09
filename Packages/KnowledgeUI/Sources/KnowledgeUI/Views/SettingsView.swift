@@ -21,7 +21,11 @@ public struct SettingsView: View {
     @State private var pairExpires: Int = 0
     @State private var pairError: String?
     @State private var pairBusy = false
-    @State private var tailscaleHint: String = ""
+    @State private var coreURL: String = ""
+    @State private var coreURLNote: String = ""
+    @State private var lanURL: String = ""
+    @State private var gatewayLive: Bool = false
+    @State private var copiedFlash: String?
     @State private var gatewayPort: UInt16 = 8741
 
     public init(model: AppModel) {
@@ -111,43 +115,115 @@ public struct SettingsView: View {
             Text("모바일 연결")
                 .font(.system(size: 15, weight: .semibold))
                 .foregroundStyle(TossColor.grey500)
-            VStack(alignment: .leading, spacing: TossSpace.x4) {
-                Text("앱이 백엔드와 함께 Core 게이트웨이(:\(gatewayPort))를 켭니다. iPhone에 Tailscale IP와 아래 코드를 입력하세요. (코드 발급은 이 Mac에서만)")
+            VStack(alignment: .leading, spacing: TossSpace.x5) {
+                Text("아이폰 Knowledge 앱에 아래를 그대로 입력하세요.")
                     .font(.system(size: 14))
                     .foregroundStyle(TossColor.grey700)
                     .fixedSize(horizontal: false, vertical: true)
 
-                if !tailscaleHint.isEmpty {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Core URL")
+                // 1) Core URL — primary value for the phone
+                VStack(alignment: .leading, spacing: TossSpace.x2) {
+                    HStack(spacing: 8) {
+                        Text("① Core URL (아이폰에 붙여넣기)")
                             .font(.system(size: 13, weight: .semibold))
                             .foregroundStyle(TossColor.grey500)
-                        Text(tailscaleHint)
-                            .font(.system(size: 15, design: .monospaced))
-                            .foregroundStyle(TossColor.grey900)
+                        Spacer()
+                        HStack(spacing: 4) {
+                            Circle()
+                                .fill(gatewayLive ? TossColor.green500 : Color.orange.opacity(0.85))
+                                .frame(width: 8, height: 8)
+                            Text(gatewayLive ? "게이트웨이 ON" : "게이트웨이 확인 중…")
+                                .font(.system(size: 12, weight: .medium))
+                                .foregroundStyle(TossColor.grey500)
+                        }
+                    }
+
+                    Text(coreURL.isEmpty ? "불러오는 중…" : coreURL)
+                        .font(.system(size: 17, weight: .semibold, design: .monospaced))
+                        .foregroundStyle(TossColor.grey900)
+                        .textSelection(.enabled)
+                        .padding(14)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(TossColor.blue50)
+                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+
+                    if !coreURLNote.isEmpty {
+                        Text(coreURLNote)
+                            .font(.system(size: 12))
+                            .foregroundStyle(TossColor.grey500)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+
+                    if !lanURL.isEmpty, lanURL != coreURL {
+                        Text("같은 Wi‑Fi만 쓸 때: \(lanURL)")
+                            .font(.system(size: 12, design: .monospaced))
+                            .foregroundStyle(TossColor.grey500)
                             .textSelection(.enabled)
+                    }
+
+                    HStack(spacing: TossSpace.x4) {
+                        Button {
+                            copyToPasteboard(coreURL)
+                            copiedFlash = "Core URL 복사됨"
+                        } label: {
+                            Text("Core URL 복사")
+                                .font(.system(size: 15, weight: .semibold))
+                                .foregroundStyle(TossColor.blue500)
+                        }
+                        .buttonStyle(.plain)
+                        .disabled(coreURL.isEmpty || coreURL.contains("<"))
+
+                        Button {
+                            refreshCoreConnectionInfo()
+                        } label: {
+                            Text("주소 새로고침")
+                                .font(.system(size: 14, weight: .medium))
+                                .foregroundStyle(TossColor.grey700)
+                        }
+                        .buttonStyle(.plain)
                     }
                 }
 
-                if let pairCode {
-                    HStack(alignment: .firstTextBaseline, spacing: TossSpace.x4) {
-                        Text(pairCode)
-                            .font(.system(size: 36, weight: .bold, design: .monospaced))
-                            .foregroundStyle(TossColor.blue500)
-                            .textSelection(.enabled)
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("\(pairExpires)초 유효 · 1회용")
-                                .font(.system(size: 13))
-                                .foregroundStyle(TossColor.grey500)
-                            Button("복사") {
-                                NSPasteboard.general.clearContents()
-                                NSPasteboard.general.setString(pairCode, forType: .string)
+                Divider().overlay(TossColor.grey200)
+
+                // 2) Pair code
+                VStack(alignment: .leading, spacing: TossSpace.x2) {
+                    Text("② 페어링 코드 (6자리)")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(TossColor.grey500)
+
+                    if let pairCode {
+                        HStack(alignment: .firstTextBaseline, spacing: TossSpace.x4) {
+                            Text(pairCode)
+                                .font(.system(size: 40, weight: .bold, design: .monospaced))
+                                .foregroundStyle(TossColor.blue500)
+                                .textSelection(.enabled)
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("\(pairExpires)초 유효 · 1회용")
+                                    .font(.system(size: 13))
+                                    .foregroundStyle(TossColor.grey500)
+                                Button {
+                                    copyToPasteboard(pairCode)
+                                    copiedFlash = "코드 복사됨"
+                                } label: {
+                                    Text("코드 복사")
+                                        .font(.system(size: 14, weight: .semibold))
+                                        .foregroundStyle(TossColor.blue500)
+                                }
+                                .buttonStyle(.plain)
                             }
-                            .font(.system(size: 14, weight: .semibold))
-                            .foregroundStyle(TossColor.blue500)
-                            .buttonStyle(.plain)
                         }
+                    } else {
+                        Text("아래 버튼으로 코드를 만드세요.")
+                            .font(.system(size: 14))
+                            .foregroundStyle(TossColor.grey500)
                     }
+                }
+
+                if let copiedFlash {
+                    Text(copiedFlash)
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(TossColor.green500)
                 }
 
                 if let pairError {
@@ -169,44 +245,122 @@ public struct SettingsView: View {
                 }
                 .buttonStyle(.plain)
                 .disabled(pairBusy)
+
+                Text("아이폰: Core URL 붙여넣기 → 코드 입력 → 연결. 집 밖에서는 Tailscale이 켜져 있어야 해요.")
+                    .font(.system(size: 12))
+                    .foregroundStyle(TossColor.grey500)
+                    .fixedSize(horizontal: false, vertical: true)
             }
             .padding(TossSpace.x5)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(TossColor.white)
             .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
         }
-        .onAppear { refreshTailscaleHint() }
+        .onAppear { refreshCoreConnectionInfo() }
     }
 
-    private func refreshTailscaleHint() {
+    private func copyToPasteboard(_ s: String) {
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(s, forType: .string)
+    }
+
+    private func refreshCoreConnectionInfo() {
         let port = gatewayPort
-        // Prefer Tailscale IPv4 if CLI present
-        let ts = Process()
-        ts.executableURL = URL(fileURLWithPath: "/usr/bin/env")
-        ts.arguments = ["tailscale", "ip", "-4"]
-        let out = Pipe()
-        ts.standardOutput = out
-        ts.standardError = Pipe()
-        do {
-            try ts.run()
-            ts.waitUntilExit()
-            let data = out.fileHandleForReading.readDataToEndOfFile()
-            if let ip = String(data: data, encoding: .utf8)?
-                .trimmingCharacters(in: .whitespacesAndNewlines)
-                .split(separator: "\n").first,
-               !ip.isEmpty {
-                tailscaleHint = "http://\(ip):\(port)"
-                return
-            }
-        } catch {
-            // fall through
+        let tsIP = Self.resolveTailscaleIPv4()
+        let lanIP = Self.resolveLANIPv4()
+
+        if let tsIP, !tsIP.isEmpty {
+            coreURL = "http://\(tsIP):\(port)"
+            coreURLNote = "Tailscale 주소예요. 집 안·밖 모두 이 값을 쓰면 됩니다. (Mac·iPhone 둘 다 Tailscale 로그인)"
+        } else if let lanIP, !lanIP.isEmpty {
+            coreURL = "http://\(lanIP):\(port)"
+            coreURLNote = "Tailscale IP를 못 찾아서 집 Wi‑Fi 주소를 넣었어요. 집 밖에서는 Tailscale을 켠 뒤 「주소 새로고침」을 누르세요."
+        } else {
+            coreURL = "http://<Mac-IP>:\(port)"
+            coreURLNote = "IP를 자동으로 못 찾았어요. Tailscale 앱에서 Mac IP(100.x.x.x)를 확인한 뒤 http://그IP:\(port) 형식으로 입력하세요."
         }
-        tailscaleHint = "http://<tailscale-ip>:\(port)"
+
+        if let lanIP, !lanIP.isEmpty {
+            lanURL = "http://\(lanIP):\(port)"
+        } else {
+            lanURL = ""
+        }
+
+        gatewayLive = DaemonSupervisor(knowledgeRoot: model.knowledgeRoot).probeHTTP(port: port)
+    }
+
+    /// Prefer Tailscale CLI / app binary.
+    private static func resolveTailscaleIPv4() -> String? {
+        let candidates: [[String]] = [
+            ["tailscale", "ip", "-4"],
+            ["/Applications/Tailscale.app/Contents/MacOS/Tailscale", "ip", "-4"],
+            ["/usr/local/bin/tailscale", "ip", "-4"],
+            ["\(NSHomeDirectory())/Applications/Tailscale.app/Contents/MacOS/Tailscale", "ip", "-4"],
+        ]
+        for args in candidates {
+            guard let bin = args.first else { continue }
+            let executable: String
+            let arguments: [String]
+            if bin.hasPrefix("/") {
+                guard FileManager.default.isExecutableFile(atPath: bin) else { continue }
+                executable = bin
+                arguments = Array(args.dropFirst())
+            } else {
+                executable = "/usr/bin/env"
+                arguments = args
+            }
+            let p = Process()
+            p.executableURL = URL(fileURLWithPath: executable)
+            p.arguments = arguments
+            let out = Pipe()
+            p.standardOutput = out
+            p.standardError = Pipe()
+            do {
+                try p.run()
+                p.waitUntilExit()
+                let data = out.fileHandleForReading.readDataToEndOfFile()
+                if let ip = String(data: data, encoding: .utf8)?
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+                    .split(separator: "\n").first.map(String.init),
+                   !ip.isEmpty,
+                   ip.contains(".") {
+                    return ip
+                }
+            } catch {
+                continue
+            }
+        }
+        return nil
+    }
+
+    private static func resolveLANIPv4() -> String? {
+        for iface in ["en0", "en1", "en2"] {
+            let p = Process()
+            p.executableURL = URL(fileURLWithPath: "/usr/sbin/ipconfig")
+            p.arguments = ["getifaddr", iface]
+            let out = Pipe()
+            p.standardOutput = out
+            p.standardError = Pipe()
+            do {
+                try p.run()
+                p.waitUntilExit()
+                let data = out.fileHandleForReading.readDataToEndOfFile()
+                if let ip = String(data: data, encoding: .utf8)?
+                    .trimmingCharacters(in: .whitespacesAndNewlines),
+                   !ip.isEmpty {
+                    return ip
+                }
+            } catch {
+                continue
+            }
+        }
+        return nil
     }
 
     private func requestPairCode() async {
         pairBusy = true
         pairError = nil
+        copiedFlash = nil
         defer { pairBusy = false }
 
         // Old daemons often run without --http-port; bring gateway up first.
@@ -216,11 +370,15 @@ public struct SettingsView: View {
             DaemonSupervisor(knowledgeRoot: root).ensureMobileGateway(port: port, timeout: 12)
         }.value
 
+        refreshCoreConnectionInfo()
+
         if !gatewayOK {
-            pairError = "모바일 게이트웨이를 켜지 못했어요. 앱을 완전히 종료한 뒤 다시 열어 주세요. (knowledged --http-port \(gatewayPort))"
+            pairError = "모바일 게이트웨이를 켜지 못했어요. 앱을 완전히 종료한 뒤 다시 열어 주세요."
             pairCode = nil
+            gatewayLive = false
             return
         }
+        gatewayLive = true
 
         let url = URL(string: "http://127.0.0.1:\(gatewayPort)/v1/pair/start")!
         var req = URLRequest(url: url)
@@ -236,7 +394,7 @@ public struct SettingsView: View {
                 pairCode = c
                 pairExpires = obj["expires_in"] as? Int ?? 300
                 pairError = nil
-                refreshTailscaleHint()
+                refreshCoreConnectionInfo()
             } else {
                 pairError = (obj["error"] as? String)
                     ?? "게이트웨이에 연결할 수 없어요. (HTTP \(code))"
