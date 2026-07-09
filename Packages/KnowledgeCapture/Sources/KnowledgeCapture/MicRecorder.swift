@@ -1,7 +1,7 @@
 import Foundation
 import AVFoundation
 
-/// Offline meeting mic capture. Owns TCC mic usage in the **UI process** (KD-16).
+/// Offline meeting mic capture. Writes linear PCM WAV for reliable Speech/ASR.
 public final class MicRecorder: NSObject, @unchecked Sendable {
     public private(set) var isRecording = false
     public private(set) var meetingId: String?
@@ -30,7 +30,9 @@ public final class MicRecorder: NSObject, @unchecked Sendable {
     public func start(meetingId: String) throws {
         guard !isRecording else { throw CaptureError.alreadyRecording }
 
-        let url = AudioArtifactBuilder.rawURL(knowledgeRoot: knowledgeRoot, meetingId: meetingId)
+        // Linear PCM WAV — AAC path produced near-empty files on some Mac setups
+        // and SFSpeechURLRecognitionRequest hangs on them.
+        let url = AudioArtifactBuilder.rawURL(knowledgeRoot: knowledgeRoot, meetingId: meetingId, ext: "wav")
         try FileManager.default.createDirectory(
             at: url.deletingLastPathComponent(),
             withIntermediateDirectories: true
@@ -40,16 +42,22 @@ public final class MicRecorder: NSObject, @unchecked Sendable {
         }
 
         let settings: [String: Any] = [
-            AVFormatIDKey: Int(kAudioFormatMPEG4AAC),
-            AVSampleRateKey: 44_100,
+            AVFormatIDKey: Int(kAudioFormatLinearPCM),
+            AVSampleRateKey: 16_000,
             AVNumberOfChannelsKey: 1,
-            AVEncoderAudioQualityKey: AVAudioQuality.high.rawValue,
+            AVLinearPCMBitDepthKey: 16,
+            AVLinearPCMIsFloatKey: false,
+            AVLinearPCMIsBigEndianKey: false,
+            AVLinearPCMIsNonInterleaved: false,
         ]
 
         let rec = try AVAudioRecorder(url: url, settings: settings)
         rec.isMeteringEnabled = true
-        guard rec.prepareToRecord(), rec.record() else {
-            throw CaptureError.engine("AVAudioRecorder failed to start")
+        guard rec.prepareToRecord() else {
+            throw CaptureError.engine("prepareToRecord failed")
+        }
+        guard rec.record() else {
+            throw CaptureError.engine("record() failed — check microphone permission")
         }
 
         self.recorder = rec
@@ -65,11 +73,22 @@ public final class MicRecorder: NSObject, @unchecked Sendable {
         guard isRecording, let meetingId, let url = outputURL else {
             throw CaptureError.notRecording
         }
+        recorder?.updateMeters()
         recorder?.stop()
         recorder = nil
         stopHeartbeatTimer()
         isRecording = false
         try CaptureHeartbeat.clear(knowledgeRoot: knowledgeRoot)
+
+        // Flush file
+        Thread.sleep(forTimeInterval: 0.15)
+
+        let attrs = try FileManager.default.attributesOfItem(atPath: url.path)
+        let size = (attrs[.size] as? NSNumber)?.intValue ?? 0
+        // WAV header ~44 bytes; require real payload
+        if size < 1600 {
+            throw CaptureError.engine("녹음이 거의 비어 있어요. 마이크 권한과 입력 장치를 확인해 주세요.")
+        }
 
         let durationMs: Int
         if let startedAt {
@@ -77,8 +96,6 @@ public final class MicRecorder: NSObject, @unchecked Sendable {
         } else {
             durationMs = 1
         }
-        // Brief settle for file finalize
-        Thread.sleep(forTimeInterval: 0.05)
         return try AudioArtifactBuilder.build(
             knowledgeRoot: knowledgeRoot,
             meetingId: meetingId,
@@ -109,7 +126,6 @@ public final class MicRecorder: NSObject, @unchecked Sendable {
 
     private func startHeartbeatTimer() {
         stopHeartbeatTimer()
-        // Timer needs runloop; for library use, fire on main
         DispatchQueue.main.async { [weak self] in
             guard let self else { return }
             self.heartbeatTimer = Timer.scheduledTimer(

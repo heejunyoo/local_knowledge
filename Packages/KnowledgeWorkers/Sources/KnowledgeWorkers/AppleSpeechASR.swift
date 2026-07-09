@@ -3,8 +3,7 @@ import Speech
 import AVFoundation
 import CoreMedia
 
-/// On-device / system speech recognition fallback when whisper.cpp is not installed.
-/// User should not need CLI tool install for first offline dogfood.
+/// On-device speech recognition (UI process only — needs TCC).
 public enum AppleSpeechASR {
     public static func requestAuthorization() async -> SFSpeechRecognizerAuthorizationStatus {
         await withCheckedContinuation { cont in
@@ -18,74 +17,120 @@ public enum AppleSpeechASR {
         meetingId: String,
         audioURL: URL,
         outputJSON: URL,
-        language: String = "ko"
+        language: String = "ko",
+        timeoutSeconds: TimeInterval = 45
     ) async throws -> TranscriptDocument {
         let status = await requestAuthorization()
         guard status == .authorized else {
-            throw WorkerError.failed(WorkerResult(
-                exitCode: 1,
-                stdout: "",
-                stderr: "speech_auth_\(status.rawValue)",
-                timedOut: false
-            ))
+            throw SpeechASRError.notAuthorized(status)
         }
 
         let localeId = language.hasPrefix("ko") ? "ko-KR" : (language == "en" ? "en-US" : language)
         guard let recognizer = SFSpeechRecognizer(locale: Locale(identifier: localeId)),
               recognizer.isAvailable else {
-            throw WorkerError.failed(WorkerResult(
-                exitCode: 1,
-                stdout: "",
-                stderr: "speech_recognizer_unavailable",
-                timedOut: false
-            ))
+            throw SpeechASRError.unavailable
+        }
+
+        // Guard empty/near-empty files (previous AAC bug)
+        let size = (try? FileManager.default.attributesOfItem(atPath: audioURL.path)[.size] as? NSNumber)?.intValue ?? 0
+        if size < 1600 {
+            return try writeSilencePlaceholder(
+                meetingId: meetingId,
+                outputJSON: outputJSON,
+                modelId: "apple-speech/\(localeId)",
+                reason: "audio_too_small"
+            )
         }
 
         let request = SFSpeechURLRecognitionRequest(url: audioURL)
         request.shouldReportPartialResults = false
         if #available(macOS 13.0, *) {
-            request.requiresOnDeviceRecognition = false // allow best available
+            request.requiresOnDeviceRecognition = false
         }
 
-        let result: SFSpeechRecognitionResult = try await withCheckedThrowingContinuation { cont in
-            var finished = false
-            recognizer.recognitionTask(with: request) { res, err in
-                if let err {
-                    if !finished {
-                        finished = true
-                        cont.resume(throwing: err)
+        let result: Result<SFSpeechRecognitionResult, Error> = await withTaskGroup(
+            of: Result<SFSpeechRecognitionResult, Error>.self
+        ) { group in
+            group.addTask {
+                await withCheckedContinuation { cont in
+                    var finished = false
+                    let task = recognizer.recognitionTask(with: request) { res, err in
+                        if finished { return }
+                        if let err {
+                            finished = true
+                            cont.resume(returning: .failure(err))
+                            return
+                        }
+                        if let res, res.isFinal {
+                            finished = true
+                            cont.resume(returning: .success(res))
+                        }
                     }
-                    return
-                }
-                guard let res, res.isFinal else { return }
-                if !finished {
-                    finished = true
-                    cont.resume(returning: res)
+                    // Retain task until callback
+                    _ = task
                 }
             }
+            group.addTask {
+                try? await Task.sleep(nanoseconds: UInt64(timeoutSeconds * 1_000_000_000))
+                return .failure(SpeechASRError.timeout)
+            }
+            let first = await group.next()!
+            group.cancelAll()
+            return first
         }
 
-        let segments = segmentsFrom(result: result)
-        guard !segments.isEmpty else {
-            // Empty audio / silence — still produce one segment so pipeline can continue honestly
-            let durationMs = try audioDurationMs(url: audioURL)
-            let segs = [
-                TranscriptSegment(
-                    index: 0,
-                    tStartMs: 0,
-                    tEndMs: max(durationMs, 1),
-                    text: "(음성에서 인식된 말이 없어요)"
-                ),
-            ]
-            return try write(meetingId: meetingId, segments: segs, outputJSON: outputJSON, modelId: "apple-speech/\(localeId)")
+        switch result {
+        case let .success(speech):
+            var segments = segmentsFrom(result: speech)
+            if segments.isEmpty {
+                return try writeSilencePlaceholder(
+                    meetingId: meetingId,
+                    outputJSON: outputJSON,
+                    modelId: "apple-speech/\(localeId)",
+                    reason: "no_speech_detected"
+                )
+            }
+            return try write(
+                meetingId: meetingId,
+                segments: segments,
+                outputJSON: outputJSON,
+                modelId: "apple-speech/\(localeId)"
+            )
+        case let .failure(err):
+            if err is SpeechASRError || (err as? SpeechASRError) != nil {
+                // timeout → still produce transcript so pipeline continues
+                return try writeSilencePlaceholder(
+                    meetingId: meetingId,
+                    outputJSON: outputJSON,
+                    modelId: "apple-speech/\(localeId)",
+                    reason: "speech_timeout_or_empty"
+                )
+            }
+            // Other errors: still soft-fail to placeholder so user sees review flow
+            return try writeSilencePlaceholder(
+                meetingId: meetingId,
+                outputJSON: outputJSON,
+                modelId: "apple-speech/\(localeId)",
+                reason: "speech_error:\(err.localizedDescription.prefix(80))"
+            )
         }
+    }
 
-        return try write(
-            meetingId: meetingId,
-            segments: segments,
-            outputJSON: outputJSON,
-            modelId: "apple-speech/\(localeId)"
-        )
+    private static func writeSilencePlaceholder(
+        meetingId: String,
+        outputJSON: URL,
+        modelId: String,
+        reason: String
+    ) throws -> TranscriptDocument {
+        let segs = [
+            TranscriptSegment(
+                index: 0,
+                tStartMs: 0,
+                tEndMs: 1000,
+                text: "(인식된 말이 없어요 — \(reason). 마이크에 말해 녹음했는지 확인해 주세요)"
+            ),
+        ]
+        return try write(meetingId: meetingId, segments: segs, outputJSON: outputJSON, modelId: modelId)
     }
 
     private static func write(
@@ -112,93 +157,41 @@ public enum AppleSpeechASR {
 
     private static func segmentsFrom(result: SFSpeechRecognitionResult) -> [TranscriptSegment] {
         var out: [TranscriptSegment] = []
-        // Prefer per-segment timing when available
         let best = result.bestTranscription
         if !best.segments.isEmpty {
-            for (i, seg) in best.segments.enumerated() {
+            for seg in best.segments {
                 let text = seg.substring.trimmingCharacters(in: .whitespacesAndNewlines)
                 guard !text.isEmpty else { continue }
                 let start = Int(seg.timestamp * 1000)
-                let end = Int((seg.timestamp + seg.duration) * 1000)
+                let end = Int((seg.timestamp + max(seg.duration, 0.05)) * 1000)
                 out.append(TranscriptSegment(
                     index: out.count,
                     tStartMs: max(0, start),
                     tEndMs: max(start + 1, end),
                     text: text
                 ))
-                _ = i
             }
         }
         if out.isEmpty {
             let text = best.formattedString.trimmingCharacters(in: .whitespacesAndNewlines)
             if !text.isEmpty {
-                // Split roughly by sentence for evidence spans
-                let parts = text
-                    .components(separatedBy: CharacterSet(charactersIn: ".!?。！？\n"))
-                    .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-                    .filter { !$0.isEmpty }
-                if parts.isEmpty {
-                    out.append(TranscriptSegment(index: 0, tStartMs: 0, tEndMs: 1000, text: text))
-                } else {
-                    var t = 0
-                    for (i, p) in parts.enumerated() {
-                        let dur = max(800, p.count * 80)
-                        out.append(TranscriptSegment(index: i, tStartMs: t, tEndMs: t + dur, text: p))
-                        t += dur
-                    }
-                }
+                out.append(TranscriptSegment(index: 0, tStartMs: 0, tEndMs: 1000, text: text))
             }
         }
         return out
     }
-
-    private static func audioDurationMs(url: URL) throws -> Int {
-        let asset = AVURLAsset(url: url)
-        let seconds = CMTimeGetSeconds(asset.duration)
-        if seconds.isFinite && seconds > 0 {
-            return Int(seconds * 1000)
-        }
-        return 1000
-    }
 }
 
-// Bridge async ASR into sync pipeline tick via semaphore (daemon thread).
-public enum AppleSpeechASRBridge {
-    public static func transcribeSync(
-        meetingId: String,
-        audioURL: URL,
-        outputJSON: URL,
-        language: String,
-        timeout: TimeInterval
-    ) throws -> TranscriptDocument {
-        let box = ResultBox<TranscriptDocument>()
-        let sem = DispatchSemaphore(value: 0)
-        Task {
-            do {
-                let doc = try await AppleSpeechASR.transcribe(
-                    meetingId: meetingId,
-                    audioURL: audioURL,
-                    outputJSON: outputJSON,
-                    language: language
-                )
-                box.result = .success(doc)
-            } catch {
-                box.result = .failure(error)
-            }
-            sem.signal()
-        }
-        let wait = sem.wait(timeout: .now() + timeout)
-        if wait == .timedOut {
-            throw WorkerError.timeout
-        }
-        switch box.result {
-        case let .success(doc): return doc
-        case let .failure(err): throw err
-        case .none: throw WorkerError.failed(WorkerResult(exitCode: 1, stdout: "", stderr: "speech_no_result", timedOut: false))
+public enum SpeechASRError: Error, LocalizedError {
+    case notAuthorized(SFSpeechRecognizerAuthorizationStatus)
+    case unavailable
+    case timeout
+
+    public var errorDescription: String? {
+        switch self {
+        case .notAuthorized: return "음성 인식 권한이 없어요. 시스템 설정에서 허용해 주세요."
+        case .unavailable: return "음성 인식을 사용할 수 없어요."
+        case .timeout: return "받아쓰기 시간이 초과됐어요."
         }
     }
-}
-
-private final class ResultBox<T>: @unchecked Sendable {
-    var result: Result<T, Error>?
 }

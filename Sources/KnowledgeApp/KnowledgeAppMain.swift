@@ -1,5 +1,7 @@
 import SwiftUI
 import AppKit
+import Speech
+import AVFoundation
 import KnowledgeUI
 import KnowledgeCore
 
@@ -12,12 +14,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // Show Dock + allow windows. Menu bar still works.
         NSApp.setActivationPolicy(.regular)
         NSApp.activate(ignoringOtherApps: true)
-        // Ensure a window is key (SPM naked binary / first launch).
+        // Pre-flight permissions so first record isn't a silent fail
+        AVCaptureDevice.requestAccess(for: .audio) { _ in }
+        SFSpeechRecognizer.requestAuthorization { status in
+            fputs("speech auth raw=\(status.rawValue)\n", stderr)
+        }
         DispatchQueue.main.async {
             NSApp.windows.forEach { $0.makeKeyAndOrderFront(nil) }
-            if NSApp.windows.isEmpty {
-                // Fallback: open first WindowGroup via openUntitledDocument if needed
-            }
         }
         fputs("Knowledge UI ready — window should be frontmost.\n", stderr)
     }
