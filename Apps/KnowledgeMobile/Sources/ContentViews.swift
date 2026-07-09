@@ -60,6 +60,7 @@ struct PairingView: View {
                             busy = true
                             await core.completePair(code: code, deviceName: name)
                             busy = false
+                            if core.isPaired { kHapticSuccess() }
                         }
                     }
                 }
@@ -217,9 +218,11 @@ struct AskMobileView: View {
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: 12) {
                         if messages.isEmpty {
-                            Text("근거를 먼저 보여 주고, 가능하면 문장을 다듬어요.")
-                                .foregroundStyle(KColor.grey500)
-                                .padding()
+                            KEmptyState(
+                                systemImage: "bubble.left.and.bubble.right",
+                                title: "무엇이 궁금한가요?",
+                                message: "근거를 먼저 보여 주고, 가능하면 문장을 다듬어요."
+                            )
                         }
                         ForEach(messages) { m in
                             bubble(m)

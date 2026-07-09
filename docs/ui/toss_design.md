@@ -82,3 +82,12 @@ Personal PKM UI does **not** copy TDS assets. It adopts Toss product philosophy:
 | 더보기 | 확인함 · 검색 · 연결 · 설정 |
 
 Anti: 6-tab dump, 식단 한 화면에 폼 전부.
+
+## Polish layer (0.2.1)
+
+- **Dark mode**: adaptive grey/blue50 surfaces (Mac NSColor dynamic · iOS UIColor trait).
+- **Empty states**: icon + title + message + optional action (`TossEmptyState` / `KEmptyState`).
+- **Motion**: soft spring appear; list/chat scroll ease.
+- **Diet NL**: one-line “점심 … kcal” / “운동 … 분” before detail sheet.
+- **A11y**: combined list rows, button labels; Dynamic Type via system fonts.
+- **Haptics (iOS)**: light on primary/list, success on pair/save.

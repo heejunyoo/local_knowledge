@@ -4,11 +4,13 @@ import SwiftUI
 public struct ChatView: View {
     @ObservedObject public var model: AppModel
     @Environment(\.dismiss) private var dismiss
+    public var showsBackButton: Bool
     @State private var draft: String = ""
     @FocusState private var focused: Bool
 
-    public init(model: AppModel) {
+    public init(model: AppModel, showsBackButton: Bool = true) {
         self.model = model
+        self.showsBackButton = showsBackButton
     }
 
     private var suggestions: [String] {
@@ -43,13 +45,18 @@ public struct ChatView: View {
 
     private var topBar: some View {
         HStack {
-            Button { dismiss() } label: {
-                Image(systemName: "chevron.left")
-                    .font(.system(size: 17, weight: .semibold))
-                    .foregroundStyle(TossColor.grey900)
-                    .frame(width: 44, height: 44)
+            if showsBackButton {
+                Button { dismiss() } label: {
+                    Image(systemName: "chevron.left")
+                        .font(.system(size: 17, weight: .semibold))
+                        .foregroundStyle(TossColor.grey900)
+                        .frame(width: 44, height: 44)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("뒤로")
+            } else {
+                Color.clear.frame(width: 12, height: 44)
             }
-            .buttonStyle(.plain)
             Text("물어보기")
                 .font(.system(size: 17, weight: .semibold))
                 .foregroundStyle(TossColor.grey900)
@@ -62,6 +69,7 @@ public struct ChatView: View {
                 .background(TossColor.white)
                 .clipShape(Capsule())
                 .padding(.trailing, TossSpace.x3)
+                .accessibilityLabel("답변 엔진 \(engineBadge)")
         }
         .padding(.horizontal, TossSpace.x2)
     }
@@ -121,17 +129,13 @@ public struct ChatView: View {
 
     private var empty: some View {
         VStack(alignment: .leading, spacing: TossSpace.x5) {
-            Text(model.corpusTotalUnits == 0
-                 ? "아직 물어볼 지식이 없어요"
-                 : "무엇이 궁금한가요?")
-                .font(.system(size: 24, weight: .bold))
-                .foregroundStyle(TossColor.grey900)
-            Text(model.corpusTotalUnits == 0
-                 ? "먼저 회의를 녹음하거나 지식을 연결해 주세요."
-                 : "먼저 근거를 바로 보여 주고, 가능하면 AI가 문장을 다듬어요.")
-                .font(.system(size: 16))
-                .foregroundStyle(TossColor.grey700)
-                .lineSpacing(3)
+            TossEmptyState(
+                systemImage: model.corpusTotalUnits == 0 ? "tray" : "bubble.left.and.bubble.right",
+                title: model.corpusTotalUnits == 0 ? "아직 물어볼 지식이 없어요" : "무엇이 궁금한가요?",
+                message: model.corpusTotalUnits == 0
+                    ? "회의를 녹음하거나 더보기에서 지식을 연결해 주세요."
+                    : "먼저 근거를 보여 주고, 가능하면 문장을 다듬어요."
+            )
 
             if model.corpusTotalUnits > 0, !suggestions.isEmpty {
                 VStack(alignment: .leading, spacing: TossSpace.x2) {

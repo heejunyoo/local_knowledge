@@ -12,6 +12,7 @@ struct DietMobileView: View {
     @State private var showWeek = false
     @State private var showGoals = false
 
+    @State private var quickLine = ""
     @State private var mealItems = ""
     @State private var mealKcal = ""
     @State private var mealProtein = ""
@@ -32,10 +33,11 @@ struct DietMobileView: View {
                     VStack(alignment: .leading, spacing: KSpace.x6) {
                         header
                         todayHero
+                        quickNL
                         if let tip = analysisFirst {
                             insight(tip)
                         }
-                        KPrimaryButton(title: "기록 남기기") { showLog = true }
+                        KPrimaryButton(title: "자세히 기록") { showLog = true }
                         HStack(spacing: KSpace.x3) {
                             secondaryBtn("주간") { showWeek = true }
                             secondaryBtn("목표") {
@@ -143,6 +145,28 @@ struct DietMobileView: View {
         }
     }
 
+    private var quickNL: some View {
+        KCard {
+            VStack(alignment: .leading, spacing: KSpace.x3) {
+                Text("한 줄로 남기기")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(KColor.grey500)
+                HStack {
+                    TextField("예: 점심 샐러드 400kcal", text: $quickLine)
+                        .textInputAutocapitalization(.never)
+                        .padding(12)
+                        .background(KColor.grey100)
+                        .clipShape(RoundedRectangle(cornerRadius: 12))
+                        .onSubmit { Task { await commitQuick() } }
+                    Button("추가") { Task { await commitQuick() } }
+                        .fontWeight(.semibold)
+                        .foregroundStyle(KColor.blue500)
+                        .disabled(quickLine.trimmingCharacters(in: .whitespaces).isEmpty)
+                }
+            }
+        }
+    }
+
     private var todayList: some View {
         let day = dashboard["day"] as? [String: Any] ?? [:]
         let meals = day["meals"] as? [[String: Any]] ?? []
@@ -153,20 +177,47 @@ struct DietMobileView: View {
                 .foregroundStyle(KColor.grey500)
             KCard {
                 if meals.isEmpty && workouts.isEmpty {
-                    Text("아직 없어요.").foregroundStyle(KColor.grey500).font(.subheadline)
+                    KEmptyState(
+                        systemImage: "fork.knife",
+                        title: "오늘 기록이 없어요",
+                        message: "한 줄로 남기거나 자세히 기록해 보세요.",
+                        actionTitle: "자세히 기록"
+                    ) { showLog = true }
                 } else {
                     VStack(alignment: .leading, spacing: 10) {
                         ForEach(Array(meals.enumerated()), id: \.offset) { _, m in
                             let items = (m["items"] as? [String])?.joined(separator: ", ") ?? "식사"
-                            Text(items).font(.system(size: 15, weight: .medium))
+                            Text(items).font(.system(size: 15, weight: .medium)).foregroundStyle(KColor.grey900)
                         }
                         ForEach(Array(workouts.enumerated()), id: \.offset) { _, w in
                             Text("\((w["kind"] as? String) ?? "운동") · \(w["minutes"] as? Int ?? 0)분")
                                 .font(.system(size: 15, weight: .medium))
+                                .foregroundStyle(KColor.grey900)
                         }
                     }
                 }
             }
+        }
+    }
+
+    private func commitQuick() async {
+        let line = quickLine.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !line.isEmpty else { return }
+        do {
+            if line.contains("운동") || line.lowercased().contains("workout") {
+                let minutes = Int(line.filter(\.isNumber)) ?? 20
+                try await core.dietLogWorkout(kind: line, minutes: minutes, intensity: nil)
+            } else {
+                let digits = line.components(separatedBy: CharacterSet.decimalDigits.inverted).filter { !$0.isEmpty }
+                let kcal = digits.first.flatMap { Double($0) }
+                try await core.dietLogMeal(items: [line], kcal: kcal, proteinG: nil, note: line)
+            }
+            quickLine = ""
+            kHapticSuccess()
+            flash = "저장했어요"
+            await reload()
+        } catch {
+            err = error.localizedDescription
         }
     }
 

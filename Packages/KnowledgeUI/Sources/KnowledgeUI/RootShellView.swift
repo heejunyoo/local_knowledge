@@ -22,7 +22,7 @@ public struct RootShellView: View {
                 .tabItem { Label("홈", systemImage: "house.fill") }
                 .tag(ShellTab.home)
 
-            ChatView(model: model)
+            ChatView(model: model, showsBackButton: false)
                 .tabItem { Label("물어보기", systemImage: "bubble.left.and.bubble.right.fill") }
                 .tag(ShellTab.chat)
 

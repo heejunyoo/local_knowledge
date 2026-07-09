@@ -1,19 +1,46 @@
 import SwiftUI
+#if canImport(AppKit)
+import AppKit
+#endif
 
-/// Toss-inspired tokens for Knowledge (not official TDS assets).
+/// Toss-inspired tokens (not official TDS). Adaptive light/dark for macOS.
 public enum TossColor {
     public static let blue500 = Color(hex: 0x3182F6)
-    public static let blue50 = Color(hex: 0xE8F3FF)
-    public static let grey900 = Color(hex: 0x191F28)
-    public static let grey700 = Color(hex: 0x4E5968)
-    public static let grey500 = Color(hex: 0x8B95A1)
-    public static let grey200 = Color(hex: 0xE5E8EB)
-    public static let grey100 = Color(hex: 0xF2F4F6)
-    public static let grey50 = Color(hex: 0xF9FAFB)
-    public static let red500 = Color(hex: 0xF04452)
-    public static let red50 = Color(hex: 0xFFEEEE)
     public static let green500 = Color(hex: 0x03B26C)
-    public static let white = Color.white
+    public static let red500 = Color(hex: 0xF04452)
+    public static let white = adaptive(light: 0xFFFFFF, dark: 0x2C2C2E)
+
+    public static let blue50 = adaptive(light: 0xE8F3FF, dark: 0x1A2740)
+    public static let red50 = adaptive(light: 0xFFEEEE, dark: 0x3A1F1F)
+    public static let grey900 = adaptive(light: 0x191F28, dark: 0xF2F4F6)
+    public static let grey700 = adaptive(light: 0x4E5968, dark: 0xC4C8CE)
+    public static let grey500 = adaptive(light: 0x8B95A1, dark: 0x8E959E)
+    public static let grey200 = adaptive(light: 0xE5E8EB, dark: 0x3A3A3C)
+    public static let grey100 = adaptive(light: 0xF2F4F6, dark: 0x1C1C1E)
+    public static let grey50 = adaptive(light: 0xF9FAFB, dark: 0x000000)
+
+    /// On primary blue buttons — always white for contrast.
+    public static let onPrimary = Color.white
+
+    private static func adaptive(light: UInt32, dark: UInt32) -> Color {
+        #if canImport(AppKit)
+        return Color(nsColor: NSColor(name: nil, dynamicProvider: { appearance in
+            let isDark = appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
+            return nsHex(isDark ? dark : light)
+        }))
+        #else
+        return Color(hex: light)
+        #endif
+    }
+
+    #if canImport(AppKit)
+    private static func nsHex(_ hex: UInt32) -> NSColor {
+        let r = CGFloat((hex >> 16) & 0xFF) / 255
+        let g = CGFloat((hex >> 8) & 0xFF) / 255
+        let b = CGFloat(hex & 0xFF) / 255
+        return NSColor(srgbRed: r, green: g, blue: b, alpha: 1)
+    }
+    #endif
 }
 
 public enum TossSpace {
@@ -49,6 +76,29 @@ public extension Color {
     }
 }
 
+// MARK: - Motion
+
+public enum TossMotion {
+    public static let soft = Animation.spring(response: 0.38, dampingFraction: 0.86)
+    public static let snappy = Animation.spring(response: 0.28, dampingFraction: 0.9)
+}
+
+public struct TossAppear: ViewModifier {
+    @State private var shown = false
+    public func body(content: Content) -> some View {
+        content
+            .opacity(shown ? 1 : 0)
+            .offset(y: shown ? 0 : 8)
+            .onAppear {
+                withAnimation(TossMotion.soft) { shown = true }
+            }
+    }
+}
+
+public extension View {
+    func tossAppear() -> some View { modifier(TossAppear()) }
+}
+
 // MARK: - Components
 
 public struct TossPrimaryButton: View {
@@ -66,7 +116,7 @@ public struct TossPrimaryButton: View {
         Button(action: action) {
             Text(title)
                 .font(TossFont.button())
-                .foregroundStyle(TossColor.white)
+                .foregroundStyle(TossColor.onPrimary)
                 .frame(maxWidth: .infinity)
                 .frame(height: 52)
                 .background(enabled ? TossColor.blue500 : TossColor.grey200)
@@ -74,6 +124,7 @@ public struct TossPrimaryButton: View {
         }
         .buttonStyle(.plain)
         .disabled(!enabled)
+        .accessibilityLabel(title)
     }
 }
 
@@ -97,6 +148,7 @@ public struct TossSecondaryButton: View {
                 .clipShape(RoundedRectangle(cornerRadius: TossRadius.button, style: .continuous))
         }
         .buttonStyle(.plain)
+        .accessibilityLabel(title)
     }
 }
 
@@ -120,12 +172,10 @@ public struct TossCard<Content: View>: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(TossColor.white)
         .clipShape(RoundedRectangle(cornerRadius: TossRadius.card, style: .continuous))
-        // Soft card: no heavy border — Toss home uses white on grey, light separation
         .shadow(color: Color.black.opacity(0.04), radius: 8, x: 0, y: 2)
     }
 }
 
-/// Settings-style row: icon + title + subtitle + chevron. One tap target.
 public struct TossListRow: View {
     public var title: String
     public var subtitle: String?
@@ -167,7 +217,8 @@ public struct TossListRow: View {
                         Text(subtitle)
                             .font(TossFont.caption())
                             .foregroundStyle(TossColor.grey500)
-                            .lineLimit(1)
+                            .lineLimit(2)
+                            .fixedSize(horizontal: false, vertical: true)
                     }
                 }
                 Spacer(minLength: TossSpace.x2)
@@ -185,6 +236,8 @@ public struct TossListRow: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(title + (subtitle.map { ", \($0)" } ?? ""))
     }
 }
 
@@ -226,13 +279,12 @@ public struct TossBadge: View {
     }
 }
 
-/// Shared top bar for pushed screens: title + optional subtitle + 홈.
 public struct TossScreenHeader: View {
     public var title: String
     public var subtitle: String?
-    public var onHome: () -> Void
+    public var onHome: (() -> Void)?
 
-    public init(title: String, subtitle: String? = nil, onHome: @escaping () -> Void) {
+    public init(title: String, subtitle: String? = nil, onHome: (() -> Void)? = nil) {
         self.title = title
         self.subtitle = subtitle
         self.onHome = onHome
@@ -252,13 +304,71 @@ public struct TossScreenHeader: View {
                 }
             }
             Spacer(minLength: TossSpace.x3)
-            Button("홈", action: onHome)
-                .font(TossFont.body())
-                .fontWeight(.semibold)
-                .foregroundStyle(TossColor.blue500)
-                .buttonStyle(.plain)
-                .padding(.top, 6)
+            if let onHome {
+                Button("홈", action: onHome)
+                    .font(TossFont.body())
+                    .fontWeight(.semibold)
+                    .foregroundStyle(TossColor.blue500)
+                    .buttonStyle(.plain)
+                    .padding(.top, 6)
+            }
         }
+    }
+}
+
+/// Quiet empty / zero state — one icon, one line, optional action.
+public struct TossEmptyState: View {
+    public var systemImage: String
+    public var title: String
+    public var message: String
+    public var actionTitle: String?
+    public var action: (() -> Void)?
+
+    public init(
+        systemImage: String,
+        title: String,
+        message: String,
+        actionTitle: String? = nil,
+        action: (() -> Void)? = nil
+    ) {
+        self.systemImage = systemImage
+        self.title = title
+        self.message = message
+        self.actionTitle = actionTitle
+        self.action = action
+    }
+
+    public var body: some View {
+        VStack(spacing: TossSpace.x4) {
+            ZStack {
+                Circle()
+                    .fill(TossColor.blue50)
+                    .frame(width: 72, height: 72)
+                Image(systemName: systemImage)
+                    .font(.system(size: 28, weight: .semibold))
+                    .foregroundStyle(TossColor.blue500)
+            }
+            Text(title)
+                .font(TossFont.section())
+                .foregroundStyle(TossColor.grey900)
+                .multilineTextAlignment(.center)
+            Text(message)
+                .font(TossFont.body())
+                .foregroundStyle(TossColor.grey500)
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+            if let actionTitle, let action {
+                Button(actionTitle, action: action)
+                    .font(TossFont.body())
+                    .fontWeight(.semibold)
+                    .foregroundStyle(TossColor.blue500)
+                    .buttonStyle(.plain)
+                    .padding(.top, TossSpace.x2)
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .padding(TossSpace.x6)
+        .tossAppear()
     }
 }
 

@@ -10,6 +10,7 @@ public struct DietView: View {
     @State private var sheet: DietSheet?
 
     // Forms
+    @State private var quickLine = ""
     @State private var mealItems = ""
     @State private var mealKcal = ""
     @State private var mealProtein = ""
@@ -46,7 +47,9 @@ public struct DietView: View {
             ScrollView(showsIndicators: false) {
                 VStack(alignment: .leading, spacing: TossSpace.x6) {
                     header
+                        .tossAppear()
                     todayHero
+                    quickNL
                     if let line = dash.analysisLines.first {
                         insightCard(line)
                     }
@@ -57,11 +60,14 @@ public struct DietView: View {
                             .font(TossFont.caption())
                             .fontWeight(.semibold)
                             .foregroundStyle(TossColor.blue500)
+                            .transition(.opacity)
                     }
                     Spacer(minLength: TossSpace.x8)
                 }
                 .padding(.horizontal, TossSpace.x6)
                 .padding(.top, TossSpace.x6)
+                .animation(TossMotion.soft, value: flash)
+                .animation(TossMotion.soft, value: dash.day.meals.count)
             }
         }
         .sheet(item: $sheet) { kind in
@@ -72,6 +78,63 @@ public struct DietView: View {
             }
         }
         .onAppear { refresh() }
+    }
+
+    /// One-line natural language: "점심 샐러드 400kcal" / "운동 걷기 30분"
+    private var quickNL: some View {
+        TossCard {
+            VStack(alignment: .leading, spacing: TossSpace.x3) {
+                Text("한 줄로 남기기")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(TossColor.grey500)
+                HStack(spacing: TossSpace.x3) {
+                    TextField("예: 점심 닭가슴살 350kcal", text: $quickLine)
+                        .textFieldStyle(.plain)
+                        .padding(12)
+                        .background(TossColor.grey100)
+                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                        .onSubmit { commitQuickLine() }
+                    Button("추가") { commitQuickLine() }
+                        .font(TossFont.body())
+                        .fontWeight(.semibold)
+                        .foregroundStyle(quickLine.trimmingCharacters(in: .whitespaces).isEmpty ? TossColor.grey200 : TossColor.blue500)
+                        .buttonStyle(.plain)
+                        .disabled(quickLine.trimmingCharacters(in: .whitespaces).isEmpty)
+                }
+                Text("운동이면 “운동 …” / 식사면 음식·kcal을 적어 주세요.")
+                    .font(TossFont.caption())
+                    .foregroundStyle(TossColor.grey500)
+            }
+        }
+    }
+
+    private func commitQuickLine() {
+        let line = quickLine.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !line.isEmpty else { return }
+        let lower = line.lowercased()
+        if line.contains("운동") || lower.contains("workout") {
+            let minutes = Int(line.components(separatedBy: CharacterSet.decimalDigits.inverted).joined()) ?? 20
+            var kind = line.replacingOccurrences(of: "운동", with: "")
+            if let re = try? NSRegularExpression(pattern: "\\d+\\s*분") {
+                kind = re.stringByReplacingMatches(in: kind, range: NSRange(kind.startIndex..., in: kind), withTemplate: "")
+            }
+            kind = kind.trimmingCharacters(in: .whitespacesAndNewlines)
+            _ = try? store.logWorkout(kind: kind.isEmpty ? "workout" : kind, minutes: minutes, intensity: nil)
+            flash = "운동 저장했어요"
+        } else {
+            let kcal: Double? = {
+                if let r = try? NSRegularExpression(pattern: "(\\d+(?:\\.\\d+)?)"),
+                   let m = r.firstMatch(in: line, range: NSRange(line.startIndex..., in: line)),
+                   let rr = Range(m.range(at: 1), in: line) {
+                    return Double(line[rr])
+                }
+                return nil
+            }()
+            _ = try? store.logMeal(items: [line], kcal: kcal, proteinG: nil, note: line)
+            flash = "식사 저장했어요"
+        }
+        quickLine = ""
+        withAnimation(TossMotion.soft) { refresh() }
     }
 
     // MARK: Depth 1
@@ -221,10 +284,12 @@ public struct DietView: View {
                 .foregroundStyle(TossColor.grey500)
             TossCard(padded: false) {
                 if dash.day.meals.isEmpty && dash.day.workouts.isEmpty {
-                    Text("아직 없어요. 위에서 남겨 보세요.")
-                        .font(TossFont.body())
-                        .foregroundStyle(TossColor.grey500)
-                        .padding(TossSpace.x5)
+                    TossEmptyState(
+                        systemImage: "fork.knife",
+                        title: "오늘 기록이 없어요",
+                        message: "한 줄로 남기거나, 아래에서 자세히 적어 보세요.",
+                        actionTitle: "기록 남기기"
+                    ) { sheet = .log }
                 } else {
                     VStack(spacing: 0) {
                         ForEach(dash.day.meals) { m in
