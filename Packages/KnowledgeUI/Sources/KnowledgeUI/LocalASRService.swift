@@ -3,9 +3,9 @@ import KnowledgeCore
 import KnowledgeWorkers
 import KnowledgeRPC
 
-/// Runs Apple Speech in the **UI process** (TCC / speech permission belong here, not daemon).
+/// Apple Speech in the **UI process** (TCC). Completes via `meeting.asr.complete`.
 public enum LocalASRService {
-    public static func transcribeIfNeeded(
+    public static func transcribeAndComplete(
         knowledgeRoot: URL,
         socketPath: String,
         meetingId: String,
@@ -13,6 +13,10 @@ public enum LocalASRService {
         language: String = "ko"
     ) async throws {
         let audioURL = knowledgeRoot.appendingPathComponent(audioRelPath)
+        guard FileManager.default.fileExists(atPath: audioURL.path) else {
+            throw CaptureBridgeError.rpc("audio file missing: \(audioRelPath)")
+        }
+
         let outJSON = knowledgeRoot
             .appendingPathComponent("transcripts", isDirectory: true)
             .appendingPathComponent("\(meetingId).json")
@@ -25,47 +29,17 @@ public enum LocalASRService {
         )
         let rel = "transcripts/\(meetingId).json"
 
-        // Drive state machine via RPC: may be recorded or transcribe_failed/transcribing
         let client = UnixDomainClient(socketPath: socketPath)
         try client.connect()
         defer { client.close() }
 
-        // Ensure we can land on transcribed with artifacts
-        // If currently recorded → transcribing → transcribed
-        // If stuck transcribing → just finish to transcribed
-        // If failed → retry path
-        let get = try client.call(JSONRPCRequest(
-            method: RPCMethod.meetingGet.rawValue,
-            params: .object(["id": .string(meetingId)])
-        ))
-        let status = get.result?["status"]?.stringValue ?? ""
-
-        if status == "recorded" || status == "transcribe_failed" {
-            if status == "transcribe_failed" {
-                _ = try client.call(JSONRPCRequest(
-                    method: RPCMethod.meetingRetry.rawValue,
-                    params: .object(["id": .string(meetingId)])
-                ))
-            }
-            // recorded → transcribing
-            _ = try client.call(JSONRPCRequest(
-                method: RPCMethod.meetingTransition.rawValue,
-                params: .object([
-                    "id": .string(meetingId),
-                    "to": .string("transcribing"),
-                    "audio_path": .string(audioRelPath),
-                ])
-            ))
-        }
-
-        // transcribing → transcribed
         let res = try client.call(JSONRPCRequest(
-            method: RPCMethod.meetingTransition.rawValue,
+            method: RPCMethod.meetingAsrComplete.rawValue,
             params: .object([
                 "id": .string(meetingId),
-                "to": .string("transcribed"),
                 "transcript_path": .string(rel),
-                "transcript_segment_count": .number(Double(doc.segments.count)),
+                "transcript_segment_count": .number(Double(max(1, doc.segments.count))),
+                "asr_model_id": .string(doc.asrModelId),
                 "audio_path": .string(audioRelPath),
             ])
         ))
@@ -75,6 +49,12 @@ public enum LocalASRService {
     }
 }
 
-public enum CaptureBridgeError: Error {
+public enum CaptureBridgeError: Error, LocalizedError {
     case rpc(String)
+
+    public var errorDescription: String? {
+        switch self {
+        case let .rpc(m): return m
+        }
+    }
 }

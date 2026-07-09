@@ -140,7 +140,9 @@ public final class PipelineService: @unchecked Sendable {
             guard var m = try store.getMeeting(id: id) else {
                 throw JSONRPCError.app("not found", code: -32004)
             }
-            if m.status == .transcribeFailed {
+            if m.status == .transcribeFailed || m.status == .transcribing {
+                // Park as recorded so UI can ASR without race with daemon
+                m.status = .recorded
                 m.stageAttempts = 0
                 m.errorCode = nil
                 try store.upsertMeeting(m)
@@ -152,9 +154,74 @@ public final class PipelineService: @unchecked Sendable {
             }
             return meetingJSON(m)
 
+        case .meetingAsrComplete:
+            return try handleAsrComplete(params: params)
+
         case .none:
             throw JSONRPCError.methodNotFound
         }
+    }
+
+    /// Idempotent: from recorded|transcribing|transcribe_failed → transcribed with artifacts.
+    private func handleAsrComplete(params: JSONValue?) throws -> JSONValue {
+        guard let id = params?["id"]?.stringValue,
+              let transcriptPath = params?["transcript_path"]?.stringValue else {
+            throw JSONRPCError.invalidParams
+        }
+        let segmentCount: Int
+        if case let .number(n) = params?["transcript_segment_count"] {
+            segmentCount = max(1, Int(n))
+        } else {
+            segmentCount = 1
+        }
+        let asrModel = params?["asr_model_id"]?.stringValue
+        guard var meeting = try store.getMeeting(id: id) else {
+            throw JSONRPCError.app("not found", code: -32004)
+        }
+        guard meeting.audioPath != nil || params?["audio_path"]?.stringValue != nil else {
+            throw JSONRPCError.app("audio missing", code: -32030)
+        }
+        if let ap = params?["audio_path"]?.stringValue {
+            meeting.audioPath = ap
+        }
+        meeting.transcriptPath = transcriptPath
+        meeting.transcriptSegmentCount = segmentCount
+        meeting.asrModelId = asrModel
+        meeting.errorCode = nil
+
+        // Normalize status to transcribing then transcribed for legal graph edges
+        switch meeting.status {
+        case .recorded, .transcribeFailed, .recordFailed:
+            meeting.status = .transcribing
+            try store.upsertMeeting(meeting)
+        case .transcribing, .transcribed:
+            try store.upsertMeeting(meeting)
+        default:
+            // Already past ASR — just return
+            try store.upsertMeeting(meeting)
+            return meetingJSON(meeting)
+        }
+
+        let ctx = GuardContext(
+            hasAudioArtifact: true,
+            audioDurationMs: meeting.audioDurationMs ?? 1,
+            transcriptSegmentCount: segmentCount,
+            hasTranscriptPath: true,
+            asrModelId: asrModel,
+            workerSlotFree: true
+        )
+        let updated = try store.transition(
+            meetingId: id,
+            to: .transcribed,
+            ctx: ctx,
+            event: "meeting.asr.complete"
+        ) { rec in
+            rec.transcriptPath = transcriptPath
+            rec.transcriptSegmentCount = segmentCount
+            rec.asrModelId = asrModel
+            rec.errorCode = nil
+        }
+        return meetingJSON(updated)
     }
 
     private func handleTransition(params: JSONValue?) throws -> JSONValue {

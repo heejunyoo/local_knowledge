@@ -86,11 +86,9 @@ public struct HomeView: View {
                     TossPrimaryButton("녹음 끝내기") {
                         model.stopRecording()
                     }
-                    TossSecondaryButton("취소") {
-                        model.stopRecording()
-                    }
+                } else if model.isProcessing {
+                    TossPrimaryButton("정리하는 중…", enabled: false) {}
                 } else {
-                    // Always tappable — bootstrap runs if needed (no CLI for user)
                     TossPrimaryButton(
                         model.isStartingBackend ? "준비 중…" : "녹음 시작",
                         enabled: !model.isStartingBackend
@@ -130,24 +128,35 @@ public struct HomeView: View {
                         .padding(.vertical, TossSpace.x4)
                 } else {
                     ForEach(model.meetings.prefix(8)) { row in
-                        HStack(alignment: .top, spacing: TossSpace.x3) {
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text(row.title)
-                                    .font(TossFont.body())
-                                    .fontWeight(.medium)
-                                    .foregroundStyle(TossColor.grey900)
-                                    .lineLimit(1)
-                                if let code = row.errorCode {
-                                    Text(code)
-                                        .font(TossFont.caption())
-                                        .foregroundStyle(TossColor.red500)
+                        VStack(alignment: .leading, spacing: TossSpace.x2) {
+                            HStack(alignment: .top, spacing: TossSpace.x3) {
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text(row.title)
+                                        .font(TossFont.body())
+                                        .fontWeight(.medium)
+                                        .foregroundStyle(TossColor.grey900)
+                                        .lineLimit(1)
+                                    if let code = row.errorCode {
+                                        Text(friendlyCode(code))
+                                            .font(TossFont.caption())
+                                            .foregroundStyle(TossColor.grey500)
+                                    }
                                 }
+                                Spacer()
+                                TossBadge(
+                                    StatusCopy.label(row.status),
+                                    kind: StatusCopy.badgeKind(row.status)
+                                )
                             }
-                            Spacer()
-                            TossBadge(
-                                StatusCopy.label(row.status),
-                                kind: StatusCopy.badgeKind(row.status)
-                            )
+                            if row.status.contains("fail") || row.errorCode == "needs_ui_asr" {
+                                Button("다시 처리") {
+                                    model.retryMeeting(meetingId: row.id)
+                                }
+                                .font(TossFont.caption())
+                                .fontWeight(.semibold)
+                                .foregroundStyle(TossColor.blue500)
+                                .buttonStyle(.plain)
+                            }
                         }
                         if row.id != model.meetings.prefix(8).last?.id {
                             Divider().overlay(TossColor.grey200)
@@ -159,9 +168,20 @@ public struct HomeView: View {
     }
 
     private var footerHint: some View {
-        Text("백그라운드 정리는 앱이 알아서 해요. 확인이 필요할 때만 알려 드릴게요.")
+        Text("녹음을 끝내면 받아쓰기·요약이 이어져요. 확인이 필요할 때만 알려 드릴게요.")
             .font(TossFont.caption())
             .foregroundStyle(TossColor.grey500)
             .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func friendlyCode(_ code: String) -> String {
+        switch code {
+        case "needs_ui_asr", "asr_tools_missing":
+            return "받아쓰기 대기 — 다시 처리를 눌러 주세요"
+        case "speech_permission":
+            return "설정에서 음성 인식을 허용해 주세요"
+        default:
+            return code
+        }
     }
 }

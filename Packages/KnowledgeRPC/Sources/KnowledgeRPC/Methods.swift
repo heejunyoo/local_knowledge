@@ -11,6 +11,8 @@ public enum RPCMethod: String, Sendable {
     case meetingSummaryGet = "meeting.summary.get"
     case meetingReviewAccept = "meeting.review.accept"
     case meetingRetry = "meeting.retry"
+    /// UI completed Apple Speech (or other) ASR — force-complete to transcribed.
+    case meetingAsrComplete = "meeting.asr.complete"
 }
 
 public struct HealthResult: Codable, Sendable {

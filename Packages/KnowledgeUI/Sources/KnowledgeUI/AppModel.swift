@@ -12,6 +12,7 @@ public final class AppModel: ObservableObject {
 
     @Published public var healthOK: Bool = false
     @Published public var isStartingBackend: Bool = false
+    @Published public var isProcessing: Bool = false
     @Published public var daemonVersion: String = ""
     @Published public var recordingCount: Int = 0
     @Published public var reviewCount: Int = 0
@@ -24,13 +25,14 @@ public final class AppModel: ObservableObject {
     private var capture: CaptureSessionController?
     private var pollTimer: Timer?
     private let supervisor: DaemonSupervisor
-    private var didBootstrap = false
+    private var asrInFlight = Set<String>()
 
     public struct MeetingRow: Identifiable, Equatable {
         public var id: String
         public var title: String
         public var status: String
         public var errorCode: String?
+        public var audioPath: String?
     }
 
     public init(knowledgeRoot: URL = KnowledgePaths.defaultKnowledgeRoot) {
@@ -44,9 +46,9 @@ public final class AppModel: ObservableObject {
         meetings.filter { $0.status.contains("fail") }.count
     }
 
-    /// Caption under status (never tells user to run CLI).
     public var connectionCaption: String {
         if isStartingBackend { return "잠시만요, 준비하고 있어요" }
+        if isProcessing { return "방금 녹음을 정리하고 있어요" }
         if healthOK { return "모든 준비가 끝났어요" }
         if lastError != nil { return "다시 시도하는 중이에요" }
         return "연결을 확인하는 중이에요"
@@ -56,10 +58,11 @@ public final class AppModel: ObservableObject {
         bootstrapBackendIfNeeded()
         refresh()
         pollTimer?.invalidate()
-        pollTimer = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: true) { [weak self] _ in
+        pollTimer = Timer.scheduledTimer(withTimeInterval: 1.5, repeats: true) { [weak self] _ in
             Task { @MainActor in
                 self?.bootstrapBackendIfNeeded()
                 self?.refresh()
+                self?.kickPendingASR()
             }
         }
     }
@@ -69,14 +72,12 @@ public final class AppModel: ObservableObject {
         pollTimer = nil
     }
 
-    /// Auto-start knowledged — user never touches CLI.
     public func bootstrapBackendIfNeeded() {
         if healthOK { return }
         if isStartingBackend { return }
 
-        // Fast path: already healthy
-        if supervisor.probeHealth() != nil {
-            applyHealthOK(version: supervisor.probeHealth() ?? "")
+        if let v = supervisor.probeHealth() {
+            applyHealthOK(version: v)
             return
         }
 
@@ -84,14 +85,12 @@ public final class AppModel: ObservableObject {
         statusMessage = "준비하고 있어요"
         lastError = nil
 
-        // Run ensure off main-ish wait on cooperative: short block OK for local spawn
         let result = supervisor.ensureReady(timeout: 10)
         isStartingBackend = false
 
         switch result {
         case let .ready(version):
             applyHealthOK(version: version)
-            didBootstrap = true
         case .starting:
             statusMessage = "준비하고 있어요"
         case let .failed(message):
@@ -104,21 +103,20 @@ public final class AppModel: ObservableObject {
     private func applyHealthOK(version: String) {
         healthOK = true
         daemonVersion = version
-        if !isRecording {
+        if !isRecording && !isProcessing {
             statusMessage = "녹음할 준비가 됐어요"
         }
         lastError = nil
     }
 
     public func refresh() {
-        // If down, try silent restart (throttled inside supervisor)
         if supervisor.probeHealth() == nil {
             healthOK = false
             if !isStartingBackend {
                 bootstrapBackendIfNeeded()
             }
-            if !healthOK && !isStartingBackend {
-                statusMessage = isRecording ? statusMessage : "연결을 복구하는 중이에요"
+            if !healthOK && !isStartingBackend && !isRecording {
+                statusMessage = "연결을 복구하는 중이에요"
             }
             return
         }
@@ -143,14 +141,17 @@ public final class AppModel: ObservableObject {
             if case let .array(arr) = list.result {
                 meetings = arr.compactMap { item in
                     guard let id = item["id"]?.stringValue else { return nil }
-                    let title = item["title"]?.stringValue ?? "제목 없는 미팅"
-                    let status = item["status"]?.stringValue ?? "?"
-                    let err = item["error_code"]?.stringValue
-                    return MeetingRow(id: id, title: title, status: status, errorCode: err)
+                    return MeetingRow(
+                        id: id,
+                        title: item["title"]?.stringValue ?? "제목 없는 미팅",
+                        status: item["status"]?.stringValue ?? "?",
+                        errorCode: item["error_code"]?.stringValue,
+                        audioPath: item["audio_path"]?.stringValue
+                    )
                 }
             }
-            lastError = nil
-            if !isRecording {
+
+            if !isRecording && !isProcessing {
                 if reviewCount > 0 {
                     statusMessage = "확인이 필요해요"
                 } else if failedCount > 0 {
@@ -158,21 +159,34 @@ public final class AppModel: ObservableObject {
                 } else {
                     statusMessage = "녹음할 준비가 됐어요"
                 }
+                lastError = nil
             }
         } catch {
             healthOK = false
-            // Never: "데몬을 켜 주세요"
             if !isStartingBackend {
                 bootstrapBackendIfNeeded()
             }
         }
     }
 
-    public func toggleRecording() {
-        if isRecording {
-            stopRecording()
-        } else {
-            startRecording()
+    /// Auto-pick meetings that need UI-side speech ASR.
+    public func kickPendingASR() {
+        guard healthOK, !isRecording else { return }
+        for row in meetings {
+            guard !asrInFlight.contains(row.id) else { continue }
+            let needs =
+                row.status == "recorded"
+                || row.errorCode == "needs_ui_asr"
+                || row.errorCode == "asr_tools_missing"
+                || (row.status == "transcribe_failed" && row.audioPath != nil)
+                || (row.status == "transcribing" && row.audioPath != nil)
+            guard needs, let audio = row.audioPath else { continue }
+            asrInFlight.insert(row.id)
+            Task { @MainActor in
+                await self.runLocalASR(meetingId: row.id, audioRel: audio)
+                self.asrInFlight.remove(row.id)
+            }
+            break // one at a time
         }
     }
 
@@ -210,29 +224,31 @@ public final class AppModel: ObservableObject {
             isRecording = false
             activeMeetingId = nil
             self.capture = nil
+            isProcessing = true
             statusMessage = "받아쓰는 중…"
             refresh()
-            // Speech ASR in UI process (permissions live here)
             if let mid {
+                asrInFlight.insert(mid)
                 Task { @MainActor in
                     await self.runLocalASR(meetingId: mid, audioRel: artifact.path)
+                    self.asrInFlight.remove(mid)
                 }
             }
         } catch {
             lastError = String(describing: error)
             statusMessage = "녹음 저장에 실패했어요"
             isRecording = false
+            isProcessing = false
         }
     }
 
-    /// Also used for retry of failed meetings that need UI ASR.
     public func runLocalASR(meetingId: String, audioRel: String?) async {
+        isProcessing = true
         statusMessage = "받아쓰는 중…"
         lastError = nil
         do {
             var audioPath = audioRel
             if audioPath == nil {
-                // fetch from server
                 let client = UnixDomainClient(socketPath: socketPath)
                 try client.connect()
                 defer { client.close() }
@@ -244,44 +260,52 @@ public final class AppModel: ObservableObject {
             }
             guard let audioPath else {
                 statusMessage = "녹음 파일을 찾지 못했어요"
+                isProcessing = false
                 return
             }
-            try await LocalASRService.transcribeIfNeeded(
+
+            try await LocalASRService.transcribeAndComplete(
                 knowledgeRoot: knowledgeRoot,
                 socketPath: socketPath,
                 meetingId: meetingId,
                 audioRelPath: audioPath
             )
             statusMessage = "정리하는 중…"
-            // Poll until review_needed or fail (daemon summarize)
-            for _ in 0..<30 {
-                try? await Task.sleep(nanoseconds: 500_000_000)
+            refresh()
+
+            for _ in 0..<40 {
+                try? await Task.sleep(nanoseconds: 400_000_000)
                 refresh()
                 if let row = meetings.first(where: { $0.id == meetingId }) {
                     if row.status == "review_needed" {
                         statusMessage = "확인이 필요해요"
+                        isProcessing = false
                         return
                     }
-                    if row.status.contains("fail") {
-                        statusMessage = "문제가 생겼어요. 다시 시도해 주세요"
+                    if row.status == "summary_failed" {
+                        statusMessage = "요약에 실패했어요"
+                        lastError = row.errorCode
+                        isProcessing = false
                         return
                     }
                     if row.status == "committed" {
                         statusMessage = "저장했어요"
+                        isProcessing = false
                         return
                     }
                 }
             }
+            isProcessing = false
+            statusMessage = "정리하는 중… 잠시 후 목록을 확인해 주세요"
             refresh()
-            statusMessage = "정리하는 중…"
         } catch {
-            lastError = String(describing: error)
+            lastError = error.localizedDescription
             statusMessage = "받아쓰기에 실패했어요"
+            isProcessing = false
             refresh()
         }
     }
 
-    /// Save reviewed summary into Obsidian vault (SoT body).
     public func acceptReview(meetingId: String) {
         lastError = nil
         do {
@@ -308,6 +332,8 @@ public final class AppModel: ObservableObject {
 
     public func retryMeeting(meetingId: String) {
         Task { @MainActor in
+            asrInFlight.insert(meetingId)
+            defer { asrInFlight.remove(meetingId) }
             do {
                 let client = UnixDomainClient(socketPath: socketPath)
                 try client.connect()
@@ -316,25 +342,12 @@ public final class AppModel: ObservableObject {
                     method: RPCMethod.meetingGet.rawValue,
                     params: .object(["id": .string(meetingId)])
                 ))
-                let status = get.result?["status"]?.stringValue ?? ""
                 let audio = get.result?["audio_path"]?.stringValue
-                let err = get.result?["error_code"]?.stringValue
-
-                if status == "transcribe_failed" || err == "needs_ui_asr" || err == "asr_tools_missing" {
-                    _ = try client.call(JSONRPCRequest(
-                        method: RPCMethod.meetingRetry.rawValue,
-                        params: .object(["id": .string(meetingId)])
-                    ))
-                    await runLocalASR(meetingId: meetingId, audioRel: audio)
-                    return
-                }
-
                 _ = try client.call(JSONRPCRequest(
                     method: RPCMethod.meetingRetry.rawValue,
                     params: .object(["id": .string(meetingId)])
                 ))
-                statusMessage = "다시 정리하는 중…"
-                refresh()
+                await runLocalASR(meetingId: meetingId, audioRel: audio)
             } catch {
                 lastError = String(describing: error)
             }

@@ -2,9 +2,10 @@ import Foundation
 import KnowledgeCore
 import KnowledgeIndex
 
-/// Offline vertical slice:
-/// recorded → ASR → transcribed → summarizing → summarized_candidate → review_needed
-/// Silent-miss forbidden.
+/// Offline pipeline:
+/// - ASR (whisper only, in daemon): recorded → transcribed
+/// - UI owns Apple Speech ASR (TCC); daemon must not loop-fail those
+/// - Summarize: transcribed → review_needed
 public final class OfflinePipelineRunner: @unchecked Sendable {
     private let store: KnowledgeStore
     private let knowledgeRoot: URL
@@ -24,31 +25,40 @@ public final class OfflinePipelineRunner: @unchecked Sendable {
         self.language = language
     }
 
+    private var hasWhisper: Bool {
+        let boot = ToolBootstrap(knowledgeRoot: knowledgeRoot)
+        return (try? boot.whisperBinaryURL()) != nil && (try? boot.whisperModelURL()) != nil
+    }
+
     @discardableResult
     public func tick() throws -> Bool {
         try singleFlight.run {
-            if let m = try store.meetings(withStatus: .recorded).first {
-                try runASR(meeting: m)
-                return true
-            }
-            // Allow retry of failed ASR (e.g. tools installed later / speech now allowed)
-            if let m = try store.meetings(withStatus: .transcribeFailed).first,
-               (m.stageAttempts < thresholds.maxStageAttempts) {
-                try retryFailedASR(meeting: m)
-                return true
-            }
+            // Prefer summarize so UI-transcribed meetings progress quickly
             if let m = try store.meetings(withStatus: .transcribed).first {
                 try runSummarize(meeting: m)
                 return true
             }
+            // Whisper-only ASR in daemon
+            if hasWhisper {
+                if let m = try store.meetings(withStatus: .recorded).first {
+                    try runASR(meeting: m)
+                    return true
+                }
+                if let m = try store.meetings(withStatus: .transcribeFailed).first,
+                   m.errorCode != "needs_ui_asr",
+                   m.stageAttempts < thresholds.maxStageAttempts {
+                    try retryFailedASR(meeting: m)
+                    return true
+                }
+            }
+            // Without whisper: leave recorded / needs_ui_asr for UI — no status thrash
             return false
         }
     }
 
-    // MARK: - ASR
+    // MARK: - ASR (whisper)
 
     private func retryFailedASR(meeting: MeetingRecord) throws {
-        // recorded-like retry: transcribe_failed → transcribing
         let ctx = GuardContext(
             hasAudioArtifact: meeting.audioPath != nil,
             audioDurationMs: meeting.audioDurationMs ?? 1
@@ -56,8 +66,7 @@ public final class OfflinePipelineRunner: @unchecked Sendable {
         guard PipelineGraph.canTransition(from: .transcribeFailed, to: .transcribing, ctx: ctx) else {
             return
         }
-        var m = meeting
-        m = try store.transition(
+        let m = try store.transition(
             meetingId: meeting.id,
             to: .transcribing,
             ctx: ctx,
@@ -66,7 +75,7 @@ public final class OfflinePipelineRunner: @unchecked Sendable {
             rec.stageAttempts += 1
             rec.errorCode = nil
         }
-        try performASR(meeting: m)
+        try performWhisperASR(meeting: m)
     }
 
     private func runASR(meeting: MeetingRecord) throws {
@@ -80,10 +89,10 @@ public final class OfflinePipelineRunner: @unchecked Sendable {
             ctx: ctx,
             event: "pipeline.asr.start"
         )
-        try performASR(meeting: m)
+        try performWhisperASR(meeting: m)
     }
 
-    private func performASR(meeting: MeetingRecord) throws {
+    private func performWhisperASR(meeting: MeetingRecord) throws {
         let id = meeting.id
         guard let audioRel = meeting.audioPath else {
             _ = try failASR(id: id, meeting: meeting, code: "audio_missing")
@@ -94,41 +103,28 @@ public final class OfflinePipelineRunner: @unchecked Sendable {
             .appendingPathComponent("transcripts", isDirectory: true)
             .appendingPathComponent("\(id).json")
         let durationS = Double(meeting.audioDurationMs ?? 1000) / 1000.0
-        let timeout = TimeInterval(thresholds.asrTimeoutSeconds(audioDurationSeconds: max(1, durationS)))
+
+        let boot = ToolBootstrap(knowledgeRoot: knowledgeRoot)
+        guard let binary = try boot.whisperBinaryURL(),
+              let model = try boot.whisperModelURL() else {
+            // Should not reach when hasWhisper is true; leave for UI without looping
+            _ = try failASR(id: id, meeting: meeting, code: "needs_ui_asr")
+            return
+        }
 
         do {
-            let doc: TranscriptDocument
-            let boot = ToolBootstrap(knowledgeRoot: knowledgeRoot)
-            if let binary = try boot.whisperBinaryURL(),
-               let model = try boot.whisperModelURL() {
-                let asr = WhisperASR(
-                    binaryURL: binary,
-                    modelURL: model,
-                    language: language,
-                    thresholds: thresholds
-                )
-                doc = try asr.transcribe(
-                    meetingId: id,
-                    audioURL: audioURL,
-                    outputJSON: outJSON,
-                    audioDurationSeconds: max(1, durationS)
-                )
-            } else {
-                // Apple Speech must run in UI app (TCC). Leave for UI; do not silent-success.
-                // Revert to recorded so UI can pick up, or mark needs_ui_asr without burning retries.
-                _ = try store.transition(
-                    meetingId: id,
-                    to: .transcribeFailed,
-                    ctx: GuardContext(
-                        hasAudioArtifact: true,
-                        audioDurationMs: meeting.audioDurationMs ?? 1
-                    ),
-                    errorCode: "needs_ui_asr",
-                    event: "pipeline.asr.defer_to_ui"
-                )
-                return
-            }
-
+            let asr = WhisperASR(
+                binaryURL: binary,
+                modelURL: model,
+                language: language,
+                thresholds: thresholds
+            )
+            let doc = try asr.transcribe(
+                meetingId: id,
+                audioURL: audioURL,
+                outputJSON: outJSON,
+                audioDurationSeconds: max(1, durationS)
+            )
             let rel = "transcripts/\(id).json"
             let doneCtx = GuardContext(
                 hasAudioArtifact: true,
@@ -152,22 +148,7 @@ public final class OfflinePipelineRunner: @unchecked Sendable {
         } catch WorkerError.timeout {
             _ = try failASR(id: id, meeting: meeting, code: "timeout")
         } catch {
-            let code: String
-            if let w = error as? WorkerError {
-                switch w {
-                case .binaryMissing: code = "asr_binary_missing"
-                case .modelMissing: code = "asr_model_missing"
-                case .timeout: code = "timeout"
-                case .failed(let r):
-                    code = r.stderr.contains("speech_auth") ? "speech_permission" : "asr_failed"
-                }
-            } else {
-                let msg = String(describing: error)
-                code = msg.contains("authorization") || msg.contains("not authorized")
-                    ? "speech_permission"
-                    : "asr_failed"
-            }
-            _ = try failASR(id: id, meeting: meeting, code: code)
+            _ = try failASR(id: id, meeting: meeting, code: "asr_failed")
         }
     }
 
@@ -176,7 +157,6 @@ public final class OfflinePipelineRunner: @unchecked Sendable {
             hasAudioArtifact: meeting.audioPath != nil,
             audioDurationMs: meeting.audioDurationMs ?? 0
         )
-        // From transcribing only
         let from = (try? store.getMeeting(id: id))?.status ?? .transcribing
         if from == .transcribing {
             return try store.transition(
@@ -222,14 +202,12 @@ public final class OfflinePipelineRunner: @unchecked Sendable {
             titleHint: meeting.title
         )
 
-        // Stage1
         let issues = MeetingSummaryValidator.validate(summary, thresholds: thresholds)
         if !issues.isEmpty {
             _ = try failSummary(id: id, code: "stage1_fail")
             return
         }
 
-        // Stage2
         let report = Stage2Evidence.evaluate(
             summary: summary,
             transcript: transcript,
@@ -238,8 +216,7 @@ public final class OfflinePipelineRunner: @unchecked Sendable {
         summary.stage2Warnings = report.warnings.isEmpty ? nil : report.warnings
 
         if report.outcome == .fail {
-            // Still write candidate for debugging
-            try writeCandidate(id: id, summary: summary)
+            _ = try writeCandidate(id: id, summary: summary)
             _ = try failSummary(id: id, code: "stage2_fail")
             return
         }
@@ -265,7 +242,6 @@ public final class OfflinePipelineRunner: @unchecked Sendable {
             rec.errorCode = nil
         }
 
-        // critic off → review_needed
         let reviewCtx = GuardContext(stage1OK: true, stage2: report.outcome, criticEnabled: false)
         _ = try store.transition(
             meetingId: id,
@@ -288,11 +264,10 @@ public final class OfflinePipelineRunner: @unchecked Sendable {
     }
 
     private func failSummary(id: String, code: String) throws -> MeetingRecord {
-        let ctx = GuardContext()
-        return try store.transition(
+        try store.transition(
             meetingId: id,
             to: .summaryFailed,
-            ctx: ctx,
+            ctx: GuardContext(),
             errorCode: code,
             event: "pipeline.summary.fail"
         )
