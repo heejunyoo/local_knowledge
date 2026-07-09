@@ -17,9 +17,9 @@
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
-	<string>0.1.2</string>
+	<string>0.1.3</string>
 	<key>CFBundleVersion</key>
-	<string>4</string>
+	<string>5</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>UILaunchScreen</key>
@@ -29,9 +29,12 @@
 		<string>UIInterfaceOrientationPortrait</string>
 	</array>
 	<!--
-	  Core gateway uses plain HTTP on Tailscale (100.x) / LAN.
-	  Tailscale CGNAT is NOT always treated as "local networking" by ATS,
-	  so NSAllowsArbitraryLoads is required for http://100.x.x.x:8741.
+	  IMPORTANT (ATS):
+	  Do NOT set NSAllowsArbitraryLoadsInWebContent / ForMedia here.
+	  If those keys are present, iOS can IGNORE NSAllowsArbitraryLoads for
+	  URLSession — which is exactly the "secure connection required" error
+	  we hit even after "allowing HTTP".
+	  Only global cleartext opt-out + local networking.
 	-->
 	<key>NSAppTransportSecurity</key>
 	<dict>
@@ -39,15 +42,8 @@
 		<true/>
 		<key>NSAllowsLocalNetworking</key>
 		<true/>
-		<key>NSAllowsArbitraryLoadsInWebContent</key>
-		<true/>
 	</dict>
-	<!-- iOS 14+ local network discovery (same Wi‑Fi); Tailscale may not need this -->
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>Mac Core 게이트웨이(Knowledge)에 연결해 지식·식단을 불러옵니다.</string>
-	<key>NSBonjourServices</key>
-	<array>
-		<string>_http._tcp</string>
-	</array>
 </dict>
 </plist>
