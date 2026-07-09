@@ -86,11 +86,26 @@ MVP defaults: all automation extras off (`critic`, `vector_search`, `notes_inges
 | 01 | Monorepo + policy SoT + schema + `KnowledgeCore` thresholds/types |
 | 02 | Pipeline state graph (default deny) + recovery R1–R6 + ScenarioRunner |
 | 03 | SQLite index (meetings, FTS, pipeline_events) |
-| **04** | Daemon + UDS JSON-RPC (`knowledged`) ← *current* |
-| 05w / 05–08 | Workers, mic, ASR, summarize, Stage2 |
+| 04 | Daemon + UDS JSON-RPC (`knowledged`) |
+| **05w** | Tool bootstrap + sha256 verify |
+| **05** | Mic capture library + heartbeat + RPC handoff |
+| **06a** | Whisper invoker (runs only if binary installed) |
+| 07–08 | Summarize Stage1/2 |
 | 10a–11 | Menu bar, review, vault commit → **MVP exit** |
 
-See design doc **PR Plan** for full ordering.
+Priority rationale: `docs/mvp_priority_scoring.md`  
+Design SoT: `~/Documents/PKM-native-app-design.md`
+
+### Tools (ASR/LLM)
+
+```bash
+./scripts/bootstrap-knowledge-root.sh
+# Drop binaries offline:
+./scripts/install-tool-file.sh /path/to/whisper-cli tools/whisper.cpp/1.7.5/whisper-cli
+./scripts/install-tool-file.sh /path/to/ggml-large-v3-turbo.bin tools/models/whisper/ggml-large-v3-turbo.bin
+# Pin sha256 in ~/Knowledge/config/tools_manifest.json then:
+./scripts/verify-tools.sh
+```
 
 ## Principles (product)
 

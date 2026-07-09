@@ -18,4 +18,6 @@ cd ~/IdeaProjects/KnowledgeApp && swift test --filter ScenarioRunnerTests
 | S06 | — | Index vs body SoT | PR-03 |
 | S13 | — | commit_pending reconcile | PR-11 |
 
+Worker timeout policy is unit-tested in `KnowledgeWorkersTests` (timeout never `succeeded`).
+
 Add a scenario in the **same change** as the layer it protects (Harness P2 / AP-08).

@@ -10,6 +10,8 @@ let package = Package(
         .library(name: "KnowledgeCore", targets: ["KnowledgeCore"]),
         .library(name: "KnowledgeIndex", targets: ["KnowledgeIndex"]),
         .library(name: "KnowledgeRPC", targets: ["KnowledgeRPC"]),
+        .library(name: "KnowledgeCapture", targets: ["KnowledgeCapture"]),
+        .library(name: "KnowledgeWorkers", targets: ["KnowledgeWorkers"]),
         .executable(name: "knowledged", targets: ["knowledged"]),
     ],
     targets: [
@@ -44,6 +46,26 @@ let package = Package(
             name: "KnowledgeRPCTests",
             dependencies: ["KnowledgeRPC", "KnowledgeIndex", "KnowledgeCore"],
             path: "Packages/KnowledgeRPC/Tests/KnowledgeRPCTests"
+        ),
+        .target(
+            name: "KnowledgeCapture",
+            dependencies: ["KnowledgeCore", "KnowledgeRPC"],
+            path: "Packages/KnowledgeCapture/Sources/KnowledgeCapture"
+        ),
+        .testTarget(
+            name: "KnowledgeCaptureTests",
+            dependencies: ["KnowledgeCapture", "KnowledgeCore"],
+            path: "Packages/KnowledgeCapture/Tests/KnowledgeCaptureTests"
+        ),
+        .target(
+            name: "KnowledgeWorkers",
+            dependencies: ["KnowledgeCore"],
+            path: "Packages/KnowledgeWorkers/Sources/KnowledgeWorkers"
+        ),
+        .testTarget(
+            name: "KnowledgeWorkersTests",
+            dependencies: ["KnowledgeWorkers", "KnowledgeCore"],
+            path: "Packages/KnowledgeWorkers/Tests/KnowledgeWorkersTests"
         ),
         .executableTarget(
             name: "knowledged",
