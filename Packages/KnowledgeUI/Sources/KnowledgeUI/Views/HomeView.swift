@@ -74,12 +74,12 @@ public struct HomeView: View {
     private var recordCard: some View {
         TossCard {
             VStack(alignment: .leading, spacing: TossSpace.x4) {
-                Text(model.isRecording ? "녹음 중" : "오프라인 미팅")
+                Text(model.isRecording ? "시스템 오디오 녹음 중" : "시스템 오디오 녹음")
                     .font(TossFont.section())
                     .foregroundStyle(TossColor.grey900)
                 Text(model.isRecording
-                     ? "마이크가 켜져 있어요. 끝나면 아래 버튼을 눌러 주세요."
-                     : "마이크만 사용해요. 온라인 회의 시스템 오디오는 다음 단계예요.")
+                     ? "Mac에서 나는 회의 소리(Zoom/Meet 등)를 듣고 있어요. 끝나면 아래를 눌러 주세요."
+                     : "Mac mini처럼 내장 마이크가 없어도 됩니다. 디스플레이 시스템 오디오를 녹음해요. 첫 실행 시 화면 기록 권한을 허용해 주세요.")
                     .font(TossFont.body())
                     .foregroundStyle(TossColor.grey700)
                     .fixedSize(horizontal: false, vertical: true)
@@ -170,7 +170,7 @@ public struct HomeView: View {
     }
 
     private var footerHint: some View {
-        Text("녹음을 끝내면 받아쓰기·요약이 이어져요. 확인이 필요할 때만 알려 드릴게요.")
+        Text("회의 탭을 켠 뒤 녹음하세요. 끝나면 받아쓰기·요약이 이어지고, 확인이 필요할 때만 알려 드릴게요.")
             .font(TossFont.caption())
             .foregroundStyle(TossColor.grey500)
             .frame(maxWidth: .infinity, alignment: .leading)

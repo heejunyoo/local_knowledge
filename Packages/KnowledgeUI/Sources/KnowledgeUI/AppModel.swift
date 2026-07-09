@@ -192,17 +192,26 @@ public final class AppModel: ObservableObject {
             statusMessage = "아직 준비가 덜 됐어요. 잠깐만요"
             return
         }
-        do {
-            let ctrl = CaptureSessionController(knowledgeRoot: knowledgeRoot, socketPath: socketPath)
-            let id = try ctrl.startSession(title: defaultTitle())
-            capture = ctrl
-            activeMeetingId = id
-            isRecording = true
-            statusMessage = "듣고 있어요"
-            refresh()
-        } catch {
-            lastError = String(describing: error)
-            statusMessage = "녹음을 시작하지 못했어요"
+        Task { @MainActor in
+            do {
+                let ctrl = CaptureSessionController(
+                    knowledgeRoot: knowledgeRoot,
+                    socketPath: socketPath,
+                    mode: .systemAudio
+                )
+                statusMessage = "시스템 오디오 연결 중…"
+                let id = try await ctrl.startSession(title: defaultTitle())
+                capture = ctrl
+                activeMeetingId = id
+                isRecording = true
+                statusMessage = "회의 소리를 듣고 있어요"
+                appendUILog("system audio recording started \(id)")
+                refresh()
+            } catch {
+                lastError = error.localizedDescription
+                statusMessage = "녹음을 시작하지 못했어요"
+                appendUILog("startRecording error \(error)")
+            }
         }
     }
 
