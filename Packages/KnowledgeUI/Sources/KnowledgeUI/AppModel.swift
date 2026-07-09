@@ -170,9 +170,13 @@ public final class AppModel: ObservableObject {
     }
 
     /// Auto-pick meetings that need UI-side speech ASR.
+    /// Runs even while another session is recording (different meeting ids).
     public func kickPendingASR() {
-        guard healthOK, !isRecording else { return }
+        guard healthOK else { return }
+        // Skip the meeting currently being captured live
+        let liveId = isRecording ? activeMeetingId : nil
         for row in meetings {
+            if row.id == liveId { continue }
             guard !asrInFlight.contains(row.id) else { continue }
             let needs =
                 row.status == "recorded"
@@ -182,11 +186,31 @@ public final class AppModel: ObservableObject {
                 || (row.status == "transcribing" && row.audioPath != nil)
             guard needs, let audio = row.audioPath else { continue }
             asrInFlight.insert(row.id)
+            appendUILog("kickPendingASR \(row.id) status=\(row.status)")
             Task { @MainActor in
                 await self.runLocalASR(meetingId: row.id, audioRel: audio)
                 self.asrInFlight.remove(row.id)
             }
             break // one at a time
+        }
+    }
+
+    private func appendUILog(_ message: String) {
+        let url = knowledgeRoot.appendingPathComponent("logs/ui.log")
+        try? FileManager.default.createDirectory(
+            at: url.deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
+        let line = "\(ISO8601DateFormatter().string(from: Date())) \(message)\n"
+        if let data = line.data(using: .utf8) {
+            if FileManager.default.fileExists(atPath: url.path),
+               let handle = try? FileHandle(forWritingTo: url) {
+                defer { try? handle.close() }
+                _ = try? handle.seekToEnd()
+                try? handle.write(contentsOf: data)
+            } else {
+                try? data.write(to: url)
+            }
         }
     }
 
@@ -246,6 +270,7 @@ public final class AppModel: ObservableObject {
         isProcessing = true
         statusMessage = "받아쓰는 중…"
         lastError = nil
+        appendUILog("runLocalASR start \(meetingId) audio=\(audioRel ?? "?")")
         do {
             var audioPath = audioRel
             if audioPath == nil {
@@ -270,6 +295,7 @@ public final class AppModel: ObservableObject {
                 meetingId: meetingId,
                 audioRelPath: audioPath
             )
+            appendUILog("runLocalASR complete \(meetingId)")
             statusMessage = "정리하는 중…"
             refresh()
 
@@ -299,6 +325,7 @@ public final class AppModel: ObservableObject {
             statusMessage = "정리하는 중… 잠시 후 목록을 확인해 주세요"
             refresh()
         } catch {
+            appendUILog("runLocalASR error \(meetingId): \(error)")
             lastError = error.localizedDescription
             statusMessage = "받아쓰기에 실패했어요"
             isProcessing = false
