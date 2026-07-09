@@ -74,13 +74,16 @@ swift run knowledged --root ~/Knowledge
 # Auto-tick: recorded → ASR → transcribed (or transcribe_failed, never silent success)
 ```
 
-Menu bar UI (Toss-inspired):
+UI (Toss-inspired) — **use the helper, not bare `swift run`**:
 
 ```bash
 ./scripts/run-ui.sh
-# or: swift run KnowledgeApp
-# Design tokens: docs/ui/toss_design.md
+# Builds Knowledge.app, starts knowledged, opens a real window.
+# Design: docs/ui/toss_design.md
 ```
+
+> **Why `swift run KnowledgeApp` looked like “nothing happened”:**  
+> SPM produces a naked binary with only a menu-bar scene. Without a `.app` bundle / main window, macOS shows no Dock icon and often no menu-bar item. `run-ui.sh` packages `.app` and opens a normal window.
 
 ## Feature flags
 
