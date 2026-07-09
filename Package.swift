@@ -76,6 +76,7 @@ let package = Package(
                 "KnowledgeIndex",
                 "KnowledgeRPC",
                 "KnowledgeCapture",
+                "KnowledgeWorkers",
             ],
             path: "Packages/KnowledgeUI/Sources/KnowledgeUI"
         ),

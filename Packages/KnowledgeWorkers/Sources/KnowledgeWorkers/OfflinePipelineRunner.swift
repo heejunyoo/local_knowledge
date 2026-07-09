@@ -114,14 +114,19 @@ public final class OfflinePipelineRunner: @unchecked Sendable {
                     audioDurationSeconds: max(1, durationS)
                 )
             } else {
-                // Apple Speech fallback — no CLI tools required
-                doc = try AppleSpeechASRBridge.transcribeSync(
+                // Apple Speech must run in UI app (TCC). Leave for UI; do not silent-success.
+                // Revert to recorded so UI can pick up, or mark needs_ui_asr without burning retries.
+                _ = try store.transition(
                     meetingId: id,
-                    audioURL: audioURL,
-                    outputJSON: outJSON,
-                    language: language,
-                    timeout: timeout
+                    to: .transcribeFailed,
+                    ctx: GuardContext(
+                        hasAudioArtifact: true,
+                        audioDurationMs: meeting.audioDurationMs ?? 1
+                    ),
+                    errorCode: "needs_ui_asr",
+                    event: "pipeline.asr.defer_to_ui"
                 )
+                return
             }
 
             let rel = "transcripts/\(id).json"

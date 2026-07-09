@@ -205,16 +205,79 @@ public final class AppModel: ObservableObject {
             return
         }
         do {
-            _ = try capture.stopSession()
+            let artifact = try capture.stopSession()
+            let mid = activeMeetingId
             isRecording = false
             activeMeetingId = nil
             self.capture = nil
-            statusMessage = "정리하는 중…"
+            statusMessage = "받아쓰는 중…"
             refresh()
+            // Speech ASR in UI process (permissions live here)
+            if let mid {
+                Task { @MainActor in
+                    await self.runLocalASR(meetingId: mid, audioRel: artifact.path)
+                }
+            }
         } catch {
             lastError = String(describing: error)
             statusMessage = "녹음 저장에 실패했어요"
             isRecording = false
+        }
+    }
+
+    /// Also used for retry of failed meetings that need UI ASR.
+    public func runLocalASR(meetingId: String, audioRel: String?) async {
+        statusMessage = "받아쓰는 중…"
+        lastError = nil
+        do {
+            var audioPath = audioRel
+            if audioPath == nil {
+                // fetch from server
+                let client = UnixDomainClient(socketPath: socketPath)
+                try client.connect()
+                defer { client.close() }
+                let get = try client.call(JSONRPCRequest(
+                    method: RPCMethod.meetingGet.rawValue,
+                    params: .object(["id": .string(meetingId)])
+                ))
+                audioPath = get.result?["audio_path"]?.stringValue
+            }
+            guard let audioPath else {
+                statusMessage = "녹음 파일을 찾지 못했어요"
+                return
+            }
+            try await LocalASRService.transcribeIfNeeded(
+                knowledgeRoot: knowledgeRoot,
+                socketPath: socketPath,
+                meetingId: meetingId,
+                audioRelPath: audioPath
+            )
+            statusMessage = "정리하는 중…"
+            // Poll until review_needed or fail (daemon summarize)
+            for _ in 0..<30 {
+                try? await Task.sleep(nanoseconds: 500_000_000)
+                refresh()
+                if let row = meetings.first(where: { $0.id == meetingId }) {
+                    if row.status == "review_needed" {
+                        statusMessage = "확인이 필요해요"
+                        return
+                    }
+                    if row.status.contains("fail") {
+                        statusMessage = "문제가 생겼어요. 다시 시도해 주세요"
+                        return
+                    }
+                    if row.status == "committed" {
+                        statusMessage = "저장했어요"
+                        return
+                    }
+                }
+            }
+            refresh()
+            statusMessage = "정리하는 중…"
+        } catch {
+            lastError = String(describing: error)
+            statusMessage = "받아쓰기에 실패했어요"
+            refresh()
         }
     }
 
@@ -244,18 +307,37 @@ public final class AppModel: ObservableObject {
     }
 
     public func retryMeeting(meetingId: String) {
-        do {
-            let client = UnixDomainClient(socketPath: socketPath)
-            try client.connect()
-            defer { client.close() }
-            _ = try client.call(JSONRPCRequest(
-                method: RPCMethod.meetingRetry.rawValue,
-                params: .object(["id": .string(meetingId)])
-            ))
-            statusMessage = "다시 정리하는 중…"
-            refresh()
-        } catch {
-            lastError = String(describing: error)
+        Task { @MainActor in
+            do {
+                let client = UnixDomainClient(socketPath: socketPath)
+                try client.connect()
+                defer { client.close() }
+                let get = try client.call(JSONRPCRequest(
+                    method: RPCMethod.meetingGet.rawValue,
+                    params: .object(["id": .string(meetingId)])
+                ))
+                let status = get.result?["status"]?.stringValue ?? ""
+                let audio = get.result?["audio_path"]?.stringValue
+                let err = get.result?["error_code"]?.stringValue
+
+                if status == "transcribe_failed" || err == "needs_ui_asr" || err == "asr_tools_missing" {
+                    _ = try client.call(JSONRPCRequest(
+                        method: RPCMethod.meetingRetry.rawValue,
+                        params: .object(["id": .string(meetingId)])
+                    ))
+                    await runLocalASR(meetingId: meetingId, audioRel: audio)
+                    return
+                }
+
+                _ = try client.call(JSONRPCRequest(
+                    method: RPCMethod.meetingRetry.rawValue,
+                    params: .object(["id": .string(meetingId)])
+                ))
+                statusMessage = "다시 정리하는 중…"
+                refresh()
+            } catch {
+                lastError = String(describing: error)
+            }
         }
     }
 
