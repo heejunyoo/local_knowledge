@@ -208,6 +208,20 @@ public struct SettingsView: View {
         pairBusy = true
         pairError = nil
         defer { pairBusy = false }
+
+        // Old daemons often run without --http-port; bring gateway up first.
+        let root = model.knowledgeRoot
+        let port = gatewayPort
+        let gatewayOK = await Task.detached(priority: .userInitiated) {
+            DaemonSupervisor(knowledgeRoot: root).ensureMobileGateway(port: port, timeout: 12)
+        }.value
+
+        if !gatewayOK {
+            pairError = "모바일 게이트웨이를 켜지 못했어요. 앱을 완전히 종료한 뒤 다시 열어 주세요. (knowledged --http-port \(gatewayPort))"
+            pairCode = nil
+            return
+        }
+
         let url = URL(string: "http://127.0.0.1:\(gatewayPort)/v1/pair/start")!
         var req = URLRequest(url: url)
         req.httpMethod = "POST"
@@ -221,14 +235,15 @@ public struct SettingsView: View {
             if code == 200, let c = obj["code"] as? String {
                 pairCode = c
                 pairExpires = obj["expires_in"] as? Int ?? 300
+                pairError = nil
                 refreshTailscaleHint()
             } else {
                 pairError = (obj["error"] as? String)
-                    ?? "게이트웨이에 연결할 수 없어요. Mac에서 mobile-gateway.sh 를 실행한 뒤 다시 시도하세요. (HTTP \(code))"
+                    ?? "게이트웨이에 연결할 수 없어요. (HTTP \(code))"
                 pairCode = nil
             }
         } catch {
-            pairError = "게이트웨이 없음 — `scripts/mobile-gateway.sh` 로 knowledged --http-port \(gatewayPort) 를 켜 주세요."
+            pairError = "게이트웨이 응답 없음 — 잠시 후 다시 시도해 주세요. (\(error.localizedDescription))"
             pairCode = nil
         }
     }
