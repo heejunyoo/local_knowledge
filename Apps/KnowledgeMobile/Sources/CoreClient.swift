@@ -30,6 +30,8 @@ public final class CoreClient: ObservableObject {
 
     public func completePair(code: String, deviceName: String) async {
         lastError = nil
+        // Normalize URL before first request (ensure http://)
+        baseURL = normalizedBase()
         do {
             let body: [String: Any] = ["code": code, "device_name": deviceName]
             let res = try await postJSON(path: "/v1/pair/complete", body: body, auth: false)
@@ -38,11 +40,18 @@ public final class CoreClient: ObservableObject {
                 deviceId = res["device_id"] as? String ?? ""
                 coreName = res["core_name"] as? String ?? ""
                 connected = true
+                lastError = nil
             } else {
                 lastError = res["error"] as? String ?? "pair failed"
             }
         } catch {
-            lastError = error.localizedDescription
+            let msg = error.localizedDescription
+            if msg.localizedCaseInsensitiveContains("App Transport Security")
+                || msg.localizedCaseInsensitiveContains("secure connection") {
+                lastError = "보안 정책 오류가 남아 있으면 앱을 삭제 후 Xcode에서 다시 설치하세요. (\(msg))"
+            } else {
+                lastError = msg
+            }
         }
     }
 
@@ -227,40 +236,57 @@ public final class CoreClient: ObservableObject {
         guard let url = URL(string: normalizedBase() + path) else {
             throw URLError(.badURL)
         }
-        var req = URLRequest(url: url)
-        req.httpMethod = "GET"
-        req.timeoutInterval = 30
-        req.setValue("application/json", forHTTPHeaderField: "Accept")
+        var headers: [String: String] = ["Accept": "application/json"]
         if auth, !token.isEmpty {
-            req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+            headers["Authorization"] = "Bearer \(token)"
         }
-        let (data, resp) = try await URLSession.shared.data(for: req)
-        try throwIfATSOrHTTPError(resp: resp, data: data)
-        return try JSONSerialization.jsonObject(with: data) as? [String: Any] ?? [:]
+        // NWConnection cleartext — bypasses URLSession ATS for http:// Core URLs.
+        let res = try await CleartextHTTP.request(
+            method: "GET",
+            url: url,
+            headers: headers,
+            body: nil,
+            timeout: 30
+        )
+        try throwIfHTTPStatus(res.status, body: res.body)
+        return try JSONSerialization.jsonObject(with: res.body) as? [String: Any] ?? [:]
     }
 
     private func postJSON(path: String, body: [String: Any], auth: Bool) async throws -> [String: Any] {
         guard let url = URL(string: normalizedBase() + path) else {
             throw URLError(.badURL)
         }
-        var req = URLRequest(url: url)
-        req.httpMethod = "POST"
-        req.timeoutInterval = 120
-        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        var headers: [String: String] = [
+            "Accept": "application/json",
+            "Content-Type": "application/json",
+        ]
         if auth, !token.isEmpty {
-            req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+            headers["Authorization"] = "Bearer \(token)"
         }
-        req.httpBody = try JSONSerialization.data(withJSONObject: body)
-        let (data, resp) = try await URLSession.shared.data(for: req)
-        try throwIfATSOrHTTPError(resp: resp, data: data)
-        return try JSONSerialization.jsonObject(with: data) as? [String: Any] ?? [:]
+        let bodyData = try JSONSerialization.data(withJSONObject: body)
+        let res = try await CleartextHTTP.request(
+            method: "POST",
+            url: url,
+            headers: headers,
+            body: bodyData,
+            timeout: 120
+        )
+        try throwIfHTTPStatus(res.status, body: res.body)
+        return try JSONSerialization.jsonObject(with: res.body) as? [String: Any] ?? [:]
     }
 
-    private func throwIfATSOrHTTPError(resp: URLResponse?, data: Data) throws {
-        if let http = resp as? HTTPURLResponse, http.statusCode == 401 {
+    private func throwIfHTTPStatus(_ status: Int, body: Data) throws {
+        if status == 401 {
             throw NSError(domain: "core", code: 401, userInfo: [NSLocalizedDescriptionKey: "unauthorized — re-pair"])
         }
-        // Surface empty/fail more clearly when ATS or connection fails via URLError upstream
-        _ = data
+        if status == 0 {
+            throw NSError(domain: "core", code: -1, userInfo: [NSLocalizedDescriptionKey: "서버 응답 없음 — Core URL·Tailscale·Mac 게이트웨이를 확인하세요"])
+        }
+        if status >= 400 {
+            let msg = (try? JSONSerialization.jsonObject(with: body) as? [String: Any])?["error"] as? String
+                ?? String(data: body, encoding: .utf8)
+                ?? "HTTP \(status)"
+            throw NSError(domain: "core", code: status, userInfo: [NSLocalizedDescriptionKey: msg])
+        }
     }
 }
