@@ -2,6 +2,7 @@ import Foundation
 import KnowledgeIndex
 
 /// Accept-loop for the pipeline daemon over UDS JSON-RPC.
+/// Supports **multiple requests per connection** until the client closes.
 public final class DaemonRuntime: @unchecked Sendable {
     private let service: PipelineService
     private let server: UnixDomainServer
@@ -41,16 +42,21 @@ public final class DaemonRuntime: @unchecked Sendable {
                 if stopFlag { break }
                 throw error
             }
-            do {
-                let payload = try conn.readFrame()
-                let request = try RPCCodec.decodeRequest(payload)
-                let response = service.handle(request: request, peer: conn.peer)
-                let data = try RPCCodec.encodeResponse(response)
-                try conn.writeFrame(data)
-            } catch RPCTransportError.closed {
-                continue
-            } catch {
-                continue
+            // Serve until client disconnects (multi-request session)
+            while !stopFlag {
+                do {
+                    let payload = try conn.readFrame()
+                    let request = try RPCCodec.decodeRequest(payload)
+                    let response = service.handle(request: request, peer: conn.peer)
+                    let data = try RPCCodec.encodeResponse(response)
+                    try conn.writeFrame(data)
+                } catch RPCTransportError.closed {
+                    break
+                } catch {
+                    // Protocol/handler error: drop connection, keep daemon alive
+                    fputs("daemon conn error: \(error)\n", stderr)
+                    break
+                }
             }
         }
         server.stop()

@@ -51,7 +51,7 @@ let package = Package(
         ),
         .target(
             name: "KnowledgeCapture",
-            dependencies: ["KnowledgeCore", "KnowledgeRPC"],
+            dependencies: ["KnowledgeCore", "KnowledgeIndex", "KnowledgeRPC"],
             path: "Packages/KnowledgeCapture/Sources/KnowledgeCapture"
         ),
         .testTarget(

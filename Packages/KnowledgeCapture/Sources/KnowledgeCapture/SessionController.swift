@@ -1,5 +1,6 @@
 import Foundation
 import KnowledgeCore
+import KnowledgeIndex
 import KnowledgeRPC
 
 public enum CaptureMode: String, Sendable {
@@ -7,7 +8,8 @@ public enum CaptureMode: String, Sendable {
     case offlineMic = "offline_mic"
 }
 
-/// Capture first, then register meeting — avoids orphan `recording` rows on SCK/TCC failure.
+/// Capture first, then register meeting. RPC uses **fresh connection per call**
+/// (and daemon now multiplexes, but one-call-per-conn remains safest).
 public final class CaptureSessionController: @unchecked Sendable {
     private let knowledgeRoot: URL
     private let socketPath: String
@@ -32,10 +34,9 @@ public final class CaptureSessionController: @unchecked Sendable {
     }
 
     public func startSession(title: String? = nil) async throws -> String {
-        // Provisional id used for audio filename before RPC create
         let id = UUID().uuidString
 
-        // 1) Start capture FIRST (fail here → no DB row)
+        // 1) Capture first
         switch mode {
         case .systemAudio:
             if #available(macOS 13.0, *),
@@ -48,34 +49,19 @@ public final class CaptureSessionController: @unchecked Sendable {
             try micRecorder.start(meetingId: id)
         }
 
-        // 2) Register meeting only after capture is live
+        // 2) Register meeting (RPC with retry, then local DB fallback)
         do {
-            let client = UnixDomainClient(socketPath: socketPath)
-            try client.connect()
-            defer { client.close() }
-
-            // Clear orphans so create isn't blocked
-            _ = try? client.call(JSONRPCRequest(method: RPCMethod.meetingAbandonOrphans.rawValue))
-
-            var params: [String: JSONValue] = [
-                "id": .string(id),
-                "mode": .string(mode.rawValue),
-            ]
-            if let title {
-                params["title"] = .string(title)
-            }
-            let res = try client.call(JSONRPCRequest(
-                method: RPCMethod.meetingCreate.rawValue,
-                params: .object(params)
-            ))
-            if let err = res.error {
-                try cancelCaptureOnly()
-                throw CaptureError.engine(err.message)
-            }
+            try registerMeeting(id: id, title: title)
         } catch {
-            try cancelCaptureOnly()
-            if let c = error as? CaptureError { throw c }
-            throw CaptureError.engine(String(describing: error))
+            // Capture is live — prefer local DB insert over aborting good SCK session
+            do {
+                try registerMeetingLocally(id: id, title: title)
+            } catch {
+                try cancelCaptureOnly()
+                throw CaptureError.engine(
+                    "녹음은 시작됐지만 목록 등록에 실패했어요: \(error.localizedDescription)"
+                )
+            }
         }
 
         meetingId = id
@@ -98,22 +84,25 @@ public final class CaptureSessionController: @unchecked Sendable {
             artifact = try micRecorder.stop()
         }
 
-        let client = UnixDomainClient(socketPath: socketPath)
-        try client.connect()
-        defer { client.close() }
-
-        let res = try client.call(JSONRPCRequest(
-            method: RPCMethod.meetingTransition.rawValue,
-            params: .object([
-                "id": .string(id),
-                "to": .string(PipelineStatus.recorded.rawValue),
-                "audio_path": .string(artifact.path),
-                "audio_sha256": .string(artifact.sha256),
-                "audio_duration_ms": .number(Double(artifact.durationMs)),
-            ])
-        ))
-        if let err = res.error {
-            throw CaptureError.engine(err.message)
+        // Transition to recorded — RPC then local fallback
+        do {
+            try rpcOnce(JSONRPCRequest(
+                method: RPCMethod.meetingTransition.rawValue,
+                params: .object([
+                    "id": .string(id),
+                    "to": .string(PipelineStatus.recorded.rawValue),
+                    "audio_path": .string(artifact.path),
+                    "audio_sha256": .string(artifact.sha256),
+                    "audio_duration_ms": .number(Double(artifact.durationMs)),
+                ])
+            ))
+        } catch {
+            try markRecordedLocally(
+                id: id,
+                audioPath: artifact.path,
+                sha: artifact.sha256,
+                durationMs: artifact.durationMs
+            )
         }
         meetingId = nil
         return artifact
@@ -123,16 +112,95 @@ public final class CaptureSessionController: @unchecked Sendable {
         try cancelCaptureOnly()
         guard let id = meetingId else { return }
         meetingId = nil
-        let client = UnixDomainClient(socketPath: socketPath)
-        try client.connect()
-        defer { client.close() }
-        _ = try client.call(JSONRPCRequest(
+        _ = try? rpcOnce(JSONRPCRequest(
             method: RPCMethod.meetingTransition.rawValue,
             params: .object([
                 "id": .string(id),
                 "to": .string(PipelineStatus.recordFailed.rawValue),
                 "error_code": .string("capture_cancelled"),
             ])
+        ))
+    }
+
+    // MARK: - RPC helpers (one connection per call)
+
+    @discardableResult
+    private func rpcOnce(_ request: JSONRPCRequest, retries: Int = 2) throws -> JSONRPCResponse {
+        var last: Error?
+        for attempt in 0...retries {
+            do {
+                let client = UnixDomainClient(socketPath: socketPath)
+                try client.connect()
+                defer { client.close() }
+                let res = try client.call(request)
+                if let err = res.error {
+                    throw CaptureError.engine(err.message)
+                }
+                return res
+            } catch {
+                last = error
+                // Brief backoff on broken pipe / closed
+                Thread.sleep(forTimeInterval: 0.15 * Double(attempt + 1))
+            }
+        }
+        throw last ?? CaptureError.engine("RPC failed")
+    }
+
+    private func registerMeeting(id: String, title: String?) throws {
+        _ = try? rpcOnce(JSONRPCRequest(method: RPCMethod.meetingAbandonOrphans.rawValue))
+        var params: [String: JSONValue] = [
+            "id": .string(id),
+            "mode": .string(mode.rawValue),
+        ]
+        if let title { params["title"] = .string(title) }
+        _ = try rpcOnce(JSONRPCRequest(
+            method: RPCMethod.meetingCreate.rawValue,
+            params: .object(params)
+        ))
+    }
+
+    private func registerMeetingLocally(id: String, title: String?) throws {
+        let db = knowledgeRoot.appendingPathComponent("index/knowledge.db").path
+        let store = try KnowledgeStore(path: db)
+        // abandon orphans
+        for m in try store.meetings(withStatus: .recording) {
+            var c = m
+            c.status = .abandoned
+            c.errorCode = "stale_recording_cleared"
+            try store.upsertMeeting(c)
+        }
+        let row = MeetingRecord(
+            id: id,
+            title: title,
+            mode: mode.rawValue,
+            status: .recording
+        )
+        try store.insertMeeting(row)
+        try store.appendEvent(PipelineEvent(
+            meetingId: id,
+            fromStatus: nil,
+            toStatus: .recording,
+            event: "meeting.create.local"
+        ))
+    }
+
+    private func markRecordedLocally(id: String, audioPath: String, sha: String, durationMs: Int) throws {
+        let db = knowledgeRoot.appendingPathComponent("index/knowledge.db").path
+        let store = try KnowledgeStore(path: db)
+        guard var m = try store.getMeeting(id: id) else {
+            throw CaptureError.engine("meeting missing for local recorded mark")
+        }
+        m.status = .recorded
+        m.audioPath = audioPath
+        m.audioSha256 = sha
+        m.audioDurationMs = durationMs
+        m.errorCode = nil
+        try store.upsertMeeting(m)
+        try store.appendEvent(PipelineEvent(
+            meetingId: id,
+            fromStatus: .recording,
+            toStatus: .recorded,
+            event: "meeting.transition.local"
         ))
     }
 

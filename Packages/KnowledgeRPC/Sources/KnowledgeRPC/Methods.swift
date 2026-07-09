@@ -35,5 +35,5 @@ public struct HealthResult: Codable, Sendable {
 
 // Bump when daemon capabilities change (pipeline tick, etc.)
 public enum DaemonVersion {
-    public static let current = "0.3.0-pr07"
+    public static let current = "0.3.1-rpc-multiplex"
 }
