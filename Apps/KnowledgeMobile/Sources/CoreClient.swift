@@ -100,7 +100,20 @@ public final class CoreClient: ObservableObject {
     }
 
     public func askFast(q: String) async throws -> (answer: String, engine: String, citations: [[String: Any]]) {
-        let rpc = try await rpc(method: "knowledge.ask.fast", params: ["q": q, "limit": 8])
+        try await askRPC(method: "knowledge.ask.fast", q: q, useLlama: false)
+    }
+
+    /// Full path: retrieve + cloud-first refine (preferred for mobile quality).
+    public func ask(q: String) async throws -> (answer: String, engine: String, citations: [[String: Any]]) {
+        try await askRPC(method: "knowledge.ask", q: q, useLlama: true)
+    }
+
+    private func askRPC(method: String, q: String, useLlama: Bool) async throws -> (answer: String, engine: String, citations: [[String: Any]]) {
+        let rpc = try await rpc(method: method, params: [
+            "q": q,
+            "limit": 8,
+            "use_llama": useLlama,
+        ])
         if let err = rpc["error"] as? [String: Any] {
             throw NSError(domain: "core", code: 1, userInfo: [NSLocalizedDescriptionKey: err["message"] as? String ?? "error"])
         }
@@ -113,7 +126,7 @@ public final class CoreClient: ObservableObject {
     }
 
     public func chat(message: String) async throws -> (answer: String, engine: String, sources: [[String: Any]]) {
-        let res = try await postJSON(path: "/v1/chat", body: ["message": message, "mode": "auto"], auth: true)
+        let res = try await postJSON(path: "/v1/chat", body: ["message": message, "mode": "knowledge"], auth: true)
         if let err = res["error"] as? String {
             throw NSError(domain: "core", code: 2, userInfo: [NSLocalizedDescriptionKey: err])
         }

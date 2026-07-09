@@ -74,17 +74,18 @@ public enum KnowledgeRAG {
             return (c.title, snip)
         }
         let prompt = LocalLLM.ragPrompt(question: question, contexts: ctx)
+        // Slightly longer for readable mobile/desktop answers; cloud-first.
         if let gen = LLMRouter.complete(
             prompt: prompt,
             knowledgeRoot: knowledgeRoot,
-            maxTokens: 160,
+            maxTokens: 280,
             preferCloud: true,
             preferLocal7B: useLlama,
-            localTimeout: 35
+            localTimeout: 40
         ), isPlausibleAnswer(gen.text) {
             return Answer(
                 question: question,
-                answer: gen.text,
+                answer: gen.text.trimmingCharacters(in: .whitespacesAndNewlines),
                 citations: citations,
                 engine: "\(gen.engine)+retrieve-v2"
             )

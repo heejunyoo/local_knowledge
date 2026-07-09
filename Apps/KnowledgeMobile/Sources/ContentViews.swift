@@ -267,54 +267,101 @@ struct AskMobileView: View {
     @State private var messages: [ChatBubble] = []
     @State private var busy = false
     @State private var status = ""
+    @FocusState private var composerFocused: Bool
 
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
-                ScrollView {
-                    LazyVStack(alignment: .leading, spacing: 12) {
-                        if messages.isEmpty {
-                            KEmptyState(
-                                systemImage: "bubble.left.and.bubble.right",
-                                title: "무엇이 궁금한가요?",
-                                message: "근거를 먼저 보여 주고, 가능하면 문장을 다듬어요."
-                            )
-                        }
-                        ForEach(messages) { m in
-                            bubble(m)
-                        }
-                        if busy {
-                            HStack(spacing: 8) {
-                                ProgressView()
-                                Text(status.isEmpty ? "찾는 중…" : status)
-                                    .font(.caption)
-                                    .foregroundStyle(KColor.grey500)
+                ScrollViewReader { proxy in
+                    ScrollView {
+                        LazyVStack(alignment: .leading, spacing: 12) {
+                            if messages.isEmpty {
+                                KEmptyState(
+                                    systemImage: "bubble.left.and.bubble.right",
+                                    title: "무엇이 궁금한가요?",
+                                    message: "지식에서 찾아 답해요. 보내기 후 키보드는 자동으로 닫혀요."
+                                )
                             }
-                            .padding()
+                            ForEach(messages) { m in
+                                bubble(m).id(m.id)
+                            }
+                            if busy {
+                                HStack(spacing: 8) {
+                                    ProgressView()
+                                    Text(status.isEmpty ? "답하는 중…" : status)
+                                        .font(.caption)
+                                        .foregroundStyle(KColor.grey500)
+                                }
+                                .padding()
+                                .id("busy")
+                            }
+                        }
+                        .padding(.vertical)
+                        .frame(maxWidth: .infinity)
+                        .contentShape(Rectangle())
+                        .onTapGesture { dismissKeyboard() }
+                    }
+                    .scrollDismissesKeyboard(.interactively)
+                    .onChange(of: messages.count) { _, _ in
+                        if let last = messages.last {
+                            withAnimation { proxy.scrollTo(last.id, anchor: .bottom) }
                         }
                     }
-                    .padding(.vertical)
-                }
-                HStack(alignment: .bottom, spacing: 10) {
-                    TextField("메시지", text: $draft, axis: .vertical)
-                        .lineLimit(1...4)
-                        .padding(12)
-                        .background(KColor.grey100)
-                        .clipShape(RoundedRectangle(cornerRadius: 20))
-                    Button(action: send) {
-                        Image(systemName: "arrow.up.circle.fill")
-                            .font(.system(size: 34))
-                            .foregroundStyle(KColor.blue500)
+                    .onChange(of: busy) { _, on in
+                        if on { withAnimation { proxy.scrollTo("busy", anchor: .bottom) } }
                     }
-                    .disabled(busy || draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                 }
-                .padding()
-                .background(KColor.white)
+                composerBar
             }
             .background(KColor.grey100)
             .navigationTitle("물어보기")
             .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItemGroup(placement: .keyboard) {
+                    Spacer()
+                    Button("완료") { dismissKeyboard() }
+                        .fontWeight(.semibold)
+                }
+                ToolbarItem(placement: .topBarTrailing) {
+                    if composerFocused {
+                        Button("키보드 닫기") { dismissKeyboard() }
+                            .font(.subheadline.weight(.semibold))
+                    }
+                }
+            }
+            // Tab bar stays usable when keyboard is up
+            .safeAreaInset(edge: .bottom, spacing: 0) { Color.clear.frame(height: 0) }
         }
+    }
+
+    private var composerBar: some View {
+        HStack(alignment: .bottom, spacing: 10) {
+            TextField("메시지", text: $draft, axis: .vertical)
+                .lineLimit(1...4)
+                .focused($composerFocused)
+                .padding(12)
+                .background(KColor.grey100)
+                .clipShape(RoundedRectangle(cornerRadius: 20))
+                .submitLabel(.send)
+                .onSubmit { send() }
+            Button(action: send) {
+                Image(systemName: "arrow.up.circle.fill")
+                    .font(.system(size: 34))
+                    .foregroundStyle(KColor.blue500)
+            }
+            .disabled(busy || draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            .accessibilityLabel("보내기")
+        }
+        .padding()
+        .background(KColor.white)
+    }
+
+    private func dismissKeyboard() {
+        composerFocused = false
+        UIApplication.shared.sendAction(
+            #selector(UIResponder.resignFirstResponder),
+            to: nil, from: nil, for: nil
+        )
     }
 
     private func bubble(_ m: ChatBubble) -> some View {
@@ -340,27 +387,34 @@ struct AskMobileView: View {
         let q = draft.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !q.isEmpty else { return }
         draft = ""
+        dismissKeyboard()
+        kHapticLight()
         messages.append(ChatBubble(role: "user", text: q, meta: ""))
         busy = true
         status = "지식 찾는 중…"
         Task {
             do {
-                let fast = try await core.askFast(q: q)
-                messages.append(ChatBubble(role: "assistant", text: fast.answer, meta: fast.engine.isEmpty ? "빠른 답" : fast.engine))
-                status = "다듬는 중…"
-                if let chat = try? await core.chat(message: q),
-                   !chat.answer.isEmpty,
-                   chat.answer != fast.answer,
-                   let last = messages.indices.last,
-                   messages[last].role == "assistant" {
-                    messages[last].text = chat.answer
-                    messages[last].meta = chat.engine.isEmpty ? "다듬음" : chat.engine
+                // Single full path (cloud refine first on Mac) — avoid flashing garbage extractive as final.
+                status = "답 만드는 중…"
+                let full = try await core.ask(q: q)
+                var answer = full.answer
+                var engine = full.engine
+                // If still extractive-only, try chat refine once more (knowledge mode).
+                if engine.contains("extractive"), let chat = try? await core.chat(message: q),
+                   !chat.answer.isEmpty, chat.answer != answer, !chat.engine.contains("extractive") {
+                    answer = chat.answer
+                    engine = chat.engine
                 }
+                let cites = full.citations.prefix(3).compactMap { $0["title"] as? String }.joined(separator: " · ")
+                let meta = [engine.isEmpty ? nil : engine, cites.isEmpty ? nil : "출처 \(cites)"]
+                    .compactMap { $0 }.joined(separator: " · ")
+                messages.append(ChatBubble(role: "assistant", text: answer, meta: meta))
             } catch {
                 messages.append(ChatBubble(role: "assistant", text: "오류: \(error.localizedDescription)", meta: ""))
             }
             busy = false
             status = ""
+            dismissKeyboard()
         }
     }
 }
