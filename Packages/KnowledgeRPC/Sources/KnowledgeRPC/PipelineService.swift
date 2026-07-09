@@ -93,10 +93,16 @@ public final class PipelineService: @unchecked Sendable {
             }
             return meetingJSON(m)
 
+        case .meetingAbandonOrphans:
+            let n = try abandonOrphanRecordings()
+            return .object(["abandoned": .number(Double(n))])
+
         case .meetingCreate:
+            // Auto-clear stale recordings (app crash / force quit left status=recording)
+            _ = try abandonOrphanRecordings()
             let id = params?["id"]?.stringValue ?? UUID().uuidString
             let title = params?["title"]?.stringValue
-            let mode = params?["mode"]?.stringValue ?? "offline_mic"
+            let mode = params?["mode"]?.stringValue ?? "system_audio"
             let scope = params?["scope"]?.stringValue ?? "personal"
             if try store.countActiveRecordings() > 0 {
                 throw JSONRPCError.app("another recording active", code: -32010)
@@ -222,6 +228,34 @@ public final class PipelineService: @unchecked Sendable {
             rec.errorCode = nil
         }
         return meetingJSON(updated)
+    }
+
+    /// Mark leftover `recording` rows as abandoned (no live capture).
+    @discardableResult
+    private func abandonOrphanRecordings() throws -> Int {
+        let active = try store.meetings(withStatus: .recording)
+        var n = 0
+        for m in active {
+            _ = try? store.transition(
+                meetingId: m.id,
+                to: .abandoned,
+                ctx: GuardContext(),
+                errorCode: "stale_recording_cleared",
+                event: "meeting.abandon_orphan"
+            )
+            // transition recording→abandoned is legal (userOnly)
+            if (try? store.getMeeting(id: m.id))?.status == .abandoned {
+                n += 1
+            } else {
+                // Force if transition failed
+                var copy = m
+                copy.status = .abandoned
+                copy.errorCode = "stale_recording_cleared"
+                try store.upsertMeeting(copy)
+                n += 1
+            }
+        }
+        return n
     }
 
     private func handleTransition(params: JSONValue?) throws -> JSONValue {

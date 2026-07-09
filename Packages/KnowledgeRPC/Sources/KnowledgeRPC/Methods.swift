@@ -13,6 +13,8 @@ public enum RPCMethod: String, Sendable {
     case meetingRetry = "meeting.retry"
     /// UI completed Apple Speech (or other) ASR — force-complete to transcribed.
     case meetingAsrComplete = "meeting.asr.complete"
+    /// Abandon stale `recording` rows so a new capture can start.
+    case meetingAbandonOrphans = "meeting.abandon_orphans"
 }
 
 public struct HealthResult: Codable, Sendable {

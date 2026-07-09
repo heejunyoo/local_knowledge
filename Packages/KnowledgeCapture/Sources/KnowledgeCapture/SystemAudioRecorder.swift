@@ -2,6 +2,7 @@ import Foundation
 import AVFoundation
 import ScreenCaptureKit
 import CoreMedia
+import CoreGraphics
 
 /// System audio capture via ScreenCaptureKit (display mix).
 /// Default path for Mac mini (often no built-in mic).
@@ -35,6 +36,18 @@ public final class SystemAudioRecorder: NSObject, @unchecked Sendable {
         lastError = nil
         sampleCount = 0
 
+        // TCC: screen recording (system audio rides on the same grant)
+        if !CGPreflightScreenCaptureAccess() {
+            let prompted = CGRequestScreenCaptureAccess()
+            if !prompted && !CGPreflightScreenCaptureAccess() {
+                throw CaptureError.engine(
+                    "화면 기록 권한이 필요해요. 시스템 설정 → 개인정보 보호 및 보안 → 화면 기록 에서 Knowledge를 켠 뒤 앱을 다시 실행해 주세요."
+                )
+            }
+            // User may have just granted; brief settle
+            try await Task.sleep(nanoseconds: 400_000_000)
+        }
+
         let url = AudioArtifactBuilder.rawURL(
             knowledgeRoot: knowledgeRoot,
             meetingId: meetingId,
@@ -48,7 +61,14 @@ public final class SystemAudioRecorder: NSObject, @unchecked Sendable {
             try FileManager.default.removeItem(at: url)
         }
 
-        let content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true)
+        let content: SCShareableContent
+        do {
+            content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true)
+        } catch {
+            throw CaptureError.engine(
+                "화면 기록 권한을 확인하지 못했어요. 시스템 설정 → 화면 기록 에서 Knowledge를 허용한 다음, 앱을 완전히 종료 후 다시 열어 주세요. (\(error.localizedDescription))"
+            )
+        }
         guard let display = content.displays.first else {
             throw CaptureError.engine("표시할 디스플레이를 찾지 못했어요")
         }

@@ -1,4 +1,5 @@
 import Foundation
+import AppKit
 import KnowledgeCore
 import KnowledgeIndex
 import KnowledgeRPC
@@ -194,6 +195,8 @@ public final class AppModel: ObservableObject {
         }
         Task { @MainActor in
             do {
+                // Clear leftover recording rows from crashes before create
+                try? abandonOrphanRecordings()
                 let ctrl = CaptureSessionController(
                     knowledgeRoot: knowledgeRoot,
                     socketPath: socketPath,
@@ -211,6 +214,31 @@ public final class AppModel: ObservableObject {
                 lastError = error.localizedDescription
                 statusMessage = "녹음을 시작하지 못했어요"
                 appendUILog("startRecording error \(error)")
+                // Offer Settings for screen capture denial
+                if error.localizedDescription.contains("화면 기록") {
+                    Self.openScreenRecordingSettings()
+                }
+            }
+        }
+    }
+
+    private func abandonOrphanRecordings() throws {
+        let client = UnixDomainClient(socketPath: socketPath)
+        try client.connect()
+        defer { client.close() }
+        _ = try client.call(JSONRPCRequest(method: RPCMethod.meetingAbandonOrphans.rawValue))
+    }
+
+    public static func openScreenRecordingSettings() {
+        // macOS Ventura+ privacy pane
+        let urls = [
+            "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture",
+            "x-apple.systempreferences:com.apple.settings.PrivacySecurity.extension?Privacy_ScreenCapture",
+        ]
+        for s in urls {
+            if let u = URL(string: s) {
+                NSWorkspace.shared.open(u)
+                return
             }
         }
     }

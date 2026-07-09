@@ -78,11 +78,22 @@ UI (Toss-inspired):
 
 ```bash
 ./scripts/run-ui.sh
-# or after package: open .build/debug/Knowledge.app
+# or: ./scripts/package-app.sh && open .build/debug/Knowledge.app
 ```
 
-**백그라운드 엔진(`knowledged`)은 앱이 자동 기동합니다.** 사용자는 CLI로 데몬을 켤 필요가 없습니다.  
-(개발자가 파이프라인만 단독 디버깅할 때만 `swift run knowledged`를 쓰면 됩니다.)
+**백그라운드 엔진(`knowledged`)은 앱이 자동 기동합니다.** CLI로 데몬을 켤 필요 없습니다.
+
+### 권한 (Mac mini / 시스템 오디오)
+
+| 권한 | 어디에 | 왜 |
+|------|--------|-----|
+| **화면 기록** | 시스템 설정 → 개인정보 보호 → **화면 기록** → **Knowledge** | 시스템 오디오 캡처 (ScreenCaptureKit) |
+| 음성 인식 | 같은 패널 → 음성 인식 | 받아쓰기 |
+
+- **터미널로 실행**하면 Terminal.app에 이미 화면 기록이 켜져 있어 “되는 것처럼” 보일 수 있습니다.  
+  그건 Terminal 권한을 빌린 것이고, **제품 경로는 `Knowledge.app`에 권한을 주는 것**입니다.
+- `package-app.sh`는 bundle id `local.knowledge.app` 로 ad-hoc 서명해, 빌드마다 권한이 초기화되는 일을 줄입니다.
+- 권한 변경 후에는 **Knowledge를 완전히 종료 후 다시 실행**하세요.
 
 Design: `docs/ui/toss_design.md`
 

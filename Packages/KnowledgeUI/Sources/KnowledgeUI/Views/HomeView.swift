@@ -104,6 +104,15 @@ public struct HomeView: View {
                         .font(TossFont.caption())
                         .foregroundStyle(TossColor.red500)
                         .fixedSize(horizontal: false, vertical: true)
+                    if err.contains("화면 기록") {
+                        Button("화면 기록 설정 열기") {
+                            AppModel.openScreenRecordingSettings()
+                        }
+                        .font(TossFont.caption())
+                        .fontWeight(.semibold)
+                        .foregroundStyle(TossColor.blue500)
+                        .buttonStyle(.plain)
+                    }
                 }
             }
         }
