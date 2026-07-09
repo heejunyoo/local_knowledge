@@ -74,16 +74,17 @@ swift run knowledged --root ~/Knowledge
 # Auto-tick: recorded → ASR → transcribed (or transcribe_failed, never silent success)
 ```
 
-UI (Toss-inspired) — **use the helper, not bare `swift run`**:
+UI (Toss-inspired):
 
 ```bash
 ./scripts/run-ui.sh
-# Builds Knowledge.app, starts knowledged, opens a real window.
-# Design: docs/ui/toss_design.md
+# or after package: open .build/debug/Knowledge.app
 ```
 
-> **Why `swift run KnowledgeApp` looked like “nothing happened”:**  
-> SPM produces a naked binary with only a menu-bar scene. Without a `.app` bundle / main window, macOS shows no Dock icon and often no menu-bar item. `run-ui.sh` packages `.app` and opens a normal window.
+**백그라운드 엔진(`knowledged`)은 앱이 자동 기동합니다.** 사용자는 CLI로 데몬을 켤 필요가 없습니다.  
+(개발자가 파이프라인만 단독 디버깅할 때만 `swift run knowledged`를 쓰면 됩니다.)
+
+Design: `docs/ui/toss_design.md`
 
 ## Feature flags
 

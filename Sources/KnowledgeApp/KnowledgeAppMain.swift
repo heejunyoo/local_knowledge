@@ -70,12 +70,14 @@ struct KnowledgeAppMain: App {
                         .font(TossFont.caption())
                         .foregroundStyle(TossColor.grey700)
                         .textSelection(.enabled)
-                    Text(model.healthOK ? "데몬 연결됨 · \(model.daemonVersion)" : "데몬이 꺼져 있어요")
-                        .font(TossFont.body())
-                        .foregroundStyle(model.healthOK ? TossColor.grey700 : TossColor.red500)
-                    Text("토스 철학: 단순한 한 가지 일, 넉넉한 여백, 조용한 성공.")
+                    Text(model.healthOK
+                         ? "백그라운드 준비됨"
+                         : model.connectionCaption)
                         .font(TossFont.body())
                         .foregroundStyle(TossColor.grey700)
+                    Text("백그라운드 엔진은 앱이 자동으로 켜요. 터미널 작업은 필요 없어요.")
+                        .font(TossFont.caption())
+                        .foregroundStyle(TossColor.grey500)
                     Spacer()
                 }
                 .padding(TossSpace.x6)

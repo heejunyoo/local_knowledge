@@ -11,17 +11,20 @@ public final class AppModel: ObservableObject {
     public let socketPath: String
 
     @Published public var healthOK: Bool = false
+    @Published public var isStartingBackend: Bool = false
     @Published public var daemonVersion: String = ""
     @Published public var recordingCount: Int = 0
     @Published public var reviewCount: Int = 0
     @Published public var meetings: [MeetingRow] = []
     @Published public var isRecording: Bool = false
     @Published public var activeMeetingId: String?
-    @Published public var statusMessage: String = "녹음할 준비가 됐어요"
+    @Published public var statusMessage: String = "준비하고 있어요"
     @Published public var lastError: String?
 
     private var capture: CaptureSessionController?
     private var pollTimer: Timer?
+    private let supervisor: DaemonSupervisor
+    private var didBootstrap = false
 
     public struct MeetingRow: Identifiable, Equatable {
         public var id: String
@@ -33,20 +36,31 @@ public final class AppModel: ObservableObject {
     public init(knowledgeRoot: URL = KnowledgePaths.defaultKnowledgeRoot) {
         self.knowledgeRoot = knowledgeRoot
         self.socketPath = knowledgeRoot.appendingPathComponent("cache/daemon.sock").path
+        self.supervisor = DaemonSupervisor(knowledgeRoot: knowledgeRoot)
         try? KnowledgePaths.ensureLayout(at: knowledgeRoot)
     }
-
-    public var badgeCount: Int { reviewCount + (lastError != nil && !isRecording ? 0 : 0) + failedCount }
 
     public var failedCount: Int {
         meetings.filter { $0.status.contains("fail") }.count
     }
 
+    /// Caption under status (never tells user to run CLI).
+    public var connectionCaption: String {
+        if isStartingBackend { return "잠시만요, 준비하고 있어요" }
+        if healthOK { return "모든 준비가 끝났어요" }
+        if lastError != nil { return "다시 시도하는 중이에요" }
+        return "연결을 확인하는 중이에요"
+    }
+
     public func startPolling() {
+        bootstrapBackendIfNeeded()
         refresh()
         pollTimer?.invalidate()
         pollTimer = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: true) { [weak self] _ in
-            Task { @MainActor in self?.refresh() }
+            Task { @MainActor in
+                self?.bootstrapBackendIfNeeded()
+                self?.refresh()
+            }
         }
     }
 
@@ -55,7 +69,60 @@ public final class AppModel: ObservableObject {
         pollTimer = nil
     }
 
+    /// Auto-start knowledged — user never touches CLI.
+    public func bootstrapBackendIfNeeded() {
+        if healthOK { return }
+        if isStartingBackend { return }
+
+        // Fast path: already healthy
+        if supervisor.probeHealth() != nil {
+            applyHealthOK(version: supervisor.probeHealth() ?? "")
+            return
+        }
+
+        isStartingBackend = true
+        statusMessage = "준비하고 있어요"
+        lastError = nil
+
+        // Run ensure off main-ish wait on cooperative: short block OK for local spawn
+        let result = supervisor.ensureReady(timeout: 10)
+        isStartingBackend = false
+
+        switch result {
+        case let .ready(version):
+            applyHealthOK(version: version)
+            didBootstrap = true
+        case .starting:
+            statusMessage = "준비하고 있어요"
+        case let .failed(message):
+            healthOK = false
+            statusMessage = "잠시 후 다시 시도해 주세요"
+            lastError = message
+        }
+    }
+
+    private func applyHealthOK(version: String) {
+        healthOK = true
+        daemonVersion = version
+        if !isRecording {
+            statusMessage = "녹음할 준비가 됐어요"
+        }
+        lastError = nil
+    }
+
     public func refresh() {
+        // If down, try silent restart (throttled inside supervisor)
+        if supervisor.probeHealth() == nil {
+            healthOK = false
+            if !isStartingBackend {
+                bootstrapBackendIfNeeded()
+            }
+            if !healthOK && !isStartingBackend {
+                statusMessage = isRecording ? statusMessage : "연결을 복구하는 중이에요"
+            }
+            return
+        }
+
         do {
             let client = UnixDomainClient(socketPath: socketPath)
             try client.connect()
@@ -64,7 +131,6 @@ public final class AppModel: ObservableObject {
             let health = try client.call(JSONRPCRequest(method: "health"))
             if let err = health.error {
                 healthOK = false
-                statusMessage = "데몬에 연결하지 못했어요"
                 lastError = err.message
                 return
             }
@@ -95,8 +161,10 @@ public final class AppModel: ObservableObject {
             }
         } catch {
             healthOK = false
-            statusMessage = "데몬을 켜 주세요"
-            lastError = String(describing: error)
+            // Never: "데몬을 켜 주세요"
+            if !isStartingBackend {
+                bootstrapBackendIfNeeded()
+            }
         }
     }
 
@@ -110,6 +178,13 @@ public final class AppModel: ObservableObject {
 
     public func startRecording() {
         lastError = nil
+        if !healthOK {
+            bootstrapBackendIfNeeded()
+        }
+        guard healthOK else {
+            statusMessage = "아직 준비가 덜 됐어요. 잠깐만요"
+            return
+        }
         do {
             let ctrl = CaptureSessionController(knowledgeRoot: knowledgeRoot, socketPath: socketPath)
             let id = try ctrl.startSession(title: defaultTitle())

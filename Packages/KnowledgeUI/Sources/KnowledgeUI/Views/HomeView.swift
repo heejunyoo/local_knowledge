@@ -45,13 +45,13 @@ public struct HomeView: View {
         TossCard {
             HStack(spacing: TossSpace.x3) {
                 Circle()
-                    .fill(model.healthOK ? TossColor.green500 : TossColor.red500)
+                    .fill(statusDotColor)
                     .frame(width: 10, height: 10)
                 VStack(alignment: .leading, spacing: 4) {
                     Text(model.statusMessage)
                         .font(TossFont.section())
                         .foregroundStyle(TossColor.grey900)
-                    Text(model.healthOK ? "파이프라인 연결됨" : "knowledged 실행이 필요해요")
+                    Text(model.connectionCaption)
                         .font(TossFont.caption())
                         .foregroundStyle(TossColor.grey500)
                 }
@@ -61,6 +61,12 @@ public struct HomeView: View {
                 }
             }
         }
+    }
+
+    private var statusDotColor: Color {
+        if model.healthOK { return TossColor.green500 }
+        if model.isStartingBackend { return TossColor.blue500 }
+        return TossColor.grey500
     }
 
     private var recordCard: some View {
@@ -81,11 +87,14 @@ public struct HomeView: View {
                         model.stopRecording()
                     }
                     TossSecondaryButton("취소") {
-                        // soft cancel via fail path if needed later
                         model.stopRecording()
                     }
                 } else {
-                    TossPrimaryButton("녹음 시작", enabled: model.healthOK) {
+                    // Always tappable — bootstrap runs if needed (no CLI for user)
+                    TossPrimaryButton(
+                        model.isStartingBackend ? "준비 중…" : "녹음 시작",
+                        enabled: !model.isStartingBackend
+                    ) {
                         model.startRecording()
                     }
                 }
@@ -150,7 +159,7 @@ public struct HomeView: View {
     }
 
     private var footerHint: some View {
-        Text("성공 알림은 보내지 않아요. 확인이 필요할 때만 알려 드릴게요.")
+        Text("백그라운드 정리는 앱이 알아서 해요. 확인이 필요할 때만 알려 드릴게요.")
             .font(TossFont.caption())
             .foregroundStyle(TossColor.grey500)
             .frame(maxWidth: .infinity, alignment: .leading)
