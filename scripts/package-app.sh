@@ -85,3 +85,25 @@ echo "Identity:  $IDENTITY"
 echo "Main DR:   $(codesign -d -r- "$INSTALL" 2>&1 | tail -1)"
 echo "Run: open \"$INSTALL\""
 codesign -dv "$INSTALL" 2>&1 | head -12
+
+# Mobile Core (daemon starts with --http-port 8741 by default)
+HTTP_PORT="${KNOWLEDGE_HTTP_PORT:-8741}"
+echo ""
+echo "── Mobile Core ──"
+echo "Gateway port: $HTTP_PORT (auto with app; disable via KNOWLEDGE_HTTP_DISABLE=1)"
+echo "Pair code:    Settings → 모바일 연결  (or ./scripts/mobile-gateway.sh)"
+echo "iOS project:  open Apps/KnowledgeMobile/KnowledgeMobile.xcodeproj"
+echo "Checklist:    docs/MOBILE_FIELD_CHECKLIST.md"
+echo "Smoke:        ./scripts/verify-mobile.sh"
+TS_BIN=""
+if command -v tailscale >/dev/null 2>&1; then
+  TS_BIN=tailscale
+elif [[ -x /Applications/Tailscale.app/Contents/MacOS/Tailscale ]]; then
+  TS_BIN=/Applications/Tailscale.app/Contents/MacOS/Tailscale
+fi
+if [[ -n "$TS_BIN" ]]; then
+  TS_IP=$("$TS_BIN" ip -4 2>/dev/null | head -1 || true)
+  if [[ -n "$TS_IP" ]]; then
+    echo "Core URL:     http://${TS_IP}:${HTTP_PORT}"
+  fi
+fi

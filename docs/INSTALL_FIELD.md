@@ -62,8 +62,26 @@ open ~/Applications/Knowledge.app
 ./scripts/verify-tools.sh
 ```
 
+## 모바일 (iPhone · Tailscale)
+
+앱 설치 후 Core 게이트웨이(`:8741`)가 같이 뜹니다.
+
+```bash
+./scripts/verify-mobile.sh          # Mac loopback 자동 스모크
+open Apps/KnowledgeMobile/KnowledgeMobile.xcodeproj
+# 상세: docs/MOBILE_FIELD_CHECKLIST.md
+```
+
+| 항목 | 값 |
+|------|-----|
+| Core URL | `http://<mac-tailscale-ip>:8741` |
+| 페어링 | 설정 → 모바일 연결 (Mac local only) |
+| iOS 서명 | Personal Team · free Apple ID (7일 재서명) |
+| 공인 노출 | **금지** |
+
 ## 하지 말 것
 
 - `swift run` / 터미널 바이너리로 제품 권한 검증 (TCC 다른 클라이언트)
 - `codesign -s -` ad-hoc 재서명으로 배포 (CDHash 붕괴)
 - admin 전역 데몬 강제 설치
+- Core 포트를 공인 인터넷에 포워딩

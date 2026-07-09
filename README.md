@@ -101,6 +101,8 @@ open Apps/KnowledgeMobile/KnowledgeMobile.xcodeproj   # Personal Team 서명
 | pair/start | **loopback only** (Mac 설정/CLI) |
 | Diet SoT | `~/Knowledge/services/diet/diet.json` |
 | Free Apple ID | 가능 (약 7일 재서명) |
+| 필드 체크리스트 | [`docs/MOBILE_FIELD_CHECKLIST.md`](docs/MOBILE_FIELD_CHECKLIST.md) |
+| 자동 스모크 | `./scripts/verify-mobile.sh` |
 
 ### 제품 설치 (Field SoT)
 

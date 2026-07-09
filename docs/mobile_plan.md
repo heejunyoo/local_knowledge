@@ -110,8 +110,10 @@ iOS thin  ──Bearer──►  Core :8741  ──inproc──►  Knowledge (S
 - [x] Daemon 기본 `--http-port 8741`  
 - [x] pair/start loopback-only  
 - [x] Diet M4 inproc + chat intent  
-- [ ] Personal Team으로 실기기 설치 (Xcode Signing)  
-- [ ] 실기기 Tailscale E2E  
+- [x] package-app + verify-mobile.sh  
+- [x] docs/MOBILE_FIELD_CHECKLIST.md  
+- [ ] Personal Team으로 실기기 설치 (Xcode Signing · 오너)  
+- [ ] 실기기 Tailscale E2E (오너)  
 
 ---
 

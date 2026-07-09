@@ -24,6 +24,15 @@ swift run knowledge-dogfood --root ~/Knowledge --reindex --pipeline --commit
 - pipeline → review_needed → committed  
 - retrieve + rag cites=6  
 
+## 모바일 자동 (Mac loopback)
+
+```bash
+./scripts/verify-mobile.sh
+# health · pair · ask.fast · review.list · diet · revoke 401
+```
+
+상세 실기기: [`MOBILE_FIELD_CHECKLIST.md`](./MOBILE_FIELD_CHECKLIST.md)
+
 ## 수동 (오너)
 
 | # | 항목 | 확인 |
@@ -33,8 +42,10 @@ swift run knowledge-dogfood --root ~/Knowledge --reindex --pipeline --commit
 | 3 | 짧은 실녹음 → 확인함 → 저장 | vault 노트 |
 | 4 | 지식 연결 → 지금 동기화 | 벡터/청크 갱신 |
 | 5 | 물어보기 질문 | 출처 카드 |
-| 6 | (선택) 설정에 Gemini free 키 | 클라우드 1순위 |
-| 7 | (선택) `scripts/install-launch-agent.sh` | 상시 데몬 |
+| 6 | 설정 → 모바일 연결 → 페어링 코드 | 6자리 |
+| 7 | iPhone Personal Team Run + 페어링 | 검색/물어보기 |
+| 8 | (선택) 설정에 Gemini free 키 | 클라우드 1순위 |
+| 9 | (선택) `scripts/install-launch-agent.sh` | 상시 데몬 |
 
 ## 정직한 한계
 
