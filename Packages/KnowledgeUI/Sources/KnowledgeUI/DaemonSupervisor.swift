@@ -88,7 +88,14 @@ public final class DaemonSupervisor: @unchecked Sendable {
 
         let proc = Process()
         proc.executableURL = binary
-        proc.arguments = ["--root", knowledgeRoot.path]
+        // Mobile Core gateway on by default (Tailscale). Disable with KNOWLEDGE_HTTP_DISABLE=1.
+        var args = ["--root", knowledgeRoot.path]
+        let env = ProcessInfo.processInfo.environment
+        if env["KNOWLEDGE_HTTP_DISABLE"] != "1" {
+            let port = env["KNOWLEDGE_HTTP_PORT"] ?? "8741"
+            args += ["--http-port", port]
+        }
+        proc.arguments = args
         proc.currentDirectoryURL = binary.deletingLastPathComponent()
 
         // Detach: don't kill when UI exits

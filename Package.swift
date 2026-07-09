@@ -13,6 +13,7 @@ let package = Package(
         .library(name: "KnowledgeCapture", targets: ["KnowledgeCapture"]),
         .library(name: "KnowledgeWorkers", targets: ["KnowledgeWorkers"]),
         .library(name: "KnowledgeUI", targets: ["KnowledgeUI"]),
+        .library(name: "KnowledgeGateway", targets: ["KnowledgeGateway"]),
         .executable(name: "knowledged", targets: ["knowledged"]),
         .executable(name: "KnowledgeApp", targets: ["KnowledgeApp"]),
         .executable(name: "KnowledgeAudioHelper", targets: ["KnowledgeAudioHelper"]),
@@ -87,6 +88,21 @@ let package = Package(
             dependencies: ["KnowledgeUI"],
             path: "Packages/KnowledgeUI/Tests/KnowledgeUITests"
         ),
+        .target(
+            name: "KnowledgeGateway",
+            dependencies: [
+                "KnowledgeCore",
+                "KnowledgeIndex",
+                "KnowledgeRPC",
+                "KnowledgeWorkers",
+            ],
+            path: "Packages/KnowledgeGateway/Sources/KnowledgeGateway"
+        ),
+        .testTarget(
+            name: "KnowledgeGatewayTests",
+            dependencies: ["KnowledgeGateway"],
+            path: "Packages/KnowledgeGateway/Tests/KnowledgeGatewayTests"
+        ),
         .executableTarget(
             name: "knowledged",
             dependencies: [
@@ -94,6 +110,7 @@ let package = Package(
                 "KnowledgeIndex",
                 "KnowledgeCore",
                 "KnowledgeWorkers",
+                "KnowledgeGateway",
             ],
             path: "Sources/knowledged"
         ),

@@ -13,3 +13,6 @@ DerivedData/
 # local secrets / runtime
 **/secrets.json
 config/secrets.json
+
+# iOS local build
+Apps/KnowledgeMobile/build/

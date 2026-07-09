@@ -17,6 +17,12 @@ public struct SettingsView: View {
     @State private var openrouterKey: String = ""
     @State private var savedFlash: String?
     @State private var llmDetail: String = ""
+    @State private var pairCode: String?
+    @State private var pairExpires: Int = 0
+    @State private var pairError: String?
+    @State private var pairBusy = false
+    @State private var tailscaleHint: String = ""
+    @State private var gatewayPort: UInt16 = 8741
 
     public init(model: AppModel) {
         self.model = model
@@ -31,6 +37,7 @@ public struct SettingsView: View {
                     VStack(alignment: .leading, spacing: TossSpace.x8) {
                         titleBlock
                         vaultBlock
+                        mobilePairBlock
                         cascadeBlock
                         cloudKeysBlock
                         local7BBlock
@@ -96,6 +103,133 @@ public struct SettingsView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(TossColor.white)
             .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+        }
+    }
+
+    private var mobilePairBlock: some View {
+        VStack(alignment: .leading, spacing: TossSpace.x3) {
+            Text("모바일 연결")
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(TossColor.grey500)
+            VStack(alignment: .leading, spacing: TossSpace.x4) {
+                Text("앱이 백엔드와 함께 Core 게이트웨이(:\(gatewayPort))를 켭니다. iPhone에 Tailscale IP와 아래 코드를 입력하세요. (코드 발급은 이 Mac에서만)")
+                    .font(.system(size: 14))
+                    .foregroundStyle(TossColor.grey700)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                if !tailscaleHint.isEmpty {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Core URL")
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundStyle(TossColor.grey500)
+                        Text(tailscaleHint)
+                            .font(.system(size: 15, design: .monospaced))
+                            .foregroundStyle(TossColor.grey900)
+                            .textSelection(.enabled)
+                    }
+                }
+
+                if let pairCode {
+                    HStack(alignment: .firstTextBaseline, spacing: TossSpace.x4) {
+                        Text(pairCode)
+                            .font(.system(size: 36, weight: .bold, design: .monospaced))
+                            .foregroundStyle(TossColor.blue500)
+                            .textSelection(.enabled)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("\(pairExpires)초 유효 · 1회용")
+                                .font(.system(size: 13))
+                                .foregroundStyle(TossColor.grey500)
+                            Button("복사") {
+                                NSPasteboard.general.clearContents()
+                                NSPasteboard.general.setString(pairCode, forType: .string)
+                            }
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundStyle(TossColor.blue500)
+                            .buttonStyle(.plain)
+                        }
+                    }
+                }
+
+                if let pairError {
+                    Text(pairError)
+                        .font(.system(size: 13))
+                        .foregroundStyle(Color.red.opacity(0.85))
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
+                Button {
+                    Task { await requestPairCode() }
+                } label: {
+                    HStack {
+                        if pairBusy { ProgressView().controlSize(.small) }
+                        Text(pairCode == nil ? "페어링 코드 만들기" : "새 코드 만들기")
+                            .font(.system(size: 16, weight: .semibold))
+                    }
+                    .foregroundStyle(TossColor.blue500)
+                }
+                .buttonStyle(.plain)
+                .disabled(pairBusy)
+            }
+            .padding(TossSpace.x5)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(TossColor.white)
+            .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+        }
+        .onAppear { refreshTailscaleHint() }
+    }
+
+    private func refreshTailscaleHint() {
+        let port = gatewayPort
+        // Prefer Tailscale IPv4 if CLI present
+        let ts = Process()
+        ts.executableURL = URL(fileURLWithPath: "/usr/bin/env")
+        ts.arguments = ["tailscale", "ip", "-4"]
+        let out = Pipe()
+        ts.standardOutput = out
+        ts.standardError = Pipe()
+        do {
+            try ts.run()
+            ts.waitUntilExit()
+            let data = out.fileHandleForReading.readDataToEndOfFile()
+            if let ip = String(data: data, encoding: .utf8)?
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+                .split(separator: "\n").first,
+               !ip.isEmpty {
+                tailscaleHint = "http://\(ip):\(port)"
+                return
+            }
+        } catch {
+            // fall through
+        }
+        tailscaleHint = "http://<tailscale-ip>:\(port)"
+    }
+
+    private func requestPairCode() async {
+        pairBusy = true
+        pairError = nil
+        defer { pairBusy = false }
+        let url = URL(string: "http://127.0.0.1:\(gatewayPort)/v1/pair/start")!
+        var req = URLRequest(url: url)
+        req.httpMethod = "POST"
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.httpBody = Data("{}".utf8)
+        req.timeoutInterval = 5
+        do {
+            let (data, resp) = try await URLSession.shared.data(for: req)
+            let code = (resp as? HTTPURLResponse)?.statusCode ?? 0
+            let obj = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] ?? [:]
+            if code == 200, let c = obj["code"] as? String {
+                pairCode = c
+                pairExpires = obj["expires_in"] as? Int ?? 300
+                refreshTailscaleHint()
+            } else {
+                pairError = (obj["error"] as? String)
+                    ?? "게이트웨이에 연결할 수 없어요. Mac에서 mobile-gateway.sh 를 실행한 뒤 다시 시도하세요. (HTTP \(code))"
+                pairCode = nil
+            }
+        } catch {
+            pairError = "게이트웨이 없음 — `scripts/mobile-gateway.sh` 로 knowledged --http-port \(gatewayPort) 를 켜 주세요."
+            pairCode = nil
         }
     }
 
@@ -191,8 +325,8 @@ public struct SettingsView: View {
                             .foregroundStyle(TossColor.grey900)
                         Text(
                             model.llmEngine.contains("7b")
-                                ? "지금 기본 엔진으로 준비됨"
-                                : "설치 필요: scripts/install-llm-field.sh"
+                                ? "빠른 근거 답 먼저 → 이어서 7B로 다듬기 (첫 실행 느릴 수 있음)"
+                                : "설치 필요: scripts/install-llm-field.sh · 없어도 빠른 근거 답은 가능"
                         )
                         .font(.system(size: 14))
                         .foregroundStyle(TossColor.grey500)

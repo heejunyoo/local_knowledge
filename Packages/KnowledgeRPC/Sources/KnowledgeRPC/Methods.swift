@@ -28,5 +28,5 @@ public enum RPCMethod: String, Sendable {
 
 // Bump when daemon capabilities change (pipeline tick, etc.)
 public enum DaemonVersion {
-    public static let current = "0.5.0-dogfood"
+    public static let current = "0.7.0-core-diet"
 }

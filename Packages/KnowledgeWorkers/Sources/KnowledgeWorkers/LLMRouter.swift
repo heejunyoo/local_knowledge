@@ -21,7 +21,8 @@ public enum LLMRouter {
         knowledgeRoot: URL,
         maxTokens: Int = 512,
         preferCloud: Bool = true,
-        preferLocal7B: Bool = true
+        preferLocal7B: Bool = true,
+        localTimeout: TimeInterval = 45
     ) -> Answer? {
         LLMProviderCatalog.ensureInstalled(knowledgeRoot: knowledgeRoot)
         let catalog = LLMProviderCatalog.load(knowledgeRoot: knowledgeRoot)
@@ -39,13 +40,13 @@ public enum LLMRouter {
             // blocked or failed → fall through to local 7B
         }
 
-        // 2) Local 7B — default path without keys
+        // 2) Local 7B — short timeout so UI never hangs forever
         if preferLocal7B, LocalLLM.isAvailable(knowledgeRoot: knowledgeRoot) {
             if let text = try? LocalLLM.complete(
                 prompt: prompt,
                 knowledgeRoot: knowledgeRoot,
                 maxTokens: maxTokens,
-                timeout: 180
+                timeout: localTimeout
             ), !text.isEmpty {
                 return Answer(text: text, engine: "local-7b/llama")
             }

@@ -1,0 +1,208 @@
+import Foundation
+
+/// Minimal Core gateway client (M1–M3).
+@MainActor
+public final class CoreClient: ObservableObject {
+    @Published public var baseURL: String {
+        didSet { UserDefaults.standard.set(baseURL, forKey: "core.baseURL") }
+    }
+    @Published public var token: String {
+        didSet { UserDefaults.standard.set(token, forKey: "core.token") }
+    }
+    @Published public var deviceId: String {
+        didSet { UserDefaults.standard.set(deviceId, forKey: "core.deviceId") }
+    }
+    @Published public var coreName: String = ""
+    @Published public var lastError: String?
+    @Published public var connected: Bool = false
+    @Published public var reviewCount: Int = 0
+    @Published public var dietLine: String = ""
+
+    public init() {
+        self.baseURL = UserDefaults.standard.string(forKey: "core.baseURL") ?? "http://100.x.y.z:8741"
+        self.token = UserDefaults.standard.string(forKey: "core.token") ?? ""
+        self.deviceId = UserDefaults.standard.string(forKey: "core.deviceId") ?? ""
+    }
+
+    public var isPaired: Bool { !token.isEmpty }
+
+    // MARK: - Pairing
+
+    public func completePair(code: String, deviceName: String) async {
+        lastError = nil
+        do {
+            let body: [String: Any] = ["code": code, "device_name": deviceName]
+            let res = try await postJSON(path: "/v1/pair/complete", body: body, auth: false)
+            if let t = res["token"] as? String {
+                token = t
+                deviceId = res["device_id"] as? String ?? ""
+                coreName = res["core_name"] as? String ?? ""
+                connected = true
+            } else {
+                lastError = res["error"] as? String ?? "pair failed"
+            }
+        } catch {
+            lastError = error.localizedDescription
+        }
+    }
+
+    public func refreshStatus() async {
+        guard isPaired else { connected = false; return }
+        do {
+            let res = try await getJSON(path: "/v1/pair/status", auth: true)
+            connected = (res["ok"] as? Bool) ?? false
+            coreName = res["core_name"] as? String ?? coreName
+            if let err = res["error"] as? String { lastError = err; connected = false }
+        } catch {
+            connected = false
+            lastError = error.localizedDescription
+        }
+        await refreshReviewCount()
+        await refreshDietLine()
+    }
+
+    public func revokeRemote() async {
+        lastError = nil
+        if isPaired {
+            _ = try? await postJSON(path: "/v1/pair/revoke", body: [:], auth: true)
+        }
+        token = ""
+        deviceId = ""
+        connected = false
+        reviewCount = 0
+        coreName = ""
+    }
+
+    // MARK: - API
+
+    public func search(q: String) async throws -> [[String: Any]] {
+        let rpc = try await rpc(method: "knowledge.search", params: ["q": q, "limit": 20])
+        if let err = rpc["error"] as? [String: Any] {
+            throw NSError(domain: "core", code: 1, userInfo: [NSLocalizedDescriptionKey: err["message"] as? String ?? "error"])
+        }
+        // result may be {hits:[]} or array depending on daemon
+        if let result = rpc["result"] as? [String: Any] {
+            if let hits = result["hits"] as? [[String: Any]] { return hits }
+            if let items = result["items"] as? [[String: Any]] { return items }
+            if let docs = result["results"] as? [[String: Any]] { return docs }
+        }
+        if let arr = rpc["result"] as? [[String: Any]] { return arr }
+        return []
+    }
+
+    public func askFast(q: String) async throws -> (answer: String, engine: String, citations: [[String: Any]]) {
+        let rpc = try await rpc(method: "knowledge.ask.fast", params: ["q": q, "limit": 8])
+        if let err = rpc["error"] as? [String: Any] {
+            throw NSError(domain: "core", code: 1, userInfo: [NSLocalizedDescriptionKey: err["message"] as? String ?? "error"])
+        }
+        let result = rpc["result"] as? [String: Any] ?? [:]
+        return (
+            result["answer"] as? String ?? "",
+            result["engine"] as? String ?? "",
+            result["citations"] as? [[String: Any]] ?? []
+        )
+    }
+
+    public func chat(message: String) async throws -> (answer: String, engine: String, sources: [[String: Any]]) {
+        let res = try await postJSON(path: "/v1/chat", body: ["message": message, "mode": "auto"], auth: true)
+        if let err = res["error"] as? String {
+            throw NSError(domain: "core", code: 2, userInfo: [NSLocalizedDescriptionKey: err])
+        }
+        return (
+            res["answer"] as? String ?? "",
+            res["engine"] as? String ?? "",
+            res["sources"] as? [[String: Any]] ?? []
+        )
+    }
+
+    public func reviewList() async throws -> [[String: Any]] {
+        let rpc = try await rpc(method: "knowledge.review.list", params: [:])
+        if let err = rpc["error"] as? [String: Any] {
+            throw NSError(domain: "core", code: 1, userInfo: [NSLocalizedDescriptionKey: err["message"] as? String ?? "error"])
+        }
+        if let arr = rpc["result"] as? [[String: Any]] { return arr }
+        if let result = rpc["result"] as? [String: Any] {
+            if let arr = result["meetings"] as? [[String: Any]] { return arr }
+            if let arr = result["items"] as? [[String: Any]] { return arr }
+        }
+        return []
+    }
+
+    public func reviewAccept(id: String) async throws {
+        let rpc = try await rpc(method: "knowledge.review.accept", params: ["id": id])
+        if let err = rpc["error"] as? [String: Any] {
+            throw NSError(domain: "core", code: 1, userInfo: [NSLocalizedDescriptionKey: err["message"] as? String ?? "error"])
+        }
+    }
+
+    public func refreshReviewCount() async {
+        guard isPaired else { reviewCount = 0; return }
+        let list = (try? await reviewList()) ?? []
+        reviewCount = list.count
+    }
+
+    public func dietDaySummary() async throws -> [String: Any] {
+        let rpc = try await rpc(method: "diet.day_summary", params: [:])
+        if let err = rpc["error"] as? [String: Any] {
+            throw NSError(domain: "core", code: 1, userInfo: [NSLocalizedDescriptionKey: err["message"] as? String ?? "error"])
+        }
+        return rpc["result"] as? [String: Any] ?? [:]
+    }
+
+    public func refreshDietLine() async {
+        guard isPaired else { dietLine = ""; return }
+        guard let day = try? await dietDaySummary() else {
+            dietLine = ""
+            return
+        }
+        dietLine = day["summary_text"] as? String ?? ""
+    }
+
+    // MARK: - transport
+
+    private func rpc(method: String, params: [String: Any]) async throws -> [String: Any] {
+        try await postJSON(path: "/v1/rpc", body: [
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": method,
+            "params": params,
+        ], auth: true)
+    }
+
+    private func getJSON(path: String, auth: Bool) async throws -> [String: Any] {
+        guard let url = URL(string: baseURL.trimmingCharacters(in: CharacterSet(charactersIn: "/")) + path) else {
+            throw URLError(.badURL)
+        }
+        var req = URLRequest(url: url)
+        req.httpMethod = "GET"
+        req.timeoutInterval = 30
+        req.setValue("application/json", forHTTPHeaderField: "Accept")
+        if auth, !token.isEmpty {
+            req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        }
+        let (data, resp) = try await URLSession.shared.data(for: req)
+        if let http = resp as? HTTPURLResponse, http.statusCode == 401 {
+            throw NSError(domain: "core", code: 401, userInfo: [NSLocalizedDescriptionKey: "unauthorized — re-pair"])
+        }
+        return try JSONSerialization.jsonObject(with: data) as? [String: Any] ?? [:]
+    }
+
+    private func postJSON(path: String, body: [String: Any], auth: Bool) async throws -> [String: Any] {
+        guard let url = URL(string: baseURL.trimmingCharacters(in: CharacterSet(charactersIn: "/")) + path) else {
+            throw URLError(.badURL)
+        }
+        var req = URLRequest(url: url)
+        req.httpMethod = "POST"
+        req.timeoutInterval = 120
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        if auth, !token.isEmpty {
+            req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        }
+        req.httpBody = try JSONSerialization.data(withJSONObject: body)
+        let (data, resp) = try await URLSession.shared.data(for: req)
+        if let http = resp as? HTTPURLResponse, http.statusCode == 401 {
+            throw NSError(domain: "core", code: 401, userInfo: [NSLocalizedDescriptionKey: "unauthorized — re-pair"])
+        }
+        return try JSONSerialization.jsonObject(with: data) as? [String: Any] ?? [:]
+    }
+}

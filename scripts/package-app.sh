@@ -53,6 +53,9 @@ cp "$BIN/KnowledgeApp" "$MACOS/Knowledge"
 cp "$BIN/knowledged" "$MACOS/knowledged"
 cp "$BIN/KnowledgeAudioHelper" "$MACOS/KnowledgeAudioHelper"
 cp "$REPO/Sources/KnowledgeApp/Info.plist" "$APP_ROOT/Contents/Info.plist"
+if [[ -f "$REPO/Resources/AppIcon.icns" ]]; then
+  cp "$REPO/Resources/AppIcon.icns" "$APP_ROOT/Contents/Resources/AppIcon.icns"
+fi
 echo -n 'APPL????' > "$APP_ROOT/Contents/PkgInfo"
 chmod +x "$MACOS/Knowledge" "$MACOS/knowledged" "$MACOS/KnowledgeAudioHelper"
 

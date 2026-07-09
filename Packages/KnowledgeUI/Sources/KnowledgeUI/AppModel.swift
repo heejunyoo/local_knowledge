@@ -55,6 +55,8 @@ public final class AppModel: ObservableObject {
     @Published public var corpusFileUnits: Int = 0
     @Published public var chatMessages: [ChatMessage] = []
     @Published public var isChatBusy: Bool = false
+    /// User-visible phase: "지식 찾는 중…" / "AI로 다듬는 중…"
+    @Published public var chatBusyLabel: String = ""
 
     private var capture: CaptureSessionController?
     private var didReindexFTS = false
@@ -106,12 +108,21 @@ public final class AppModel: ObservableObject {
         public var role: Role
         public var text: String
         public var citations: [RAGCitation]
+        /// True while a fast extractive answer may still be upgraded by cloud/7B.
+        public var isRefining: Bool
 
-        public init(id: String = UUID().uuidString, role: Role, text: String, citations: [RAGCitation] = []) {
+        public init(
+            id: String = UUID().uuidString,
+            role: Role,
+            text: String,
+            citations: [RAGCitation] = [],
+            isRefining: Bool = false
+        ) {
             self.id = id
             self.role = role
             self.text = text
             self.citations = citations
+            self.isRefining = isRefining
         }
     }
 
@@ -767,28 +778,25 @@ public final class AppModel: ObservableObject {
         }.count
     }
 
-    // MARK: - RAG Chat
+    // MARK: - RAG Chat (fast extractive first, optional LLM refine)
 
     public func askKnowledge(question: String) {
         let q = question.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !q.isEmpty, !isChatBusy else { return }
         chatMessages.append(ChatMessage(role: .user, text: q))
         isChatBusy = true
+        chatBusyLabel = "지식 찾는 중…"
         let db = dbPath
+        let root = knowledgeRoot
         Task.detached(priority: .userInitiated) { [weak self] in
             guard let self else { return }
             do {
                 let store = try KnowledgeStore(path: db)
-                // Ensure stats reflect corpus size for empty case messaging
-                let cfg = AppConfig.load(knowledgeRoot: self.knowledgeRoot)
-                let answer = try KnowledgeRAG.ask(
-                    question: q,
-                    store: store,
-                    knowledgeRoot: self.knowledgeRoot,
-                    topK: 8,
-                    useLlama: cfg.ragUseLlama
-                )
-                let cites = answer.citations.map {
+                let cfg = AppConfig.load(knowledgeRoot: root)
+
+                // 1) Instant path — never wait on 7B for first paint
+                let fast = try KnowledgeRAG.askFast(question: q, store: store, topK: 8)
+                let cites = fast.citations.map {
                     RAGCitation(
                         id: $0.id,
                         unitId: $0.unitId,
@@ -797,14 +805,51 @@ public final class AppModel: ObservableObject {
                         snippet: $0.snippet
                     )
                 }
+                let assistantId = UUID().uuidString
+                let willRefine = cfg.ragUseLlama
+                    && !fast.citations.isEmpty
+                    && (LocalLLM.isAvailable(knowledgeRoot: root)
+                        || LLMSecrets.hasAnyCloudKey(
+                            knowledgeRoot: root,
+                            catalog: LLMProviderCatalog.load(knowledgeRoot: root)
+                        ))
+
                 await MainActor.run {
                     self.chatMessages.append(ChatMessage(
+                        id: assistantId,
                         role: .assistant,
-                        text: answer.answer,
-                        citations: cites
+                        text: fast.answer,
+                        citations: cites,
+                        isRefining: willRefine
                     ))
                     self.isChatBusy = false
-                    self.appendUILog("rag.ask cites=\(cites.count) engine=\(answer.engine)")
+                    self.chatBusyLabel = ""
+                    self.appendUILog("rag.fast cites=\(cites.count) engine=\(fast.engine) refine=\(willRefine)")
+                }
+
+                // 2) Background refine — cloud first, then 7B (≤35s); keep extractive if slow
+                guard willRefine else { return }
+                await MainActor.run {
+                    if let i = self.chatMessages.firstIndex(where: { $0.id == assistantId }) {
+                        self.chatMessages[i].isRefining = true
+                    }
+                }
+                let refined = KnowledgeRAG.refine(
+                    question: q,
+                    citations: fast.citations,
+                    knowledgeRoot: root,
+                    useLlama: cfg.ragUseLlama
+                )
+                await MainActor.run {
+                    guard let i = self.chatMessages.firstIndex(where: { $0.id == assistantId }) else { return }
+                    if let refined, refined.answer != self.chatMessages[i].text {
+                        self.chatMessages[i].text = refined.answer
+                        self.chatMessages[i].isRefining = false
+                        self.appendUILog("rag.refine engine=\(refined.engine)")
+                    } else {
+                        self.chatMessages[i].isRefining = false
+                        self.appendUILog("rag.refine keep extractive")
+                    }
                 }
             } catch {
                 await MainActor.run {
@@ -813,6 +858,7 @@ public final class AppModel: ObservableObject {
                         text: "답변 중 오류: \(error.localizedDescription)"
                     ))
                     self.isChatBusy = false
+                    self.chatBusyLabel = ""
                     self.appendUILog("rag.ask error \(error)")
                 }
             }

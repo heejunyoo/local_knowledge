@@ -9,11 +9,12 @@ public enum LocalLLM {
     }
 
     /// Short grounded answer. Returns nil if tools missing or worker fails.
+    /// Tuned for chat latency on M4 16GB: Metal offload, small context, low n.
     public static func complete(
         prompt: String,
         knowledgeRoot: URL,
-        maxTokens: Int = 320,
-        timeout: TimeInterval = 90
+        maxTokens: Int = 160,
+        timeout: TimeInterval = 45
     ) throws -> String? {
         let boot = ToolBootstrap(knowledgeRoot: knowledgeRoot)
         guard let binary = try boot.llamaBinaryURL(),
@@ -21,16 +22,25 @@ public enum LocalLLM {
             return nil
         }
 
-        // Prefer stdin prompt to avoid argv length / shell-escape issues.
-        // Try modern llama-cli flags first; fall back to simpler set.
+        // Metal GPU layers + compact context. Fallbacks for older flag sets.
         let attempts: [[String]] = [
             [
                 "-m", model.path,
                 "-n", "\(maxTokens)",
+                "-c", "2048",
+                "-ngl", "99",
                 "--temp", "0.2",
                 "--top-p", "0.9",
                 "-no-cnv",
                 "--simple-io",
+                "-p", prompt,
+            ],
+            [
+                "-m", model.path,
+                "-n", "\(maxTokens)",
+                "-c", "2048",
+                "--temp", "0.2",
+                "-no-cnv",
                 "-p", prompt,
             ],
             [

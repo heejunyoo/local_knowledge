@@ -51,6 +51,47 @@ public enum KnowledgeRAG {
         }
     }
 
+    /// Fast path: retrieve + extractive only (UI shows this immediately).
+    public static func askFast(
+        question: String,
+        store: KnowledgeStore,
+        topK: Int = 8
+    ) throws -> Answer {
+        try ask(question: question, store: store, knowledgeRoot: nil, topK: topK, useLlama: false)
+    }
+
+    /// Optional LLM refine over an existing extractive answer (cloud first, then 7B short).
+    public static func refine(
+        question: String,
+        citations: [Citation],
+        knowledgeRoot: URL,
+        useLlama: Bool = true
+    ) -> Answer? {
+        guard !citations.isEmpty else { return nil }
+        // Fewer / shorter contexts → much faster local 7B
+        let ctx = citations.prefix(3).map { c -> (String, String) in
+            let snip = c.snippet.count > 220 ? String(c.snippet.prefix(220)) + "…" : c.snippet
+            return (c.title, snip)
+        }
+        let prompt = LocalLLM.ragPrompt(question: question, contexts: ctx)
+        if let gen = LLMRouter.complete(
+            prompt: prompt,
+            knowledgeRoot: knowledgeRoot,
+            maxTokens: 160,
+            preferCloud: true,
+            preferLocal7B: useLlama,
+            localTimeout: 35
+        ), isPlausibleAnswer(gen.text) {
+            return Answer(
+                question: question,
+                answer: gen.text,
+                citations: citations,
+                engine: "\(gen.engine)+retrieve-v2"
+            )
+        }
+        return nil
+    }
+
     public static func ask(
         question: String,
         store: KnowledgeStore,
@@ -97,23 +138,15 @@ public enum KnowledgeRAG {
             )
         }
 
-        // Generation: cloud free (if keys) → local 7B → extractive
+        // Blocking full path (tests / dogfood): try LLM then extractive
         if let root = knowledgeRoot {
-            let ctx = citations.prefix(6).map { (title: $0.title, snippet: $0.snippet) }
-            let prompt = LocalLLM.ragPrompt(question: q, contexts: Array(ctx))
-            if let gen = LLMRouter.complete(
-                prompt: prompt,
+            if let refined = refine(
+                question: q,
+                citations: citations,
                 knowledgeRoot: root,
-                maxTokens: 512,
-                preferCloud: true,
-                preferLocal7B: useLlama
-            ), isPlausibleAnswer(gen.text) {
-                return Answer(
-                    question: q,
-                    answer: gen.text,
-                    citations: citations,
-                    engine: "\(gen.engine)+retrieve-v2"
-                )
+                useLlama: useLlama
+            ) {
+                return refined
             }
         }
 

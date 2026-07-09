@@ -67,10 +67,12 @@ public struct ChatView: View {
     }
 
     private var engineBadge: String {
-        if model.llmEngine.contains("cloud") { return "클라우드" }
-        if model.llmEngine.contains("7b") || model.llmEngine.contains("llama") { return "로컬 7B" }
+        if model.llmEngine.contains("cloud") { return "클라우드 우선" }
+        if model.llmEngine.contains("7b") || model.llmEngine.contains("llama") { return "빠른답+7B" }
         return "근거 모음"
     }
+
+    // empty body copy clarifies progressive UX
 
     private var messages: some View {
         ScrollViewReader { proxy in
@@ -86,7 +88,7 @@ public struct ChatView: View {
                     if model.isChatBusy {
                         HStack(spacing: 8) {
                             ProgressView().controlSize(.small)
-                            Text(model.llmEngine.contains("llama") ? "생각하고 있어요" : "찾는 중")
+                            Text(model.chatBusyLabel.isEmpty ? "지식 찾는 중…" : model.chatBusyLabel)
                                 .font(.system(size: 14))
                                 .foregroundStyle(TossColor.grey500)
                         }
@@ -109,6 +111,11 @@ public struct ChatView: View {
                     withAnimation { proxy.scrollTo("busy", anchor: .bottom) }
                 }
             }
+            .onChange(of: model.chatMessages.last?.isRefining) { _, _ in
+                if let last = model.chatMessages.last {
+                    withAnimation { proxy.scrollTo(last.id, anchor: .bottom) }
+                }
+            }
         }
     }
 
@@ -121,7 +128,7 @@ public struct ChatView: View {
                 .foregroundStyle(TossColor.grey900)
             Text(model.corpusTotalUnits == 0
                  ? "먼저 회의를 녹음하거나 지식을 연결해 주세요."
-                 : "미팅 요약과 메모를 바탕으로 답할게요.")
+                 : "먼저 근거를 바로 보여 주고, 가능하면 AI가 문장을 다듬어요.")
                 .font(.system(size: 16))
                 .foregroundStyle(TossColor.grey700)
                 .lineSpacing(3)
@@ -152,14 +159,24 @@ public struct ChatView: View {
 
     private func bubble(_ msg: AppModel.ChatMessage) -> some View {
         VStack(alignment: msg.role == .user ? .trailing : .leading, spacing: TossSpace.x2) {
-            Text(msg.text)
-                .font(.system(size: 16))
-                .foregroundStyle(msg.role == .user ? TossColor.white : TossColor.grey900)
-                .padding(.horizontal, 16)
-                .padding(.vertical, 12)
-                .background(msg.role == .user ? TossColor.blue500 : TossColor.white)
-                .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
-                .textSelection(.enabled)
+            VStack(alignment: .leading, spacing: 8) {
+                Text(msg.text)
+                    .font(.system(size: 16))
+                    .foregroundStyle(msg.role == .user ? TossColor.white : TossColor.grey900)
+                    .textSelection(.enabled)
+                if msg.role == .assistant, msg.isRefining {
+                    HStack(spacing: 6) {
+                        ProgressView().controlSize(.mini)
+                        Text("AI로 문장 다듬는 중… (첫 실행은 최대 30초)")
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundStyle(TossColor.grey500)
+                    }
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+            .background(msg.role == .user ? TossColor.blue500 : TossColor.white)
+            .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
 
             if !msg.citations.isEmpty {
                 VStack(alignment: .leading, spacing: 8) {

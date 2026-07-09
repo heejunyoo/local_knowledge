@@ -81,7 +81,26 @@ UI (Toss-inspired):
 # or: ./scripts/package-app.sh && open .build/debug/Knowledge.app
 ```
 
-**백그라운드 엔진(`knowledged`)은 앱이 자동 기동합니다.** CLI로 데몬을 켤 필요 없습니다.
+**백그라운드 엔진(`knowledged`)은 앱이 자동 기동합니다.** CLI로 데몬을 켤 필요 없습니다.  
+기본으로 **Core HTTP 게이트웨이** (`--http-port 8741`) 도 함께 뜹니다. 끄려면 `KNOWLEDGE_HTTP_DISABLE=1`.
+
+### Mobile (iPhone · Tailscale)
+
+설계: [`docs/core_platform_sketch.md`](docs/core_platform_sketch.md) · 계획: [`docs/mobile_plan.md`](docs/mobile_plan.md)
+
+```bash
+# 명시 기동 (앱 없이도)
+./scripts/mobile-gateway.sh
+# Mac 설정 → 모바일 연결 → 6자리 코드
+open Apps/KnowledgeMobile/KnowledgeMobile.xcodeproj   # Personal Team 서명
+```
+
+| 항목 | 값 |
+|------|-----|
+| Core URL | `http://<tailscale-ip>:8741` |
+| pair/start | **loopback only** (Mac 설정/CLI) |
+| Diet SoT | `~/Knowledge/services/diet/diet.json` |
+| Free Apple ID | 가능 (약 7일 재서명) |
 
 ### 제품 설치 (Field SoT)
 

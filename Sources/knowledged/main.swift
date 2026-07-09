@@ -3,9 +3,10 @@ import KnowledgeCore
 import KnowledgeIndex
 import KnowledgeRPC
 import KnowledgeWorkers
+import KnowledgeGateway
 
-// knowledged — pipeline daemon
-// Usage: knowledged [--root ~/Knowledge] [--socket path] [--no-pipeline]
+// knowledged — pipeline daemon + optional mobile HTTP gateway
+// Usage: knowledged [--root ~/Knowledge] [--socket path] [--http-port 8741] [--pair] [--no-pipeline]
 
 func expand(_ path: String) -> String {
     if path.hasPrefix("~/") {
@@ -18,6 +19,8 @@ func expand(_ path: String) -> String {
 var root = KnowledgePaths.defaultKnowledgeRoot.path
 var socketRel = "cache/daemon.sock"
 var enablePipeline = true
+var httpPort: UInt16? = nil
+var emitPair = false
 
 var args = Array(CommandLine.arguments.dropFirst())
 while let a = args.first {
@@ -29,8 +32,13 @@ while let a = args.first {
         socketRel = args.removeFirst()
     case "--no-pipeline":
         enablePipeline = false
+    case "--http-port":
+        httpPort = UInt16(args.removeFirst()) ?? 8741
+    case "--pair":
+        emitPair = true
+        if httpPort == nil { httpPort = 8741 }
     case "--help", "-h":
-        print("knowledged [--root PATH] [--socket REL_OR_ABS] [--no-pipeline]")
+        print("knowledged [--root PATH] [--socket REL] [--http-port 8741] [--pair] [--no-pipeline]")
         exit(0)
     default:
         fputs("unknown arg \(a)\n", stderr)
@@ -49,13 +57,14 @@ if socketRel.hasPrefix("/") {
 }
 
 let store = try KnowledgeStore(path: dbPath)
+let vault = PipelineService.resolveVaultPath(knowledgeRoot: rootURL)
+let pipeline = PipelineService(store: store, knowledgeRoot: rootURL, vaultPath: vault)
 let runtime = DaemonRuntime(
     store: store,
     knowledgeRoot: rootURL,
     socketPath: socketPath
 )
 
-// Config from app.json (language + retention)
 let appConfig = AppConfig.load(knowledgeRoot: rootURL)
 let language = appConfig.asrLanguage
 
@@ -70,7 +79,6 @@ signal(SIGINT) { _ in
     exit(0)
 }
 
-// Quiet retention once at launch (before accept loop)
 if appConfig.retentionPurgeOnLaunch {
     do {
         let r = try MeetingCleanup.runRetentionPolicy(
@@ -85,6 +93,26 @@ if appConfig.retentionPurgeOnLaunch {
         fputs("knowledged: retention skip \(error)\n", stderr)
     }
 }
+
+// Mobile / Core HTTP gateway (Tailscale). Must retain server for process lifetime.
+var mobileGateway: MobileHTTPServer?
+if let port = httpPort {
+    let gw = MobileHTTPServer(
+        port: port,
+        knowledgeRoot: rootURL,
+        store: store,
+        pipeline: pipeline,
+        coreName: Host.current().localizedName ?? "knowledge-core"
+    )
+    try gw.start()
+    if emitPair {
+        _ = try gw.emitPairCode()
+    }
+    mobileGateway = gw
+    fputs("knowledged: mobile gateway on port \(port) — use Tailscale IP from phone\n", stderr)
+}
+// prevent optimizer dropping retain
+withExtendedLifetime(mobileGateway) { _ in }
 
 try runtime.startListening()
 fputs("knowledged \(PipelineService.version) listening on \(socketPath)\n", stderr)
