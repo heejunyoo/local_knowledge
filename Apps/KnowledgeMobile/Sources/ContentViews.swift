@@ -7,6 +7,8 @@ struct PairingView: View {
     @State private var code = ""
     @State private var name = UIDevice.current.name
     @State private var busy = false
+    @State private var showScanner = false
+    @State private var pasteHint: String?
 
     var body: some View {
         ZStack {
@@ -18,10 +20,32 @@ struct PairingView: View {
                         .foregroundStyle(KColor.grey900)
                         .padding(.top, KSpace.x8)
 
-                    Text("Mac 설정 → 모바일 연결에 있는 주소와 6자리 코드를 입력하세요.")
+                    Text("Mac 설정 → 모바일 연결에서 QR을 스캔하거나, 주소·코드를 입력하세요.")
                         .font(.system(size: 15))
                         .foregroundStyle(KColor.grey700)
                         .fixedSize(horizontal: false, vertical: true)
+
+                    KPrimaryButton(title: "QR 스캔으로 채우기") {
+                        showScanner = true
+                    }
+
+                    Button {
+                        applyPasteboard()
+                    } label: {
+                        Text("클립보드에서 연결 정보 붙여넣기")
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundStyle(KColor.blue500)
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 48)
+                            .background(KColor.white)
+                            .clipShape(RoundedRectangle(cornerRadius: 12))
+                    }
+
+                    if let pasteHint {
+                        Text(pasteHint)
+                            .font(.caption)
+                            .foregroundStyle(KColor.grey500)
+                    }
 
                     KCard {
                         VStack(alignment: .leading, spacing: KSpace.x4) {
@@ -68,12 +92,44 @@ struct PairingView: View {
                 .padding(.bottom, KSpace.x8)
             }
         }
+        .fullScreenCover(isPresented: $showScanner) {
+            QRScannerView(
+                onCode: { value in
+                    showScanner = false
+                    applyPayload(value)
+                },
+                onClose: { showScanner = false }
+            )
+            .ignoresSafeArea()
+        }
     }
 
     private func fieldLabel(_ t: String) -> some View {
         Text(t)
             .font(.system(size: 13, weight: .semibold))
             .foregroundStyle(KColor.grey500)
+    }
+
+    private func applyPasteboard() {
+        guard let s = UIPasteboard.general.string else {
+            pasteHint = "클립보드가 비어 있어요"
+            return
+        }
+        applyPayload(s)
+    }
+
+    private func applyPayload(_ s: String) {
+        if let p = PairingPayload.parse(s) {
+            core.baseURL = p.coreURL
+            code = p.code
+            pasteHint = "QR/붙여넣기 정보를 채웠어요. 연결하기를 누르세요."
+            kHapticLight()
+        } else if s.lowercased().hasPrefix("http") {
+            core.baseURL = s.trimmingCharacters(in: .whitespacesAndNewlines)
+            pasteHint = "주소만 채웠어요. 코드도 입력해 주세요."
+        } else {
+            pasteHint = "인식할 수 없는 형식이에요. Mac에서 QR을 다시 확인하세요."
+        }
     }
 }
 

@@ -112,8 +112,10 @@ iOS thin  ──Bearer──►  Core :8741  ──inproc──►  Knowledge (S
 - [x] Diet M4 inproc + chat intent  
 - [x] package-app + verify-mobile.sh  
 - [x] docs/MOBILE_FIELD_CHECKLIST.md  
-- [ ] Personal Team으로 실기기 설치 (Xcode Signing · 오너)  
-- [ ] 실기기 Tailscale E2E (오너)  
+- [x] UX 2.x: 4탭 IA · 식단 2뎁스 · dark/empty/motion  
+- [x] QR 페어링 payload (`knowledge-pair:1|url|code`) + iOS 스캔  
+- [x] Personal Team 실기기 설치 경로 검증됨 (오너 신뢰 1회)  
+- [x] 실기기 Tailscale E2E (연결 성공 보고)  
 
 ---
 

@@ -26,7 +26,12 @@ public struct ReviewInboxView: View {
                     VStack(alignment: .leading, spacing: TossSpace.x6) {
                         title
                         if pending.isEmpty && failed.isEmpty {
-                            empty
+                            TossEmptyState(
+                                systemImage: "checkmark.circle",
+                                title: "확인할 일이 없어요",
+                                message: "녹음이 끝나면 요약이 여기로 와요. 홈에서 녹음을 시작해 보세요."
+                            )
+                            .padding(.top, TossSpace.x4)
                         }
                         ForEach(pending) { row in
                             pendingCard(row)
@@ -77,19 +82,6 @@ public struct ReviewInboxView: View {
                 .foregroundStyle(TossColor.grey700)
                 .lineSpacing(3)
         }
-    }
-
-    private var empty: some View {
-        VStack(spacing: TossSpace.x3) {
-            Image(systemName: "checkmark.circle")
-                .font(.system(size: 48, weight: .light))
-                .foregroundStyle(TossColor.grey200)
-            Text("확인할 미팅이 없어요")
-                .font(.system(size: 17, weight: .semibold))
-                .foregroundStyle(TossColor.grey700)
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, TossSpace.x8)
     }
 
     private func pendingCard(_ row: AppModel.MeetingRow) -> some View {

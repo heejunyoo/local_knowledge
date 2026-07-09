@@ -17,9 +17,9 @@
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
-	<string>0.2.1</string>
+	<string>0.2.2</string>
 	<key>CFBundleVersion</key>
-	<string>7</string>
+	<string>8</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>UILaunchScreen</key>
@@ -28,14 +28,6 @@
 	<array>
 		<string>UIInterfaceOrientationPortrait</string>
 	</array>
-	<!--
-	  IMPORTANT (ATS):
-	  Do NOT set NSAllowsArbitraryLoadsInWebContent / ForMedia here.
-	  If those keys are present, iOS can IGNORE NSAllowsArbitraryLoads for
-	  URLSession — which is exactly the "secure connection required" error
-	  we hit even after "allowing HTTP".
-	  Only global cleartext opt-out + local networking.
-	-->
 	<key>NSAppTransportSecurity</key>
 	<dict>
 		<key>NSAllowsArbitraryLoads</key>
@@ -45,5 +37,7 @@
 	</dict>
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>Mac Core 게이트웨이(Knowledge)에 연결해 지식·식단을 불러옵니다.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>Mac 페어링 QR 코드를 스캔해 Knowledge에 연결합니다.</string>
 </dict>
 </plist>

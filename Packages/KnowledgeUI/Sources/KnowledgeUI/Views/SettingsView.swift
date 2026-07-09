@@ -193,12 +193,24 @@ public struct SettingsView: View {
                         .foregroundStyle(TossColor.grey500)
 
                     if let pairCode {
-                        HStack(alignment: .firstTextBaseline, spacing: TossSpace.x4) {
-                            Text(pairCode)
-                                .font(.system(size: 40, weight: .bold, design: .monospaced))
-                                .foregroundStyle(TossColor.blue500)
-                                .textSelection(.enabled)
-                            VStack(alignment: .leading, spacing: 4) {
+                        HStack(alignment: .top, spacing: TossSpace.x5) {
+                            // QR: URL + code in one scan
+                            if !coreURL.isEmpty, !coreURL.contains("<") {
+                                VStack(spacing: TossSpace.x2) {
+                                    TossQRCodeView(
+                                        payload: PairingPayload.encode(coreURL: coreURL, code: pairCode),
+                                        dimension: 148
+                                    )
+                                    Text("아이폰에서 스캔")
+                                        .font(.system(size: 12, weight: .medium))
+                                        .foregroundStyle(TossColor.grey500)
+                                }
+                            }
+                            VStack(alignment: .leading, spacing: TossSpace.x3) {
+                                Text(pairCode)
+                                    .font(.system(size: 36, weight: .bold, design: .monospaced))
+                                    .foregroundStyle(TossColor.blue500)
+                                    .textSelection(.enabled)
                                 Text("\(pairExpires)초 유효 · 1회용")
                                     .font(.system(size: 13))
                                     .foregroundStyle(TossColor.grey500)
@@ -211,10 +223,20 @@ public struct SettingsView: View {
                                         .foregroundStyle(TossColor.blue500)
                                 }
                                 .buttonStyle(.plain)
+                                Button {
+                                    let p = PairingPayload.encode(coreURL: coreURL, code: pairCode)
+                                    copyToPasteboard(p)
+                                    copiedFlash = "QR 문자열 복사됨 (붙여넣기용)"
+                                } label: {
+                                    Text("전체 연결 정보 복사")
+                                        .font(.system(size: 13, weight: .semibold))
+                                        .foregroundStyle(TossColor.grey700)
+                                }
+                                .buttonStyle(.plain)
                             }
                         }
                     } else {
-                        Text("아래 버튼으로 코드를 만드세요.")
+                        Text("아래 버튼으로 코드를 만들면 QR도 함께 보여요.")
                             .font(.system(size: 14))
                             .foregroundStyle(TossColor.grey500)
                     }
