@@ -1,0 +1,26 @@
+{
+  "version": 1,
+  "description": "Cloud preflight patterns. Expand only with eval coverage.",
+  "patterns": [
+    {
+      "id": "pan_like",
+      "regex": "\\b(?:\\d[ -]*?){13,19}\\b",
+      "label": "Possible card number"
+    },
+    {
+      "id": "aws_access_key",
+      "regex": "\\bAKIA[0-9A-Z]{16}\\b",
+      "label": "AWS access key id"
+    },
+    {
+      "id": "private_key_pem",
+      "regex": "-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----",
+      "label": "PEM private key"
+    },
+    {
+      "id": "bearer_token",
+      "regex": "(?i)bearer\\s+[A-Za-z0-9\\-._~+/]+=*",
+      "label": "Bearer token"
+    }
+  ]
+}

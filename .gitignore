@@ -1,0 +1,11 @@
+.DS_Store
+.swiftpm/
+.build/
+*.xcodeproj/xcuserdata/
+*.xcworkspace/xcuserdata/
+DerivedData/
+.idea/
+*.gguf
+*.bin
+~/Knowledge/
+.env

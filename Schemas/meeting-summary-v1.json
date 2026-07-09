@@ -1,0 +1,88 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://knowledge.local/schemas/meeting-summary-v1.json",
+  "title": "MeetingSummaryV1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "one_line_summary",
+    "key_discussion_points",
+    "decisions",
+    "action_items",
+    "unresolved_items",
+    "model_id",
+    "created_at"
+  ],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "one_line_summary": { "type": "string", "minLength": 1, "maxLength": 280 },
+    "key_discussion_points": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/grounded_bullet" }
+    },
+    "decisions": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/grounded_bullet" }
+    },
+    "action_items": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/action_item" }
+    },
+    "unresolved_items": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/grounded_bullet" }
+    },
+    "model_id": { "type": "string", "minLength": 1 },
+    "created_at": { "type": "string", "format": "date-time" },
+    "warnings": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "stage2_warnings": {
+      "type": "array",
+      "items": { "type": "string" }
+    }
+  },
+  "$defs": {
+    "evidence_span": {
+      "type": "object",
+      "required": ["t_start_ms", "t_end_ms", "quote"],
+      "additionalProperties": false,
+      "properties": {
+        "t_start_ms": { "type": "integer", "minimum": 0 },
+        "t_end_ms": { "type": "integer", "minimum": 0 },
+        "quote": { "type": "string", "minLength": 1, "maxLength": 500 },
+        "segment_index": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "grounded_bullet": {
+      "type": "object",
+      "required": ["text", "evidence"],
+      "additionalProperties": false,
+      "properties": {
+        "text": { "type": "string", "minLength": 1 },
+        "evidence": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/evidence_span" }
+        }
+      }
+    },
+    "action_item": {
+      "type": "object",
+      "required": ["text", "evidence"],
+      "additionalProperties": false,
+      "properties": {
+        "text": { "type": "string", "minLength": 1 },
+        "owner": { "type": ["string", "null"] },
+        "due_on": { "type": ["string", "null"], "format": "date" },
+        "evidence": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/evidence_span" }
+        }
+      }
+    }
+  }
+}

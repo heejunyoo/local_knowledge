@@ -1,0 +1,5 @@
+{
+  "version": 1,
+  "description": "Exact allowlist entries only — not open-ended regex. Treat as policy code.",
+  "allowed_exact": []
+}

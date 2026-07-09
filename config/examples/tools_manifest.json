@@ -1,0 +1,34 @@
+{
+  "version": 1,
+  "tools": [
+    {
+      "name": "whisper.cpp",
+      "version": "1.7.5",
+      "binary_rel": "tools/whisper.cpp/1.7.5/whisper-cli",
+      "sha256": "PIN_AFTER_DOWNLOAD",
+      "notes": "Replace sha256 after first verified download (PR-05w)"
+    },
+    {
+      "name": "llama.cpp",
+      "version": "b0",
+      "binary_rel": "tools/llama.cpp/b0/llama-cli",
+      "sha256": "PIN_AFTER_DOWNLOAD",
+      "notes": "Pin build id + hash in PR-05w"
+    }
+  ],
+  "models": [
+    {
+      "name": "whisper-large-v3-turbo",
+      "rel": "tools/models/whisper/ggml-large-v3-turbo.bin",
+      "sha256": "PIN_AFTER_DOWNLOAD",
+      "tier": "T16"
+    },
+    {
+      "name": "qwen2.5-7b-instruct-q4_k_m",
+      "rel": "tools/models/llm/Qwen2.5-7B-Instruct-Q4_K_M.gguf",
+      "sha256": "PIN_AFTER_DOWNLOAD",
+      "tier": "T16",
+      "notes": "Example SKU; re-pin after local bench on owner 16GB mini"
+    }
+  ]
+}

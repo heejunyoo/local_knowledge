@@ -1,0 +1,23 @@
+{
+  "knowledge_root": "~/Knowledge",
+  "vault_path": "~/Obsidian/Main",
+  "asr": {
+    "engine": "whisper.cpp",
+    "binary_rel": "tools/whisper.cpp/1.7.5/whisper-cli",
+    "model_rel": "tools/models/whisper/ggml-large-v3-turbo.bin",
+    "language": "ko"
+  },
+  "llm": {
+    "engine": "llama.cpp",
+    "binary_rel": "tools/llama.cpp/b0/llama-cli",
+    "model_rel": "tools/models/llm/Qwen2.5-7B-Instruct-Q4_K_M.gguf",
+    "cloud_enabled": false
+  },
+  "notes": {
+    "folder_allowlist": [],
+    "page_size": 50
+  },
+  "ipc": {
+    "socket_rel": "cache/daemon.sock"
+  }
+}
