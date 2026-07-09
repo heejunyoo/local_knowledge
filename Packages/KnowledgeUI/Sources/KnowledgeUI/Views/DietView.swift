@@ -24,8 +24,8 @@ public struct DietView: View {
     @State private var goalWeeklyWO = "4"
     @State private var goalDayMin = "30"
 
-    private let mealPresets = ["밥·반찬", "샐러드", "닭가슴살", "계란", "커피", "과일"]
-    private let workoutPresets: [(String, Int)] = [("걷기", 20), ("러닝", 30), ("헬스", 45), ("스트레칭", 10)]
+    private let mealPresets = DietMealPreset.all
+    private let workoutPresets = DietWorkoutPreset.all
 
     private enum DietSheet: Identifiable {
         case log, week, goals
@@ -154,13 +154,40 @@ public struct DietView: View {
                     .font(TossFont.caption())
                     .foregroundStyle(TossColor.grey500)
                 HStack(spacing: TossSpace.x3) {
-                    ring("kcal", value: Int(dash.day.kcal), goal: Int(dash.goals.targetKcal), p: dash.kcalProgress, color: TossColor.blue500)
-                    ring("단백질", value: Int(dash.day.proteinG), goal: Int(dash.goals.targetProteinG), p: dash.proteinProgress, color: TossColor.green500)
-                    ring("운동분", value: dash.day.workoutMinutes, goal: dash.goals.targetWorkoutMinutesPerDay, p: dash.workoutProgress, color: Color(hex: 0xF59E0B))
+                    ring(
+                        title: "칼로리",
+                        hint: "오늘 먹은 열량",
+                        value: Int(dash.day.kcal),
+                        goal: Int(dash.goals.targetKcal),
+                        unit: "kcal",
+                        p: dash.kcalProgress,
+                        color: TossColor.blue500
+                    )
+                    ring(
+                        title: "단백질",
+                        hint: "오늘 단백질",
+                        value: Int(dash.day.proteinG),
+                        goal: Int(dash.goals.targetProteinG),
+                        unit: "g",
+                        p: dash.proteinProgress,
+                        color: TossColor.green500
+                    )
+                    ring(
+                        title: "운동",
+                        hint: "오늘 운동 시간",
+                        value: dash.day.workoutMinutes,
+                        goal: dash.goals.targetWorkoutMinutesPerDay,
+                        unit: "분",
+                        p: dash.workoutProgress,
+                        color: Color(hex: 0xF59E0B)
+                    )
                 }
+                Text("% = 오늘 기록 ÷ 목표. 목표는 우측 상단에서 바꿀 수 있어요.")
+                    .font(.system(size: 11))
+                    .foregroundStyle(TossColor.grey500)
                 VStack(alignment: .leading, spacing: 6) {
                     HStack {
-                        Text("주간 운동")
+                        Text("주간 운동 횟수 (목표 대비)")
                             .font(TossFont.caption())
                             .foregroundStyle(TossColor.grey700)
                         Spacer()
@@ -182,9 +209,17 @@ public struct DietView: View {
         }
     }
 
-    private func ring(_ title: String, value: Int, goal: Int, p: Double, color: Color) -> some View {
+    private func ring(
+        title: String,
+        hint: String,
+        value: Int,
+        goal: Int,
+        unit: String,
+        p: Double,
+        color: Color
+    ) -> some View {
         let frac = min(1, max(0, p))
-        return VStack(spacing: 8) {
+        return VStack(spacing: 6) {
             ZStack {
                 Circle().stroke(TossColor.grey200, lineWidth: 7)
                 Circle()
@@ -192,15 +227,29 @@ public struct DietView: View {
                     .stroke(color, style: StrokeStyle(lineWidth: 7, lineCap: .round))
                     .rotationEffect(.degrees(-90))
                 VStack(spacing: 0) {
-                    Text("\(value)").font(.system(size: 15, weight: .bold)).foregroundStyle(TossColor.grey900)
-                    Text("\(Int(frac * 100))%").font(.system(size: 10)).foregroundStyle(TossColor.grey500)
+                    Text("\(value)")
+                        .font(.system(size: 14, weight: .bold))
+                        .foregroundStyle(TossColor.grey900)
+                    Text(unit)
+                        .font(.system(size: 9))
+                        .foregroundStyle(TossColor.grey500)
                 }
             }
             .frame(width: 76, height: 76)
-            Text(title).font(.system(size: 12, weight: .semibold)).foregroundStyle(TossColor.grey700)
-            Text("/ \(goal)").font(.system(size: 11)).foregroundStyle(TossColor.grey500)
+            .help(hint)
+            Text(title)
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(TossColor.grey700)
+            Text("목표 \(goal)\(unit)")
+                .font(.system(size: 10))
+                .foregroundStyle(TossColor.grey500)
+                .multilineTextAlignment(.center)
+            Text("\(Int(frac * 100))%")
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(color)
         }
         .frame(maxWidth: .infinity)
+        .accessibilityLabel("\(title) \(value)\(unit), 목표 \(goal)\(unit), \(Int(frac * 100))퍼센트")
     }
 
     private var slotChips: some View {
@@ -257,24 +306,33 @@ public struct DietView: View {
 
     private var mealPresetRow: some View {
         VStack(alignment: .leading, spacing: TossSpace.x2) {
-            Text("빠른 식사")
+            Text("빠른 식사 (기본 분량·대략 kcal)")
                 .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(TossColor.grey500)
+            Text("그램은 대략값이에요. 나중에 한 줄로 수정해도 됩니다.")
+                .font(.system(size: 11))
                 .foregroundStyle(TossColor.grey500)
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: TossSpace.x2) {
-                    ForEach(mealPresets, id: \.self) { p in
+                    ForEach(mealPresets) { p in
                         Button {
                             quickAddMeal(p)
                         } label: {
-                            Text(p)
-                                .font(.system(size: 13, weight: .medium))
-                                .foregroundStyle(TossColor.blue500)
-                                .padding(.horizontal, 12)
-                                .padding(.vertical, 8)
-                                .background(TossColor.blue50)
-                                .clipShape(Capsule())
+                            VStack(spacing: 2) {
+                                Text(p.chipTitle)
+                                    .font(.system(size: 13, weight: .semibold))
+                                Text("~\(Int(p.kcal))kcal · P\(Int(p.proteinG))g")
+                                    .font(.system(size: 10))
+                                    .opacity(0.85)
+                            }
+                            .foregroundStyle(TossColor.blue500)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 8)
+                            .background(TossColor.blue50)
+                            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                         }
                         .buttonStyle(.plain)
+                        .help("\(p.name) 기본 \(p.grams)\(p.unit), 약 \(Int(p.kcal))kcal, 단백질 \(Int(p.proteinG))g")
                     }
                 }
             }
@@ -283,18 +341,18 @@ public struct DietView: View {
 
     private var workoutPresetRow: some View {
         VStack(alignment: .leading, spacing: TossSpace.x2) {
-            Text("빠른 운동")
+            Text("빠른 운동 (기본 시간)")
                 .font(.system(size: 13, weight: .semibold))
                 .foregroundStyle(TossColor.grey500)
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: TossSpace.x2) {
-                    ForEach(workoutPresets, id: \.0) { item in
+                    ForEach(workoutPresets) { item in
                         Button {
-                            _ = try? store.logWorkout(kind: item.0, minutes: item.1, intensity: nil)
-                            flash = "\(item.0) \(item.1)분 저장"
+                            _ = try? store.logWorkout(kind: item.name, minutes: item.minutes, intensity: nil)
+                            flash = "\(item.chipTitle) 저장"
                             refresh()
                         } label: {
-                            Text("\(item.0) \(item.1)분")
+                            Text(item.chipTitle)
                                 .font(.system(size: 13, weight: .medium))
                                 .foregroundStyle(TossColor.grey900)
                                 .padding(.horizontal, 12)
@@ -511,10 +569,43 @@ public struct DietView: View {
     private var goalsSheet: some View {
         NavigationStack {
             Form {
-                TextField("하루 kcal", text: $goalKcal)
-                TextField("하루 단백질 g", text: $goalProtein)
-                TextField("주간 운동 횟수", text: $goalWeeklyWO)
-                TextField("하루 운동 분", text: $goalDayMin)
+                Section {
+                    Text("링의 %는 「오늘 기록 ÷ 여기 목표」예요. 대략값으로 잡아도 됩니다.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                Section {
+                    TextField("숫자", text: $goalKcal)
+                    Text("하루 목표 칼로리 (kcal)\n오늘 먹은 열량의 목표치예요.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                } header: {
+                    Text("칼로리")
+                }
+                Section {
+                    TextField("숫자", text: $goalProtein)
+                    Text("하루 목표 단백질 (g)\n근육·포만감 관리용 단백질 목표예요.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                } header: {
+                    Text("단백질")
+                }
+                Section {
+                    TextField("횟수", text: $goalWeeklyWO)
+                    Text("일주일에 운동할 횟수 목표예요. (주간 바)")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                } header: {
+                    Text("주간 운동 횟수")
+                }
+                Section {
+                    TextField("분", text: $goalDayMin)
+                    Text("하루에 움직이고 싶은 운동 시간(분) 목표예요.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                } header: {
+                    Text("하루 운동 시간")
+                }
                 Button("저장") {
                     saveGoals()
                     sheet = nil
@@ -527,7 +618,7 @@ public struct DietView: View {
                 }
             }
         }
-        .frame(minWidth: 360, minHeight: 360)
+        .frame(minWidth: 380, minHeight: 480)
     }
 
     // MARK: Actions
@@ -539,15 +630,15 @@ public struct DietView: View {
         if let s = suggest.slot { selectedSlot = s }
     }
 
-    private func quickAddMeal(_ name: String) {
+    private func quickAddMeal(_ p: DietMealPreset) {
         _ = try? store.logMealWithSlot(
             slot: selectedSlot ?? .lunch,
-            items: [name],
-            kcal: nil,
-            proteinG: nil,
-            note: nil
+            items: [p.logItem],
+            kcal: p.kcal,
+            proteinG: p.proteinG,
+            note: "기본 \(p.grams)\(p.unit)"
         )
-        flash = "\(name) 저장"
+        flash = "\(p.chipTitle) · ~\(Int(p.kcal))kcal 저장"
         refresh()
     }
 
