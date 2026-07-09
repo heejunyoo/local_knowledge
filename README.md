@@ -65,6 +65,14 @@ swift test --filter ScenarioRunnerTests
 # definitions: evals/scenarios/*.json
 ```
 
+Run pipeline daemon (dev):
+
+```bash
+swift run knowledged --root ~/Knowledge
+# UDS: ~/Knowledge/cache/daemon.sock  (mode 0600)
+# methods: ping, health, meeting.create, meeting.transition, meeting.get, meeting.list
+```
+
 ## Feature flags
 
 **Only** `~/Knowledge/config/features.json` (never duplicate in `app.json`).
@@ -77,8 +85,8 @@ MVP defaults: all automation extras off (`critic`, `vector_search`, `notes_inges
 |----|--------|
 | 01 | Monorepo + policy SoT + schema + `KnowledgeCore` thresholds/types |
 | 02 | Pipeline state graph (default deny) + recovery R1–R6 + ScenarioRunner |
-| **03** | SQLite index (meetings, FTS, pipeline_events) ← *current* |
-| 04 | Daemon + UDS JSON-RPC |
+| 03 | SQLite index (meetings, FTS, pipeline_events) |
+| **04** | Daemon + UDS JSON-RPC (`knowledged`) ← *current* |
 | 05w / 05–08 | Workers, mic, ASR, summarize, Stage2 |
 | 10a–11 | Menu bar, review, vault commit → **MVP exit** |
 

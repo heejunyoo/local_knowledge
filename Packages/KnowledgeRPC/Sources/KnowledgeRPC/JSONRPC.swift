@@ -36,7 +36,7 @@ public struct JSONRPCResponse: Codable, Sendable {
     }
 }
 
-public struct JSONRPCError: Codable, Sendable, Equatable {
+public struct JSONRPCError: Codable, Sendable, Equatable, Error {
     public var code: Int
     public var message: String
     public var data: JSONValue?
