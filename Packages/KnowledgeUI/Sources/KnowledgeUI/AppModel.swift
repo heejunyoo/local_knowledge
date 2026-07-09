@@ -26,6 +26,7 @@ public final class AppModel: ObservableObject {
     private var pollTimer: Timer?
     private let supervisor: DaemonSupervisor
     private var asrInFlight = Set<String>()
+    private let dbPath: String
 
     public struct MeetingRow: Identifiable, Equatable {
         public var id: String
@@ -38,8 +39,14 @@ public final class AppModel: ObservableObject {
     public init(knowledgeRoot: URL = KnowledgePaths.defaultKnowledgeRoot) {
         self.knowledgeRoot = knowledgeRoot
         self.socketPath = knowledgeRoot.appendingPathComponent("cache/daemon.sock").path
+        self.dbPath = knowledgeRoot.appendingPathComponent("index/knowledge.db").path
         self.supervisor = DaemonSupervisor(knowledgeRoot: knowledgeRoot)
         try? KnowledgePaths.ensureLayout(at: knowledgeRoot)
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 300_000_000)
+            self.appendUILog("AppModel bootstrap task")
+            self.startPolling()
+        }
     }
 
     public var failedCount: Int {
@@ -57,6 +64,7 @@ public final class AppModel: ObservableObject {
     public func startPolling() {
         bootstrapBackendIfNeeded()
         refresh()
+        kickPendingASR()
         pollTimer?.invalidate()
         pollTimer = Timer.scheduledTimer(withTimeInterval: 1.5, repeats: true) { [weak self] _ in
             Task { @MainActor in
@@ -112,68 +120,50 @@ public final class AppModel: ObservableObject {
     public func refresh() {
         if supervisor.probeHealth() == nil {
             healthOK = false
-            if !isStartingBackend {
-                bootstrapBackendIfNeeded()
-            }
-            if !healthOK && !isStartingBackend && !isRecording {
-                statusMessage = "연결을 복구하는 중이에요"
-            }
+            if !isStartingBackend { bootstrapBackendIfNeeded() }
             return
         }
+        healthOK = true
 
+        // Local DB is SoT for list (avoids JSONValue array decode issues on RPC).
         do {
-            let client = UnixDomainClient(socketPath: socketPath)
-            try client.connect()
-            defer { client.close() }
-
-            let health = try client.call(JSONRPCRequest(method: "health"))
-            if let err = health.error {
-                healthOK = false
-                lastError = err.message
-                return
+            let store = try KnowledgeStore(path: dbPath)
+            let rows = try PipelineStatus.allCases.flatMap { try store.meetings(withStatus: $0) }
+            meetings = rows.map { m in
+                MeetingRow(
+                    id: m.id,
+                    title: m.title ?? "제목 없는 미팅",
+                    status: m.status.rawValue,
+                    errorCode: m.errorCode,
+                    audioPath: m.audioPath
+                )
             }
-            healthOK = true
-            if case let .string(v) = health.result?["version"] { daemonVersion = v }
-            if case let .number(n) = health.result?["recording_count"] { recordingCount = Int(n) }
-            if case let .number(n) = health.result?["review_needed_count"] { reviewCount = Int(n) }
-
-            let list = try client.call(JSONRPCRequest(method: "meeting.list"))
-            if case let .array(arr) = list.result {
-                meetings = arr.compactMap { item in
-                    guard let id = item["id"]?.stringValue else { return nil }
-                    return MeetingRow(
-                        id: id,
-                        title: item["title"]?.stringValue ?? "제목 없는 미팅",
-                        status: item["status"]?.stringValue ?? "?",
-                        errorCode: item["error_code"]?.stringValue,
-                        audioPath: item["audio_path"]?.stringValue
-                    )
-                }
-            }
-
-            if !isRecording && !isProcessing {
-                if reviewCount > 0 {
-                    statusMessage = "확인이 필요해요"
-                } else if failedCount > 0 {
-                    statusMessage = "문제가 생겼어요. 다시 시도해 주세요"
-                } else {
-                    statusMessage = "녹음할 준비가 됐어요"
-                }
-                lastError = nil
-            }
+            reviewCount = rows.filter { $0.status == .reviewNeeded }.count
+            recordingCount = rows.filter { $0.status == .recording }.count
+            appendUILog("refresh meetings=\(meetings.count) withAudio=\(meetings.filter { $0.audioPath != nil }.count)")
         } catch {
-            healthOK = false
-            if !isStartingBackend {
-                bootstrapBackendIfNeeded()
+            appendUILog("refresh db error \(error)")
+            lastError = String(describing: error)
+        }
+
+        if !isRecording && !isProcessing {
+            if reviewCount > 0 {
+                statusMessage = "확인이 필요해요"
+            } else if failedCount > 0 {
+                statusMessage = "문제가 생겼어요. 다시 시도해 주세요"
+            } else if meetings.contains(where: { $0.status == "recorded" && $0.audioPath != nil }) {
+                statusMessage = "받아쓰는 중…"
+            } else {
+                statusMessage = "녹음할 준비가 됐어요"
             }
         }
     }
 
-    /// Auto-pick meetings that need UI-side speech ASR.
-    /// Runs even while another session is recording (different meeting ids).
     public func kickPendingASR() {
-        guard healthOK else { return }
-        // Skip the meeting currently being captured live
+        guard healthOK else {
+            appendUILog("kick skip healthOK=false")
+            return
+        }
         let liveId = isRecording ? activeMeetingId : nil
         for row in meetings {
             if row.id == liveId { continue }
@@ -186,39 +176,18 @@ public final class AppModel: ObservableObject {
                 || (row.status == "transcribing" && row.audioPath != nil)
             guard needs, let audio = row.audioPath else { continue }
             asrInFlight.insert(row.id)
-            appendUILog("kickPendingASR \(row.id) status=\(row.status)")
+            appendUILog("kick START \(row.id) \(row.status) \(audio)")
             Task { @MainActor in
                 await self.runLocalASR(meetingId: row.id, audioRel: audio)
                 self.asrInFlight.remove(row.id)
             }
-            break // one at a time
-        }
-    }
-
-    private func appendUILog(_ message: String) {
-        let url = knowledgeRoot.appendingPathComponent("logs/ui.log")
-        try? FileManager.default.createDirectory(
-            at: url.deletingLastPathComponent(),
-            withIntermediateDirectories: true
-        )
-        let line = "\(ISO8601DateFormatter().string(from: Date())) \(message)\n"
-        if let data = line.data(using: .utf8) {
-            if FileManager.default.fileExists(atPath: url.path),
-               let handle = try? FileHandle(forWritingTo: url) {
-                defer { try? handle.close() }
-                _ = try? handle.seekToEnd()
-                try? handle.write(contentsOf: data)
-            } else {
-                try? data.write(to: url)
-            }
+            break
         }
     }
 
     public func startRecording() {
         lastError = nil
-        if !healthOK {
-            bootstrapBackendIfNeeded()
-        }
+        if !healthOK { bootstrapBackendIfNeeded() }
         guard healthOK else {
             statusMessage = "아직 준비가 덜 됐어요. 잠깐만요"
             return
@@ -250,6 +219,7 @@ public final class AppModel: ObservableObject {
             self.capture = nil
             isProcessing = true
             statusMessage = "받아쓰는 중…"
+            appendUILog("stopRecording mid=\(mid ?? "?") path=\(artifact.path) bytes=\(artifact.byteCount)")
             refresh()
             if let mid {
                 asrInFlight.insert(mid)
@@ -263,6 +233,7 @@ public final class AppModel: ObservableObject {
             statusMessage = "녹음 저장에 실패했어요"
             isRecording = false
             isProcessing = false
+            appendUILog("stopRecording error \(error)")
         }
     }
 
@@ -274,18 +245,13 @@ public final class AppModel: ObservableObject {
         do {
             var audioPath = audioRel
             if audioPath == nil {
-                let client = UnixDomainClient(socketPath: socketPath)
-                try client.connect()
-                defer { client.close() }
-                let get = try client.call(JSONRPCRequest(
-                    method: RPCMethod.meetingGet.rawValue,
-                    params: .object(["id": .string(meetingId)])
-                ))
-                audioPath = get.result?["audio_path"]?.stringValue
+                let store = try KnowledgeStore(path: dbPath)
+                audioPath = try store.getMeeting(id: meetingId)?.audioPath
             }
             guard let audioPath else {
                 statusMessage = "녹음 파일을 찾지 못했어요"
                 isProcessing = false
+                appendUILog("runLocalASR no audio path")
                 return
             }
 
@@ -295,7 +261,7 @@ public final class AppModel: ObservableObject {
                 meetingId: meetingId,
                 audioRelPath: audioPath
             )
-            appendUILog("runLocalASR complete \(meetingId)")
+            appendUILog("runLocalASR asr.complete ok \(meetingId)")
             statusMessage = "정리하는 중…"
             refresh()
 
@@ -306,6 +272,7 @@ public final class AppModel: ObservableObject {
                     if row.status == "review_needed" {
                         statusMessage = "확인이 필요해요"
                         isProcessing = false
+                        appendUILog("pipeline review_needed \(meetingId)")
                         return
                     }
                     if row.status == "summary_failed" {
@@ -322,7 +289,7 @@ public final class AppModel: ObservableObject {
                 }
             }
             isProcessing = false
-            statusMessage = "정리하는 중… 잠시 후 목록을 확인해 주세요"
+            statusMessage = "정리 중이에요. 목록을 확인해 주세요"
             refresh()
         } catch {
             appendUILog("runLocalASR error \(meetingId): \(error)")
@@ -362,14 +329,11 @@ public final class AppModel: ObservableObject {
             asrInFlight.insert(meetingId)
             defer { asrInFlight.remove(meetingId) }
             do {
+                let store = try KnowledgeStore(path: dbPath)
+                let audio = try store.getMeeting(id: meetingId)?.audioPath
                 let client = UnixDomainClient(socketPath: socketPath)
                 try client.connect()
                 defer { client.close() }
-                let get = try client.call(JSONRPCRequest(
-                    method: RPCMethod.meetingGet.rawValue,
-                    params: .object(["id": .string(meetingId)])
-                ))
-                let audio = get.result?["audio_path"]?.stringValue
                 _ = try client.call(JSONRPCRequest(
                     method: RPCMethod.meetingRetry.rawValue,
                     params: .object(["id": .string(meetingId)])
@@ -386,5 +350,23 @@ public final class AppModel: ObservableObject {
         f.locale = Locale(identifier: "ko_KR")
         f.dateFormat = "M월 d일 HH:mm 미팅"
         return f.string(from: Date())
+    }
+
+    private func appendUILog(_ message: String) {
+        let url = knowledgeRoot.appendingPathComponent("logs/ui.log")
+        try? FileManager.default.createDirectory(
+            at: url.deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
+        let line = "\(ISO8601DateFormatter().string(from: Date())) \(message)\n"
+        guard let data = line.data(using: .utf8) else { return }
+        if FileManager.default.fileExists(atPath: url.path),
+           let handle = try? FileHandle(forWritingTo: url) {
+            defer { try? handle.close() }
+            _ = try? handle.seekToEnd()
+            try? handle.write(contentsOf: data)
+        } else {
+            try? data.write(to: url)
+        }
     }
 }

@@ -23,8 +23,10 @@ public struct HomeView: View {
             }
         }
         .frame(minWidth: 380, idealWidth: 400, minHeight: 520)
-        .onAppear { model.startPolling() }
-        .onDisappear { model.stopPolling() }
+        .task {
+            model.startPolling()
+            model.kickPendingASR()
+        }
         .sheet(isPresented: $showReview) {
             ReviewInboxView(model: model)
         }
