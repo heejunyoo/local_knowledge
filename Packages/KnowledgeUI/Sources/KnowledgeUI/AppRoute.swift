@@ -7,6 +7,7 @@ public enum AppRoute: String, Hashable, CaseIterable, Identifiable, Sendable {
     case library
     case review
     case search
+    case diet
     case settings
 
     public var id: String { rawValue }
@@ -18,6 +19,7 @@ public enum AppRoute: String, Hashable, CaseIterable, Identifiable, Sendable {
         case .library: return "지식 연결"
         case .review: return "확인함"
         case .search: return "찾아보기"
+        case .diet: return "식단 · 운동"
         case .settings: return "설정"
         }
     }
@@ -29,6 +31,7 @@ public enum AppRoute: String, Hashable, CaseIterable, Identifiable, Sendable {
         case .library: return "메모·폴더 연결"
         case .review: return "요약 확인 후 저장"
         case .search: return "키워드 검색"
+        case .diet: return "식사·운동·진행 보기"
         case .settings: return "보관·저장 위치"
         }
     }
@@ -40,6 +43,7 @@ public enum AppRoute: String, Hashable, CaseIterable, Identifiable, Sendable {
         case .library: return "folder.fill"
         case .review: return "checkmark.circle.fill"
         case .search: return "magnifyingglass"
+        case .diet: return "fork.knife.circle.fill"
         case .settings: return "gearshape.fill"
         }
     }

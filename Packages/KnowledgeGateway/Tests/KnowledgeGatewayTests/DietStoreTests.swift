@@ -1,4 +1,5 @@
 import XCTest
+import KnowledgeCore
 @testable import KnowledgeGateway
 
 final class DietStoreTests: XCTestCase {
@@ -19,5 +20,9 @@ final class DietStoreTests: XCTestCase {
         XCTAssertEqual(totals?["workout_minutes"] as? Int, 25)
         let coach = store.coach(message: "어때?")
         XCTAssertFalse((coach["answer"] as? String ?? "").isEmpty)
+        let dash = store.dashboard()
+        XCTAssertGreaterThan(dash.kcalProgress, 0)
+        try store.setGoals(DietStore.Goals(targetKcal: 2000, targetProteinG: 120, weeklyWorkouts: 5, targetWorkoutMinutesPerDay: 40))
+        XCTAssertEqual(store.goals().targetProteinG, 120)
     }
 }

@@ -142,7 +142,45 @@ public final class CoreClient: ObservableObject {
     }
 
     public func dietDaySummary() async throws -> [String: Any] {
-        let rpc = try await rpc(method: "diet.day_summary", params: [:])
+        try await dietRPC("diet.day_summary", params: [:])
+    }
+
+    public func dietDashboard() async throws -> [String: Any] {
+        try await dietRPC("diet.dashboard", params: [:])
+    }
+
+    public func dietLogMeal(items: [String], kcal: Double?, proteinG: Double?, note: String?) async throws {
+        var p: [String: Any] = ["items": items]
+        if let kcal { p["kcal"] = kcal }
+        if let proteinG { p["protein_g"] = proteinG }
+        if let note { p["note"] = note }
+        _ = try await dietRPC("diet.log_meal", params: p)
+    }
+
+    public func dietLogWorkout(kind: String, minutes: Int, intensity: String?) async throws {
+        var p: [String: Any] = ["kind": kind, "minutes": minutes]
+        if let intensity { p["intensity"] = intensity }
+        _ = try await dietRPC("diet.log_workout", params: p)
+    }
+
+    public func dietLogMetric(weightKg: Double?, sleepH: Double?) async throws {
+        var p: [String: Any] = [:]
+        if let weightKg { p["weight_kg"] = weightKg }
+        if let sleepH { p["sleep_h"] = sleepH }
+        _ = try await dietRPC("diet.log_metric", params: p)
+    }
+
+    public func dietSetGoals(kcal: Double, protein: Double, weeklyWorkouts: Int, dayMinutes: Int) async throws {
+        _ = try await dietRPC("diet.goals.set", params: [
+            "target_kcal": kcal,
+            "target_protein_g": protein,
+            "weekly_workouts": weeklyWorkouts,
+            "target_workout_minutes_per_day": dayMinutes,
+        ])
+    }
+
+    private func dietRPC(_ method: String, params: [String: Any]) async throws -> [String: Any] {
+        let rpc = try await rpc(method: method, params: params)
         if let err = rpc["error"] as? [String: Any] {
             throw NSError(domain: "core", code: 1, userInfo: [NSLocalizedDescriptionKey: err["message"] as? String ?? "error"])
         }
@@ -151,6 +189,12 @@ public final class CoreClient: ObservableObject {
 
     public func refreshDietLine() async {
         guard isPaired else { dietLine = ""; return }
+        if let dash = try? await dietDashboard(),
+           let day = dash["day"] as? [String: Any],
+           let text = day["summary_text"] as? String {
+            dietLine = text
+            return
+        }
         guard let day = try? await dietDaySummary() else {
             dietLine = ""
             return

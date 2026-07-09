@@ -34,6 +34,8 @@ struct MainTabs: View {
         TabView {
             HomeMobileView()
                 .tabItem { Label("홈", systemImage: "house.fill") }
+            DietMobileView()
+                .tabItem { Label("식단", systemImage: "fork.knife.circle.fill") }
             AskMobileView()
                 .tabItem { Label("물어보기", systemImage: "bubble.left.and.bubble.right.fill") }
             SearchMobileView()

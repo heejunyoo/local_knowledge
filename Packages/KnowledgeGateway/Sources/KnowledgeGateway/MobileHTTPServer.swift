@@ -310,12 +310,33 @@ public final class MobileHTTPServer: @unchecked Sendable {
             return jsonRPCResponse(id: id, result: JSONValue.fromJSONObject([
                 "id": w.id, "ts": w.ts, "kind": w.kind, "minutes": w.minutes,
             ]), error: nil)
+        case "diet.log_metric":
+            let m = try diet.logMetric(
+                weightKg: doubleParam(p["weight_kg"] ?? p["weightKg"]),
+                sleepH: doubleParam(p["sleep_h"] ?? p["sleepH"])
+            )
+            var out: [String: Any] = ["id": m.id, "ts": m.ts]
+            if let w = m.weightKg { out["weight_kg"] = w }
+            if let s = m.sleepH { out["sleep_h"] = s }
+            return jsonRPCResponse(id: id, result: JSONValue.fromJSONObject(out), error: nil)
         case "diet.day_summary":
             return jsonRPCResponse(id: id, result: JSONValue.fromJSONObject(diet.daySummary()), error: nil)
         case "diet.week_review":
             return jsonRPCResponse(id: id, result: JSONValue.fromJSONObject(diet.weekReview()), error: nil)
         case "diet.coach":
             return jsonRPCResponse(id: id, result: JSONValue.fromJSONObject(diet.coach(message: p["message"] as? String)), error: nil)
+        case "diet.dashboard":
+            return jsonRPCResponse(id: id, result: JSONValue.fromJSONObject(diet.dashboardJSON()), error: nil)
+        case "diet.goals", "diet.goals.get":
+            return jsonRPCResponse(id: id, result: JSONValue.fromJSONObject(diet.goalsDict()), error: nil)
+        case "diet.goals.set":
+            var g = diet.goals()
+            if let v = doubleParam(p["target_kcal"]) { g.targetKcal = v }
+            if let v = doubleParam(p["target_protein_g"]) { g.targetProteinG = v }
+            if let v = intParam(p["weekly_workouts"]) { g.weeklyWorkouts = v }
+            if let v = intParam(p["target_workout_minutes_per_day"]) { g.targetWorkoutMinutesPerDay = v }
+            try diet.setGoals(g)
+            return jsonRPCResponse(id: id, result: JSONValue.fromJSONObject(diet.goalsDict()), error: nil)
         default:
             return jsonRPCResponse(id: id, result: nil, error: .methodNotFound)
         }

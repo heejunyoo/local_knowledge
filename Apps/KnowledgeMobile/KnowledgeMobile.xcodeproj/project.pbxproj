@@ -10,6 +10,7 @@
 		A10000000000000000000014 /* KnowledgeMobileApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000010 /* KnowledgeMobileApp.swift */; };
 		A10000000000000000000015 /* CoreClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000011 /* CoreClient.swift */; };
 		A10000000000000000000016 /* ContentViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000012 /* ContentViews.swift */; };
+		A10000000000000000000019 /* DietMobileView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000018 /* DietMobileView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -18,6 +19,7 @@
 		A10000000000000000000011 /* CoreClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoreClient.swift; sourceTree = "<group>"; };
 		A10000000000000000000012 /* ContentViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentViews.swift; sourceTree = "<group>"; };
 		A10000000000000000000013 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		A10000000000000000000018 /* DietMobileView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DietMobileView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -46,6 +48,7 @@
 				A10000000000000000000010 /* KnowledgeMobileApp.swift */,
 				A10000000000000000000011 /* CoreClient.swift */,
 				A10000000000000000000012 /* ContentViews.swift */,
+				A10000000000000000000018 /* DietMobileView.swift */,
 			);
 			path = Sources;
 			sourceTree = "<group>";
@@ -130,6 +133,7 @@
 				A10000000000000000000014 /* KnowledgeMobileApp.swift in Sources */,
 				A10000000000000000000015 /* CoreClient.swift in Sources */,
 				A10000000000000000000016 /* ContentViews.swift in Sources */,
+				A10000000000000000000019 /* DietMobileView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -177,7 +181,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = "";
+				DEVELOPMENT_TEAM = 7QXGG66FG5;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = Info.plist;
@@ -205,7 +209,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = "";
+				DEVELOPMENT_TEAM = 7QXGG66FG5;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = Info.plist;

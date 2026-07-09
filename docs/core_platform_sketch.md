@@ -157,12 +157,15 @@ iPhone                         Core (:8741)                    Mac UI / CLI
 | `knowledge.meetings` | Knowledge | `status?` | meeting 배열 |
 | `knowledge.review.list` | Knowledge | — | `status=review_needed` 미팅 배열 |
 | `knowledge.review.accept` | Knowledge | `id` (meeting) | vault commit 결과 |
-| `diet.ping` | Diet | — | `{ ok }` (stub until M4) |
-| `diet.log_meal` | Diet | meal payload | M4 |
-| `diet.log_workout` | Diet | workout | M4 |
-| `diet.day_summary` | Diet | `date?` | M4 |
-| `diet.week_review` | Diet | — | M4 |
-| `diet.coach` | Diet | `message?` | M4 |
+| `diet.ping` | Diet | — | `{ ok, enabled }` |
+| `diet.log_meal` | Diet | items, kcal?, protein_g? | meal |
+| `diet.log_workout` | Diet | kind, minutes | workout |
+| `diet.log_metric` | Diet | weight_kg?, sleep_h? | metric |
+| `diet.day_summary` | Diet | — | day totals + lists |
+| `diet.week_review` | Diet | — | 7-day bars |
+| `diet.dashboard` | Diet | — | progress + analysis + goals |
+| `diet.goals` / `diet.goals.set` | Diet | targets | goals |
+| `diet.coach` | Diet | message? | analysis text |
 
 미등록 method → JSON-RPC `-32601 Method not found`.
 

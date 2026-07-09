@@ -148,6 +148,7 @@ public struct HomeView: View {
         case .library: SourcesView(model: model)
         case .review: ReviewInboxView(model: model)
         case .search: SearchView(model: model)
+        case .diet: DietView(knowledgeRoot: model.knowledgeRoot)
         case .settings: SettingsView(model: model)
         }
     }
@@ -291,6 +292,15 @@ public struct HomeView: View {
                     icon: "bubble.left.and.bubble.right.fill",
                     trailing: nil
                 ) { path.append(AppRoute.chat) }
+
+                rowDivider
+
+                menuRow(
+                    title: "식단 · 운동",
+                    subtitle: "기록 · 분석 · 진행률",
+                    icon: "fork.knife.circle.fill",
+                    trailing: nil
+                ) { path.append(AppRoute.diet) }
 
                 rowDivider
 
