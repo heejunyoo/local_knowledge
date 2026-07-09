@@ -41,7 +41,7 @@ let package = Package(
         ),
         .target(
             name: "KnowledgeRPC",
-            dependencies: ["KnowledgeCore", "KnowledgeIndex"],
+            dependencies: ["KnowledgeCore", "KnowledgeIndex", "KnowledgeWorkers"],
             path: "Packages/KnowledgeRPC/Sources/KnowledgeRPC"
         ),
         .testTarget(

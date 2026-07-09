@@ -1,16 +1,45 @@
 import Foundation
 import KnowledgeCore
 import KnowledgeIndex
+import KnowledgeWorkers
 
 /// In-process request handler used by the daemon (and tests).
 public final class PipelineService: @unchecked Sendable {
     public static let version = DaemonVersion.current
     private let store: KnowledgeStore
     private let policy: PeerPolicy
+    private let knowledgeRoot: URL
+    private let vaultPath: URL
 
-    public init(store: KnowledgeStore, policy: PeerPolicy = PeerPolicy()) {
+    public init(
+        store: KnowledgeStore,
+        knowledgeRoot: URL,
+        vaultPath: URL,
+        policy: PeerPolicy = PeerPolicy()
+    ) {
         self.store = store
+        self.knowledgeRoot = knowledgeRoot
+        self.vaultPath = vaultPath
         self.policy = policy
+    }
+
+    /// Loads vault_path from app.json when present.
+    public static func resolveVaultPath(knowledgeRoot: URL) -> URL {
+        let appJSON = knowledgeRoot.appendingPathComponent("config/app.json")
+        if let data = try? Data(contentsOf: appJSON),
+           let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+           let vp = obj["vault_path"] as? String {
+            let expanded: String
+            if vp.hasPrefix("~/") {
+                expanded = FileManager.default.homeDirectoryForCurrentUser
+                    .appendingPathComponent(String(vp.dropFirst(2))).path
+            } else {
+                expanded = (vp as NSString).expandingTildeInPath
+            }
+            return URL(fileURLWithPath: expanded, isDirectory: true)
+        }
+        return FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent("Obsidian/Main", isDirectory: true)
     }
 
     public func handle(request: JSONRPCRequest, peer: PeerIdentity) -> JSONRPCResponse {
@@ -53,16 +82,12 @@ public final class PipelineService: @unchecked Sendable {
             if let statusFilter, let st = PipelineStatus(rawValue: statusFilter) {
                 meetings = try store.meetings(withStatus: st)
             } else {
-                // all statuses: cheap scan via union of known statuses for MVP
                 meetings = try PipelineStatus.allCases.flatMap { try store.meetings(withStatus: $0) }
             }
-            let arr = meetings.map { meetingJSON($0) }
-            return .array(arr)
+            return .array(meetings.map { meetingJSON($0) })
 
         case .meetingGet:
-            guard let id = params?["id"]?.stringValue else {
-                throw JSONRPCError.invalidParams
-            }
+            guard let id = params?["id"]?.stringValue else { throw JSONRPCError.invalidParams }
             guard let m = try store.getMeeting(id: id) else {
                 throw JSONRPCError.app("not found", code: -32004)
             }
@@ -76,10 +101,9 @@ public final class PipelineService: @unchecked Sendable {
             if try store.countActiveRecordings() > 0 {
                 throw JSONRPCError.app("another recording active", code: -32010)
             }
-            let preflightOK = true
             guard PipelineGraph.canStartRecording(ctx: GuardContext(
                 otherRecordingActive: false,
-                capturePreflightOK: preflightOK
+                capturePreflightOK: true
             )) else {
                 throw JSONRPCError.app("cannot start recording", code: -32011)
             }
@@ -94,68 +118,157 @@ public final class PipelineService: @unchecked Sendable {
             return meetingJSON(m)
 
         case .meetingTransition:
-            guard let id = params?["id"]?.stringValue,
-                  let toRaw = params?["to"]?.stringValue,
-                  let to = PipelineStatus(rawValue: toRaw) else {
-                throw JSONRPCError.invalidParams
+            return try handleTransition(params: params)
+
+        case .meetingSummaryGet:
+            guard let id = params?["id"]?.stringValue else { throw JSONRPCError.invalidParams }
+            guard let m = try store.getMeeting(id: id), let rel = m.candidatePath else {
+                throw JSONRPCError.app("summary not found", code: -32005)
             }
-            let errorCode = params?["error_code"]?.stringValue
-            guard var meeting = try store.getMeeting(id: id) else {
+            let url = knowledgeRoot.appendingPathComponent(rel)
+            guard let data = try? Data(contentsOf: url),
+                  let obj = try? JSONSerialization.jsonObject(with: data) else {
+                throw JSONRPCError.app("summary unreadable", code: -32006)
+            }
+            return jsonValue(from: obj)
+
+        case .meetingReviewAccept:
+            return try handleReviewAccept(params: params)
+
+        case .meetingRetry:
+            guard let id = params?["id"]?.stringValue else { throw JSONRPCError.invalidParams }
+            guard var m = try store.getMeeting(id: id) else {
                 throw JSONRPCError.app("not found", code: -32004)
             }
-            // Apply optional artifact updates from params before guard eval
-            if let audioPath = params?["audio_path"]?.stringValue {
-                meeting.audioPath = audioPath
+            if m.status == .transcribeFailed {
+                m.stageAttempts = 0
+                m.errorCode = nil
+                try store.upsertMeeting(m)
+            } else if m.status == .summaryFailed, m.transcriptPath != nil {
+                m.status = .transcribed
+                m.stageAttempts = 0
+                m.errorCode = nil
+                try store.upsertMeeting(m)
             }
-            if let sha = params?["audio_sha256"]?.stringValue {
-                meeting.audioSha256 = sha
-            }
-            if case let .number(ms) = params?["audio_duration_ms"] {
-                meeting.audioDurationMs = Int(ms)
-            }
-            if let tp = params?["transcript_path"]?.stringValue {
-                meeting.transcriptPath = tp
-            }
-            if case let .number(sc) = params?["transcript_segment_count"] {
-                meeting.transcriptSegmentCount = Int(sc)
-            }
-            if case let .bool(ok) = params?["stage1_ok"] {
-                meeting.stage1OK = ok
-            }
-            if let s2 = params?["stage2_outcome"]?.stringValue {
-                meeting.stage2Outcome = Stage2Outcome(rawValue: s2)
-            }
-            if let acc = params?["accepted_at"]?.stringValue {
-                meeting.acceptedAt = acc
-            }
-            if let vp = params?["vault_path"]?.stringValue {
-                meeting.vaultPath = vp
-            }
-            try store.upsertMeeting(meeting)
-
-            var ctx = meeting.toGuardContext()
-            if case let .bool(w) = params?["worker_slot_free"] {
-                ctx.workerSlotFree = w
-            }
-            if case let .bool(c) = params?["critic_enabled"] {
-                ctx.criticEnabled = c
-            }
-            if case let .bool(o) = params?["open_anyway"] {
-                ctx.openAnywayAllowed = o
-            }
-
-            let updated = try store.transition(
-                meetingId: id,
-                to: to,
-                ctx: ctx,
-                errorCode: errorCode,
-                event: "meeting.transition"
-            )
-            return meetingJSON(updated)
+            return meetingJSON(m)
 
         case .none:
             throw JSONRPCError.methodNotFound
         }
+    }
+
+    private func handleTransition(params: JSONValue?) throws -> JSONValue {
+        guard let id = params?["id"]?.stringValue,
+              let toRaw = params?["to"]?.stringValue,
+              let to = PipelineStatus(rawValue: toRaw) else {
+            throw JSONRPCError.invalidParams
+        }
+        let errorCode = params?["error_code"]?.stringValue
+        guard var meeting = try store.getMeeting(id: id) else {
+            throw JSONRPCError.app("not found", code: -32004)
+        }
+        if let audioPath = params?["audio_path"]?.stringValue { meeting.audioPath = audioPath }
+        if let sha = params?["audio_sha256"]?.stringValue { meeting.audioSha256 = sha }
+        if case let .number(ms) = params?["audio_duration_ms"] { meeting.audioDurationMs = Int(ms) }
+        if let tp = params?["transcript_path"]?.stringValue { meeting.transcriptPath = tp }
+        if case let .number(sc) = params?["transcript_segment_count"] {
+            meeting.transcriptSegmentCount = Int(sc)
+        }
+        if case let .bool(ok) = params?["stage1_ok"] { meeting.stage1OK = ok }
+        if let s2 = params?["stage2_outcome"]?.stringValue {
+            meeting.stage2Outcome = Stage2Outcome(rawValue: s2)
+        }
+        if let acc = params?["accepted_at"]?.stringValue { meeting.acceptedAt = acc }
+        if let vp = params?["vault_path"]?.stringValue { meeting.vaultPath = vp }
+        try store.upsertMeeting(meeting)
+
+        var ctx = meeting.toGuardContext()
+        if case let .bool(w) = params?["worker_slot_free"] { ctx.workerSlotFree = w }
+        if case let .bool(c) = params?["critic_enabled"] { ctx.criticEnabled = c }
+        if case let .bool(o) = params?["open_anyway"] { ctx.openAnywayAllowed = o }
+
+        let updated = try store.transition(
+            meetingId: id,
+            to: to,
+            ctx: ctx,
+            errorCode: errorCode,
+            event: "meeting.transition"
+        )
+        return meetingJSON(updated)
+    }
+
+    private func handleReviewAccept(params: JSONValue?) throws -> JSONValue {
+        guard let id = params?["id"]?.stringValue else { throw JSONRPCError.invalidParams }
+        guard var meeting = try store.getMeeting(id: id) else {
+            throw JSONRPCError.app("not found", code: -32004)
+        }
+        guard meeting.status == .reviewNeeded else {
+            throw JSONRPCError.app("not in review_needed", code: -32020)
+        }
+        guard let candRel = meeting.candidatePath else {
+            throw JSONRPCError.app("no candidate", code: -32021)
+        }
+        let candURL = knowledgeRoot.appendingPathComponent(candRel)
+        let data = try Data(contentsOf: candURL)
+        let dec = JSONDecoder()
+        dec.dateDecodingStrategy = .iso8601
+        let summary = try dec.decode(MeetingSummaryV1.self, from: data)
+        let issues = MeetingSummaryValidator.validate(summary)
+        if !issues.isEmpty {
+            throw JSONRPCError.app("stage1 invalid", code: -32022)
+        }
+
+        let acceptedAt = ISO8601DateFormatter().string(from: Date())
+        meeting.acceptedAt = acceptedAt
+        meeting.stage1OK = true
+        try store.upsertMeeting(meeting)
+
+        let humanCtx = GuardContext(
+            stage1OK: true,
+            stage2: meeting.stage2Outcome ?? .pass,
+            humanAccepted: true
+        )
+        _ = try store.transition(
+            meetingId: id,
+            to: .commitPending,
+            ctx: humanCtx,
+            event: "meeting.review.accept"
+        )
+
+        let title = meeting.title ?? "미팅"
+        try FileManager.default.createDirectory(at: vaultPath, withIntermediateDirectories: true)
+        let (rel, hash) = try VaultCommit.commit(
+            vaultPath: vaultPath,
+            meetingId: id,
+            title: title,
+            summary: summary,
+            transcriptRel: meeting.transcriptPath
+        )
+
+        let ftsBody = [
+            summary.oneLineSummary,
+            summary.keyDiscussionPoints.map(\.text).joined(separator: " "),
+            summary.decisions.map(\.text).joined(separator: " "),
+            summary.actionItems.map(\.text).joined(separator: " "),
+        ].joined(separator: "\n")
+        try store.upsertFTS(docId: id, sourceType: "meeting", title: title, body: ftsBody)
+
+        let commitCtx = GuardContext(vaultFinalExists: true, indexCommittedOK: true)
+        let committed = try store.transition(
+            meetingId: id,
+            to: .committed,
+            ctx: commitCtx,
+            event: "meeting.commit.ok"
+        ) { rec in
+            rec.vaultPath = rel
+            rec.vaultContentHash = hash
+            rec.acceptedAt = acceptedAt
+        }
+
+        return .object([
+            "meeting": meetingJSON(committed),
+            "vault_rel": .string(rel),
+        ])
     }
 
     private func meetingJSON(_ m: MeetingRecord) -> JSONValue {
@@ -168,10 +281,28 @@ public final class PipelineService: @unchecked Sendable {
             "audio_path": m.audioPath.map { .string($0) } ?? .null,
             "audio_duration_ms": m.audioDurationMs.map { .number(Double($0)) } ?? .null,
             "transcript_path": m.transcriptPath.map { .string($0) } ?? .null,
+            "candidate_path": m.candidatePath.map { .string($0) } ?? .null,
             "stage1_ok": .bool(m.stage1OK),
             "stage2_outcome": m.stage2Outcome.map { .string($0.rawValue) } ?? .null,
             "vault_path": m.vaultPath.map { .string($0) } ?? .null,
             "error_code": m.errorCode.map { .string($0) } ?? .null,
         ])
+    }
+
+    private func jsonValue(from any: Any) -> JSONValue {
+        switch any {
+        case is NSNull: return .null
+        case let b as Bool: return .bool(b)
+        case let n as NSNumber:
+            if CFGetTypeID(n) == CFBooleanGetTypeID() {
+                return .bool(n.boolValue)
+            }
+            return .number(n.doubleValue)
+        case let s as String: return .string(s)
+        case let a as [Any]: return .array(a.map { jsonValue(from: $0) })
+        case let d as [String: Any]:
+            return .object(d.mapValues { jsonValue(from: $0) })
+        default: return .string(String(describing: any))
+        }
     }
 }

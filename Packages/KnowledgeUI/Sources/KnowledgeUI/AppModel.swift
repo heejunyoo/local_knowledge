@@ -218,6 +218,47 @@ public final class AppModel: ObservableObject {
         }
     }
 
+    /// Save reviewed summary into Obsidian vault (SoT body).
+    public func acceptReview(meetingId: String) {
+        lastError = nil
+        do {
+            if !healthOK { bootstrapBackendIfNeeded() }
+            let client = UnixDomainClient(socketPath: socketPath)
+            try client.connect()
+            defer { client.close() }
+            let res = try client.call(JSONRPCRequest(
+                method: RPCMethod.meetingReviewAccept.rawValue,
+                params: .object(["id": .string(meetingId)])
+            ))
+            if let err = res.error {
+                lastError = err.message
+                statusMessage = "저장하지 못했어요"
+                return
+            }
+            statusMessage = "저장했어요"
+            refresh()
+        } catch {
+            lastError = String(describing: error)
+            statusMessage = "저장하지 못했어요"
+        }
+    }
+
+    public func retryMeeting(meetingId: String) {
+        do {
+            let client = UnixDomainClient(socketPath: socketPath)
+            try client.connect()
+            defer { client.close() }
+            _ = try client.call(JSONRPCRequest(
+                method: RPCMethod.meetingRetry.rawValue,
+                params: .object(["id": .string(meetingId)])
+            ))
+            statusMessage = "다시 정리하는 중…"
+            refresh()
+        } catch {
+            lastError = String(describing: error)
+        }
+    }
+
     private func defaultTitle() -> String {
         let f = DateFormatter()
         f.locale = Locale(identifier: "ko_KR")

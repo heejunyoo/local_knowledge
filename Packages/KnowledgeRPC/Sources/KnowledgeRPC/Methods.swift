@@ -8,6 +8,9 @@ public enum RPCMethod: String, Sendable {
     case meetingGet = "meeting.get"
     case meetingCreate = "meeting.create"
     case meetingTransition = "meeting.transition"
+    case meetingSummaryGet = "meeting.summary.get"
+    case meetingReviewAccept = "meeting.review.accept"
+    case meetingRetry = "meeting.retry"
 }
 
 public struct HealthResult: Codable, Sendable {
@@ -28,5 +31,5 @@ public struct HealthResult: Codable, Sendable {
 
 // Bump when daemon capabilities change (pipeline tick, etc.)
 public enum DaemonVersion {
-    public static let current = "0.2.0-pr06"
+    public static let current = "0.3.0-pr07"
 }

@@ -16,6 +16,10 @@ public struct ReviewInboxView: View {
         model.meetings.filter { $0.status.contains("fail") }
     }
 
+    private var committedItems: [AppModel.MeetingRow] {
+        model.meetings.filter { $0.status == "committed" }.prefix(5).map { $0 }
+    }
+
     public var body: some View {
         ZStack {
             TossColor.grey50.ignoresSafeArea()
@@ -34,19 +38,12 @@ public struct ReviewInboxView: View {
 
                 ScrollView {
                     VStack(alignment: .leading, spacing: TossSpace.x6) {
-                        section(
-                            title: "확인이 필요해요",
-                            empty: "확인할 미팅이 없어요",
-                            items: reviewItems,
-                            kind: .info
-                        )
-                        section(
-                            title: "문제가 있었어요",
-                            empty: "실패한 작업이 없어요",
-                            items: failedItems,
-                            kind: .danger
-                        )
-                        Text("요약 수정·vault 저장은 다음 단계에서 이어져요.")
+                        sectionReview
+                        sectionFailed
+                        if !committedItems.isEmpty {
+                            sectionCommitted
+                        }
+                        Text("확인을 누르면 Obsidian vault에 미팅 노트가 저장돼요.")
                             .font(TossFont.caption())
                             .foregroundStyle(TossColor.grey500)
                     }
@@ -55,47 +52,112 @@ public struct ReviewInboxView: View {
                 }
             }
         }
-        .frame(minWidth: 420, minHeight: 480)
+        .frame(minWidth: 420, minHeight: 520)
         .onAppear { model.refresh() }
     }
 
-    private func section(
-        title: String,
-        empty: String,
-        items: [AppModel.MeetingRow],
-        kind: TossBadge.Kind
-    ) -> some View {
+    private var sectionReview: some View {
         VStack(alignment: .leading, spacing: TossSpace.x3) {
-            Text(title)
+            Text("확인이 필요해요")
                 .font(TossFont.section())
                 .foregroundStyle(TossColor.grey900)
-            if items.isEmpty {
+            if reviewItems.isEmpty {
                 TossCard {
-                    Text(empty)
+                    Text("확인할 미팅이 없어요")
                         .font(TossFont.body())
                         .foregroundStyle(TossColor.grey500)
                 }
             } else {
-                ForEach(items) { row in
+                ForEach(reviewItems) { row in
                     TossCard {
-                        VStack(alignment: .leading, spacing: TossSpace.x2) {
+                        VStack(alignment: .leading, spacing: TossSpace.x3) {
                             HStack {
                                 Text(row.title)
                                     .font(TossFont.body())
                                     .fontWeight(.semibold)
                                     .foregroundStyle(TossColor.grey900)
                                 Spacer()
-                                TossBadge(StatusCopy.label(row.status), kind: kind)
+                                TossBadge("확인 필요", kind: .info)
                             }
-                            if let code = row.errorCode {
-                                Text(code)
-                                    .font(TossFont.caption())
-                                    .foregroundStyle(TossColor.grey500)
+                            TossPrimaryButton("확인 후 저장") {
+                                model.acceptReview(meetingId: row.id)
                             }
                         }
                     }
                 }
             }
+        }
+    }
+
+    private var sectionFailed: some View {
+        VStack(alignment: .leading, spacing: TossSpace.x3) {
+            Text("문제가 있었어요")
+                .font(TossFont.section())
+                .foregroundStyle(TossColor.grey900)
+            if failedItems.isEmpty {
+                TossCard {
+                    Text("실패한 작업이 없어요")
+                        .font(TossFont.body())
+                        .foregroundStyle(TossColor.grey500)
+                }
+            } else {
+                ForEach(failedItems) { row in
+                    TossCard {
+                        VStack(alignment: .leading, spacing: TossSpace.x3) {
+                            HStack {
+                                Text(row.title)
+                                    .font(TossFont.body())
+                                    .fontWeight(.semibold)
+                                    .foregroundStyle(TossColor.grey900)
+                                Spacer()
+                                TossBadge(StatusCopy.label(row.status), kind: .danger)
+                            }
+                            if let code = row.errorCode {
+                                Text(friendlyError(code))
+                                    .font(TossFont.caption())
+                                    .foregroundStyle(TossColor.grey500)
+                            }
+                            TossSecondaryButton("다시 시도") {
+                                model.retryMeeting(meetingId: row.id)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private var sectionCommitted: some View {
+        VStack(alignment: .leading, spacing: TossSpace.x3) {
+            Text("저장됨")
+                .font(TossFont.section())
+                .foregroundStyle(TossColor.grey900)
+            ForEach(committedItems) { row in
+                TossCard {
+                    HStack {
+                        Text(row.title)
+                            .font(TossFont.body())
+                            .foregroundStyle(TossColor.grey900)
+                        Spacer()
+                        TossBadge("저장됨", kind: .neutral)
+                    }
+                }
+            }
+        }
+    }
+
+    private func friendlyError(_ code: String) -> String {
+        switch code {
+        case "asr_tools_missing", "asr_binary_missing", "asr_model_missing":
+            return "받아쓰기를 시스템 음성 인식으로 다시 시도할 수 있어요"
+        case "speech_permission":
+            return "시스템 설정에서 음성 인식 권한을 허용해 주세요"
+        case "timeout":
+            return "시간이 초과됐어요. 다시 시도해 주세요"
+        case "stage2_fail", "stage1_fail":
+            return "요약 검증에 실패했어요"
+        default:
+            return code
         }
     }
 }

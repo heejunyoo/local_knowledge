@@ -28,7 +28,12 @@ final class RPCTests: XCTestCase {
         defer { try? FileManager.default.removeItem(at: dir) }
 
         let store = try KnowledgeStore(path: dir.appendingPathComponent("k.db").path)
-        let svc = PipelineService(store: store)
+        let root = dir
+        let svc = PipelineService(
+            store: store,
+            knowledgeRoot: root,
+            vaultPath: dir.appendingPathComponent("vault")
+        )
         let peer = PeerIdentity(uid: getuid(), pid: getpid())
 
         let ping = svc.handle(
@@ -79,7 +84,12 @@ final class RPCTests: XCTestCase {
         defer { try? FileManager.default.removeItem(at: dir) }
 
         let store = try KnowledgeStore(path: dir.appendingPathComponent("k.db").path)
-        let svc = PipelineService(store: store, policy: PeerPolicy(allowedUIDs: [getuid()]))
+        let svc = PipelineService(
+            store: store,
+            knowledgeRoot: dir,
+            vaultPath: dir.appendingPathComponent("vault"),
+            policy: PeerPolicy(allowedUIDs: [getuid()])
+        )
         let bad = PeerIdentity(uid: getuid() &+ 99, pid: 1)
         let res = svc.handle(request: JSONRPCRequest(method: "ping"), peer: bad)
         XCTAssertEqual(res.error?.code, -32001)
@@ -104,7 +114,11 @@ final class RPCTests: XCTestCase {
                 let conn = try server.acceptClient()
                 let frame = try conn.readFrame()
                 let req = try RPCCodec.decodeRequest(frame)
-                let svc = PipelineService(store: store)
+                let svc = PipelineService(
+                    store: store,
+                    knowledgeRoot: dir,
+                    vaultPath: dir.appendingPathComponent("vault")
+                )
                 let res = svc.handle(request: req, peer: conn.peer)
                 try conn.writeFrame(try RPCCodec.encodeResponse(res))
             } catch {

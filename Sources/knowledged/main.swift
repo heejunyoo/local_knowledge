@@ -49,7 +49,11 @@ if socketRel.hasPrefix("/") {
 }
 
 let store = try KnowledgeStore(path: dbPath)
-let runtime = DaemonRuntime(store: store, socketPath: socketPath)
+let runtime = DaemonRuntime(
+    store: store,
+    knowledgeRoot: rootURL,
+    socketPath: socketPath
+)
 
 // Language from app.json if present
 var language = "ko"
@@ -76,7 +80,7 @@ try runtime.startListening()
 fputs("knowledged \(PipelineService.version) listening on \(socketPath)\n", stderr)
 
 if enablePipeline {
-    fputs("knowledged: offline pipeline tick enabled (recorded→ASR)\n", stderr)
+    fputs("knowledged: pipeline tick (ASR→summary→review_needed)\n", stderr)
     DispatchQueue.global(qos: .utility).async {
         while true {
             do {

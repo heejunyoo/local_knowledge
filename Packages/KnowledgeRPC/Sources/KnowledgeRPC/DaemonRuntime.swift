@@ -8,9 +8,21 @@ public final class DaemonRuntime: @unchecked Sendable {
     private let policy: PeerPolicy
     private var stopFlag = false
 
-    public init(store: KnowledgeStore, socketPath: String, policy: PeerPolicy = PeerPolicy()) {
+    public init(
+        store: KnowledgeStore,
+        knowledgeRoot: URL,
+        socketPath: String,
+        vaultPath: URL? = nil,
+        policy: PeerPolicy = PeerPolicy()
+    ) {
         self.policy = policy
-        self.service = PipelineService(store: store, policy: policy)
+        let vault = vaultPath ?? PipelineService.resolveVaultPath(knowledgeRoot: knowledgeRoot)
+        self.service = PipelineService(
+            store: store,
+            knowledgeRoot: knowledgeRoot,
+            vaultPath: vault,
+            policy: policy
+        )
         self.server = UnixDomainServer(socketPath: socketPath)
     }
 
@@ -20,7 +32,6 @@ public final class DaemonRuntime: @unchecked Sendable {
         try server.start()
     }
 
-    /// Blocking accept loop. Call `requestStop()` from another thread to exit after next accept interruption.
     public func runAcceptLoop() throws {
         while !stopFlag {
             let conn: UnixDomainConnection
@@ -30,7 +41,6 @@ public final class DaemonRuntime: @unchecked Sendable {
                 if stopFlag { break }
                 throw error
             }
-            // Handle one request per connection for simplicity (MVP)
             do {
                 let payload = try conn.readFrame()
                 let request = try RPCCodec.decodeRequest(payload)
@@ -40,7 +50,6 @@ public final class DaemonRuntime: @unchecked Sendable {
             } catch RPCTransportError.closed {
                 continue
             } catch {
-                // best-effort error response if we can
                 continue
             }
         }
@@ -52,8 +61,10 @@ public final class DaemonRuntime: @unchecked Sendable {
         server.stop()
     }
 
-    /// Serve a single connection payload (tests).
-    public func handleOnce(request: JSONRPCRequest, peer: PeerIdentity = PeerIdentity(uid: getuid(), pid: getpid())) -> JSONRPCResponse {
+    public func handleOnce(
+        request: JSONRPCRequest,
+        peer: PeerIdentity = PeerIdentity(uid: getuid(), pid: getpid())
+    ) -> JSONRPCResponse {
         service.handle(request: request, peer: peer)
     }
 }
