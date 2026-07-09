@@ -61,12 +61,13 @@ iOS thin  ──Bearer──►  Core :8741  ──inproc──►  Knowledge (S
 
 | 화면 | 내용 | 상태 |
 |------|------|------|
-| 페어링 | Core URL + 6자리 코드 | ✅ 소스 |
-| 홈 | 연결 상태 · 확인함 배지 | 🚧 배지 |
-| 물어보기 | progressive fast → chat | ✅ 소스 |
-| 검색 | `knowledge.search` | ✅ 소스 |
-| 확인함 | list / accept | 🚧 |
-| 설정 | URL · 상태 · revoke(서버) | 🚧 revoke API |
+| 페어링 | Core URL · 코드 · QR 스캔 | ✅ |
+| 홈 | Primary CTA · 식단 제안 · 연결 | ✅ |
+| 물어보기 | knowledge.ask + 키보드 dismiss | ✅ |
+| 검색 | `knowledge.search` | ✅ |
+| 확인함 | list / accept | ✅ |
+| 식단 | 제안·칩·링·NL·삭제 | ✅ |
+| 설정 | URL · revoke | ✅ |
 
 **비범위 v1:** 회의 녹음, 전체 Obsidian 동기화 UI, 오프라인 풀 인덱스.
 

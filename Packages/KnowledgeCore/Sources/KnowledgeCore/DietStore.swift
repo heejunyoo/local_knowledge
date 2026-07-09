@@ -206,6 +206,68 @@ public final class DietStore: @unchecked Sendable {
         return m
     }
 
+    public func deleteMeal(id: String) throws {
+        lock.lock(); defer { lock.unlock() }
+        model.meals.removeAll { $0.id == id }
+        try persist()
+    }
+
+    public func deleteWorkout(id: String) throws {
+        lock.lock(); defer { lock.unlock() }
+        model.workouts.removeAll { $0.id == id }
+        try persist()
+    }
+
+    /// Morning / lunch / dinner / snack for UX chips.
+    public enum MealSlot: String, CaseIterable, Sendable {
+        case breakfast = "아침"
+        case lunch = "점심"
+        case dinner = "저녁"
+        case snack = "간식"
+    }
+
+    /// Suggest next action from local hour (device TZ).
+    public func suggestedAction(now: Date = Date()) -> (title: String, subtitle: String, slot: MealSlot?) {
+        let hour = Calendar.current.component(.hour, from: now)
+        let day = daySnapshot(day: now)
+        let mealText = day.meals.map { $0.items.joined(separator: " ") }.joined(separator: " ")
+        func has(_ words: [String]) -> Bool {
+            words.contains { mealText.contains($0) }
+        }
+        if hour < 11, !has(["아침", "조식", "breakfast"]) {
+            return ("아침을 남겨 볼까요?", "한 줄로 빠르게 기록해요", .breakfast)
+        }
+        if hour >= 11, hour < 15, !has(["점심", "중식", "lunch"]) {
+            return ("점심은 어떠셨나요?", "kcal만 적어도 충분해요", .lunch)
+        }
+        if hour >= 17, hour < 22, !has(["저녁", "석식", "dinner"]) {
+            return ("저녁을 기록해 주세요", "단백질 목표에 도움이 돼요", .dinner)
+        }
+        if day.workoutMinutes == 0, hour >= 12 {
+            return ("오늘 운동은요?", "걷기 20분만 남겨도 좋아요", nil)
+        }
+        if day.meals.isEmpty {
+            return ("오늘 첫 기록을 남겨 보세요", "식사·운동 모두 한 줄로 가능해요", .lunch)
+        }
+        return ("오늘도 잘하고 있어요", day.summaryText, nil)
+    }
+
+    public func logMealWithSlot(
+        slot: MealSlot?,
+        items: [String],
+        kcal: Double?,
+        proteinG: Double?,
+        note: String?
+    ) throws -> Meal {
+        var labeled = items
+        if let slot, let first = labeled.first, !first.contains(slot.rawValue) {
+            labeled[0] = "\(slot.rawValue) \(first)"
+        } else if let slot, labeled.isEmpty {
+            labeled = [slot.rawValue]
+        }
+        return try logMeal(items: labeled, kcal: kcal, proteinG: proteinG, note: note)
+    }
+
     public func daySnapshot(day: Date = Date()) -> DaySnapshot {
         lock.lock(); defer { lock.unlock() }
         return daySnapshotLocked(day: day)

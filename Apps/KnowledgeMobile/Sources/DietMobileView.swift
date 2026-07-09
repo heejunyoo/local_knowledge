@@ -1,17 +1,19 @@
 import SwiftUI
 
-/// Depth 1: today + one CTA. Sheets for log / week / goals.
+/// Diet hub — suggest, slots, chips, rings, NL, delete. Aligned with Mac DietView.
 struct DietMobileView: View {
     @EnvironmentObject var core: CoreClient
 
     @State private var dashboard: [String: Any] = [:]
-    @State private var busy = false
+    @State private var suggestTitle = "오늘 기록을 남겨 보세요"
+    @State private var suggestSub = "한 줄이면 충분해요"
+    @State private var suggestSlot: String?
+    @State private var selectedSlot = "점심"
     @State private var err: String?
     @State private var flash: String?
     @State private var showLog = false
     @State private var showWeek = false
     @State private var showGoals = false
-
     @State private var quickLine = ""
     @State private var mealItems = ""
     @State private var mealKcal = ""
@@ -25,27 +27,31 @@ struct DietMobileView: View {
     @State private var goalWeekly = "4"
     @State private var goalDayMin = "30"
 
+    private let slots = ["아침", "점심", "저녁", "간식"]
+    private let mealPresets = ["밥·반찬", "샐러드", "닭가슴살", "계란", "커피", "과일"]
+    private let workoutPresets: [(String, Int)] = [("걷기", 20), ("러닝", 30), ("헬스", 45), ("스트레칭", 10)]
+
     var body: some View {
         NavigationStack {
             ZStack {
                 KPageBackground()
                 ScrollView {
-                    VStack(alignment: .leading, spacing: KSpace.x6) {
+                    VStack(alignment: .leading, spacing: KSpace.x5) {
                         header
+                        suggestCard
                         todayHero
+                        slotChips
                         quickNL
-                        if let tip = analysisFirst {
-                            insight(tip)
+                        chipRow("빠른 식사", mealPresets) { p in
+                            Task { await quickMeal(p) }
                         }
-                        KPrimaryButton(title: "자세히 기록") { showLog = true }
+                        chipRowWorkouts
+                        if let tip = analysisFirst { insight(tip) }
+                        todayList
                         HStack(spacing: KSpace.x3) {
                             secondaryBtn("주간") { showWeek = true }
-                            secondaryBtn("목표") {
-                                loadGoals()
-                                showGoals = true
-                            }
+                            secondaryBtn("목표") { loadGoals(); showGoals = true }
                         }
-                        todayList
                         if let flash {
                             Text(flash).font(.caption).fontWeight(.semibold).foregroundStyle(KColor.blue500)
                         }
@@ -56,6 +62,7 @@ struct DietMobileView: View {
                     .padding(.horizontal, KSpace.x6)
                     .padding(.vertical, KSpace.x4)
                 }
+                .scrollDismissesKeyboard(.interactively)
             }
             .navigationBarTitleDisplayMode(.inline)
             .refreshable { await reload() }
@@ -63,6 +70,14 @@ struct DietMobileView: View {
             .sheet(isPresented: $showLog) { logSheet }
             .sheet(isPresented: $showWeek) { weekSheet }
             .sheet(isPresented: $showGoals) { goalsSheet }
+            .toolbar {
+                ToolbarItemGroup(placement: .keyboard) {
+                    Spacer()
+                    Button("완료") {
+                        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+                    }
+                }
+            }
         }
     }
 
@@ -71,10 +86,39 @@ struct DietMobileView: View {
             Text("식단")
                 .font(.system(size: 28, weight: .bold))
                 .foregroundStyle(KColor.grey900)
-            Text("오늘만 보면 돼요")
+            Text("가볍게, 매일")
                 .font(.system(size: 15))
                 .foregroundStyle(KColor.grey500)
         }
+    }
+
+    private var suggestCard: some View {
+        Button {
+            if let s = suggestSlot { selectedSlot = s }
+            showLog = true
+        } label: {
+            HStack(spacing: KSpace.x3) {
+                ZStack {
+                    Circle().fill(KColor.blue50).frame(width: 44, height: 44)
+                    Image(systemName: suggestSlot != nil ? "fork.knife" : "figure.walk")
+                        .foregroundStyle(KColor.blue500)
+                }
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(suggestTitle)
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundStyle(KColor.grey900)
+                    Text(suggestSub)
+                        .font(.system(size: 13))
+                        .foregroundStyle(KColor.grey500)
+                }
+                Spacer()
+                Image(systemName: "chevron.right").foregroundStyle(KColor.grey200)
+            }
+            .padding(KSpace.x4)
+            .background(KColor.white)
+            .clipShape(RoundedRectangle(cornerRadius: 16))
+        }
+        .buttonStyle(.plain)
     }
 
     private var todayHero: some View {
@@ -90,13 +134,13 @@ struct DietMobileView: View {
                     .font(.caption)
                     .foregroundStyle(KColor.grey500)
                 HStack {
-                    pill("칼로리", "\(intVal(totals["kcal"]))", "\(intVal(goals["target_kcal"]))", doubleVal(prog["kcal"]))
-                    pill("단백질", "\(intVal(totals["protein_g"]))g", "\(intVal(goals["target_protein_g"]))g", doubleVal(prog["protein"]))
-                    pill("운동", "\(intVal(totals["workout_minutes"]))분", "\(intVal(goals["target_workout_minutes_per_day"]))분", doubleVal(prog["workout"]))
+                    ring("kcal", intVal(totals["kcal"]), intVal(goals["target_kcal"]), doubleVal(prog["kcal"]), KColor.blue500)
+                    ring("단백질", intVal(totals["protein_g"]), intVal(goals["target_protein_g"]), doubleVal(prog["protein"]), KColor.green500)
+                    ring("운동", intVal(totals["workout_minutes"]), intVal(goals["target_workout_minutes_per_day"]), doubleVal(prog["workout"]), Color.orange)
                 }
                 VStack(alignment: .leading, spacing: 6) {
                     HStack {
-                        Text("이번 주 운동").font(.caption).foregroundStyle(KColor.grey700)
+                        Text("주간 운동").font(.caption).foregroundStyle(KColor.grey700)
                         Spacer()
                         Text("\(intVal(week["workout_count"]))/\(intVal(goals["weekly_workouts"]))회")
                             .font(.caption).foregroundStyle(KColor.grey500)
@@ -108,14 +152,114 @@ struct DietMobileView: View {
         }
     }
 
-    private func pill(_ title: String, _ value: String, _ target: String, _ p: Double) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text(title).font(.caption2).foregroundStyle(KColor.grey500)
-            Text(value).font(.system(size: 16, weight: .bold)).foregroundStyle(KColor.grey900)
-            Text("\(Int(min(1.5, max(0, p)) * 100))% · \(target)")
-                .font(.system(size: 10)).foregroundStyle(KColor.grey500).lineLimit(2)
+    private func ring(_ title: String, _ value: Int, _ goal: Int, _ p: Double, _ color: Color) -> some View {
+        let frac = min(1, max(0, p))
+        return VStack(spacing: 6) {
+            ZStack {
+                Circle().stroke(KColor.grey200, lineWidth: 6)
+                Circle()
+                    .trim(from: 0, to: CGFloat(frac))
+                    .stroke(color, style: StrokeStyle(lineWidth: 6, lineCap: .round))
+                    .rotationEffect(.degrees(-90))
+                VStack(spacing: 0) {
+                    Text("\(value)").font(.system(size: 14, weight: .bold)).foregroundStyle(KColor.grey900)
+                    Text("\(Int(frac * 100))%").font(.system(size: 9)).foregroundStyle(KColor.grey500)
+                }
+            }
+            .frame(width: 70, height: 70)
+            Text(title).font(.caption2.weight(.semibold)).foregroundStyle(KColor.grey700)
+            Text("/\(goal)").font(.system(size: 10)).foregroundStyle(KColor.grey500)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .frame(maxWidth: .infinity)
+    }
+
+    private var slotChips: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                ForEach(slots, id: \.self) { s in
+                    let on = selectedSlot == s
+                    Button {
+                        selectedSlot = s
+                        showLog = true
+                    } label: {
+                        Text(s)
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundStyle(on ? KColor.onPrimary : KColor.grey900)
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 10)
+                            .background(on ? KColor.blue500 : KColor.white)
+                            .clipShape(Capsule())
+                    }
+                }
+            }
+        }
+    }
+
+    private var quickNL: some View {
+        KCard {
+            VStack(alignment: .leading, spacing: KSpace.x3) {
+                Text("한 줄로 남기기")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(KColor.grey500)
+                HStack {
+                    TextField("예: \(selectedSlot) 샐러드 400kcal", text: $quickLine)
+                        .textInputAutocapitalization(.never)
+                        .padding(12)
+                        .background(KColor.grey100)
+                        .clipShape(RoundedRectangle(cornerRadius: 12))
+                        .onSubmit { Task { await commitQuick() } }
+                    Button("추가") { Task { await commitQuick() } }
+                        .fontWeight(.semibold)
+                        .foregroundStyle(KColor.blue500)
+                        .disabled(quickLine.trimmingCharacters(in: .whitespaces).isEmpty)
+                }
+            }
+        }
+    }
+
+    private func chipRow(_ title: String, _ items: [String], action: @escaping (String) -> Void) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(title).font(.system(size: 13, weight: .semibold)).foregroundStyle(KColor.grey500)
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    ForEach(items, id: \.self) { p in
+                        Button(p) { action(p) }
+                            .font(.system(size: 13, weight: .medium))
+                            .foregroundStyle(KColor.blue500)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 8)
+                            .background(KColor.blue50)
+                            .clipShape(Capsule())
+                    }
+                }
+            }
+        }
+    }
+
+    private var chipRowWorkouts: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("빠른 운동").font(.system(size: 13, weight: .semibold)).foregroundStyle(KColor.grey500)
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    ForEach(workoutPresets, id: \.0) { item in
+                        Button("\(item.0) \(item.1)분") {
+                            Task {
+                                try? await core.dietLogWorkout(kind: item.0, minutes: item.1, intensity: nil)
+                                kHapticSuccess()
+                                flash = "\(item.0) 저장"
+                                await reload()
+                            }
+                        }
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundStyle(KColor.grey900)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 8)
+                        .background(KColor.white)
+                        .clipShape(Capsule())
+                    }
+                }
+            }
+        }
     }
 
     private var analysisFirst: String? {
@@ -145,28 +289,6 @@ struct DietMobileView: View {
         }
     }
 
-    private var quickNL: some View {
-        KCard {
-            VStack(alignment: .leading, spacing: KSpace.x3) {
-                Text("한 줄로 남기기")
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(KColor.grey500)
-                HStack {
-                    TextField("예: 점심 샐러드 400kcal", text: $quickLine)
-                        .textInputAutocapitalization(.never)
-                        .padding(12)
-                        .background(KColor.grey100)
-                        .clipShape(RoundedRectangle(cornerRadius: 12))
-                        .onSubmit { Task { await commitQuick() } }
-                    Button("추가") { Task { await commitQuick() } }
-                        .fontWeight(.semibold)
-                        .foregroundStyle(KColor.blue500)
-                        .disabled(quickLine.trimmingCharacters(in: .whitespaces).isEmpty)
-                }
-            }
-        }
-    }
-
     private var todayList: some View {
         let day = dashboard["day"] as? [String: Any] ?? [:]
         let meals = day["meals"] as? [[String: Any]] ?? []
@@ -179,20 +301,55 @@ struct DietMobileView: View {
                 if meals.isEmpty && workouts.isEmpty {
                     KEmptyState(
                         systemImage: "fork.knife",
-                        title: "오늘 기록이 없어요",
-                        message: "한 줄로 남기거나 자세히 기록해 보세요.",
-                        actionTitle: "자세히 기록"
+                        title: "아직 없어요",
+                        message: "끼니 칩이나 한 줄로 시작해 보세요.",
+                        actionTitle: "기록하기"
                     ) { showLog = true }
                 } else {
-                    VStack(alignment: .leading, spacing: 10) {
+                    VStack(alignment: .leading, spacing: 12) {
                         ForEach(Array(meals.enumerated()), id: \.offset) { _, m in
+                            let id = m["id"] as? String ?? ""
                             let items = (m["items"] as? [String])?.joined(separator: ", ") ?? "식사"
-                            Text(items).font(.system(size: 15, weight: .medium)).foregroundStyle(KColor.grey900)
+                            HStack {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(items).font(.system(size: 15, weight: .medium)).foregroundStyle(KColor.grey900)
+                                    if let k = m["kcal"] as? Double {
+                                        Text("\(Int(k)) kcal").font(.caption).foregroundStyle(KColor.grey500)
+                                    }
+                                }
+                                Spacer()
+                                if !id.isEmpty {
+                                    Button {
+                                        Task {
+                                            try? await core.dietDeleteMeal(id: id)
+                                            flash = "삭제"
+                                            await reload()
+                                        }
+                                    } label: {
+                                        Image(systemName: "trash").font(.caption).foregroundStyle(KColor.grey500)
+                                    }
+                                }
+                            }
                         }
                         ForEach(Array(workouts.enumerated()), id: \.offset) { _, w in
-                            Text("\((w["kind"] as? String) ?? "운동") · \(w["minutes"] as? Int ?? 0)분")
-                                .font(.system(size: 15, weight: .medium))
-                                .foregroundStyle(KColor.grey900)
+                            let id = w["id"] as? String ?? ""
+                            HStack {
+                                Text("\((w["kind"] as? String) ?? "운동") · \(w["minutes"] as? Int ?? 0)분")
+                                    .font(.system(size: 15, weight: .medium))
+                                    .foregroundStyle(KColor.grey900)
+                                Spacer()
+                                if !id.isEmpty {
+                                    Button {
+                                        Task {
+                                            try? await core.dietDeleteWorkout(id: id)
+                                            flash = "삭제"
+                                            await reload()
+                                        }
+                                    } label: {
+                                        Image(systemName: "trash").font(.caption).foregroundStyle(KColor.grey500)
+                                    }
+                                }
+                            }
                         }
                     }
                 }
@@ -200,31 +357,14 @@ struct DietMobileView: View {
         }
     }
 
-    private func commitQuick() async {
-        let line = quickLine.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !line.isEmpty else { return }
-        do {
-            if line.contains("운동") || line.lowercased().contains("workout") {
-                let minutes = Int(line.filter(\.isNumber)) ?? 20
-                try await core.dietLogWorkout(kind: line, minutes: minutes, intensity: nil)
-            } else {
-                let digits = line.components(separatedBy: CharacterSet.decimalDigits.inverted).filter { !$0.isEmpty }
-                let kcal = digits.first.flatMap { Double($0) }
-                try await core.dietLogMeal(items: [line], kcal: kcal, proteinG: nil, note: line)
-            }
-            quickLine = ""
-            kHapticSuccess()
-            flash = "저장했어요"
-            await reload()
-        } catch {
-            err = error.localizedDescription
-        }
-    }
-
     private var logSheet: some View {
         NavigationStack {
             Form {
                 Section("식사") {
+                    Picker("끼니", selection: $selectedSlot) {
+                        ForEach(slots, id: \.self) { Text($0).tag($0) }
+                    }
+                    .pickerStyle(.segmented)
                     TextField("음식", text: $mealItems)
                     TextField("kcal", text: $mealKcal).keyboardType(.decimalPad)
                     TextField("단백질 g", text: $mealProtein).keyboardType(.decimalPad)
@@ -242,7 +382,15 @@ struct DietMobileView: View {
                 }
             }
             .navigationTitle("기록")
-            .toolbar { ToolbarItem(placement: .cancellationAction) { Button("닫기") { showLog = false } } }
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) { Button("닫기") { showLog = false } }
+                ToolbarItemGroup(placement: .keyboard) {
+                    Spacer()
+                    Button("완료") {
+                        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+                    }
+                }
+            }
         }
         .presentationDetents([.medium, .large])
     }
@@ -298,25 +446,65 @@ struct DietMobileView: View {
     }
 
     private func reload() async {
-        busy = true
         err = nil
-        defer { busy = false }
         do {
             dashboard = try await core.dietDashboard()
+            if let s = try? await core.dietSuggest() {
+                suggestTitle = s.title
+                suggestSub = s.subtitle
+                suggestSlot = s.slot
+                if let slot = s.slot { selectedSlot = slot }
+            }
             await core.refreshDietLine()
         } catch {
             err = error.localizedDescription
         }
     }
 
+    private func quickMeal(_ name: String) async {
+        do {
+            try await core.dietLogMeal(
+                items: ["\(selectedSlot) \(name)"],
+                kcal: nil,
+                proteinG: nil,
+                note: nil
+            )
+            kHapticSuccess()
+            flash = "\(name) 저장"
+            await reload()
+        } catch { err = error.localizedDescription }
+    }
+
+    private func commitQuick() async {
+        let line = quickLine.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !line.isEmpty else { return }
+        do {
+            if line.contains("운동") || line.lowercased().contains("workout") {
+                let minutes = Int(line.filter(\.isNumber)) ?? 20
+                try await core.dietLogWorkout(kind: line, minutes: minutes, intensity: nil)
+            } else {
+                let digits = line.components(separatedBy: CharacterSet.decimalDigits.inverted).filter { !$0.isEmpty }
+                let kcal = digits.first.flatMap { Double($0) }
+                let text = line.contains(selectedSlot) ? line : "\(selectedSlot) \(line)"
+                try await core.dietLogMeal(items: [text], kcal: kcal, proteinG: nil, note: line)
+            }
+            quickLine = ""
+            kHapticSuccess()
+            flash = "저장"
+            await reload()
+        } catch { err = error.localizedDescription }
+    }
+
     private func saveMeal() async {
         let items = mealItems.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
         guard !items.isEmpty else { return }
+        let labeled = items.map { $0.contains(selectedSlot) ? $0 : "\(selectedSlot) \($0)" }
         do {
-            try await core.dietLogMeal(items: items, kcal: Double(mealKcal), proteinG: Double(mealProtein), note: nil)
+            try await core.dietLogMeal(items: labeled, kcal: Double(mealKcal), proteinG: Double(mealProtein), note: nil)
             mealItems = ""; mealKcal = ""; mealProtein = ""
             flash = "식사 저장"
             showLog = false
+            kHapticSuccess()
             await reload()
         } catch { err = error.localizedDescription }
     }
@@ -326,6 +514,7 @@ struct DietMobileView: View {
             try await core.dietLogWorkout(kind: workoutKind, minutes: Int(workoutMin) ?? 0, intensity: nil)
             flash = "운동 저장"
             showLog = false
+            kHapticSuccess()
             await reload()
         } catch { err = error.localizedDescription }
     }

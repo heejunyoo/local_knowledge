@@ -319,6 +319,23 @@ public final class MobileHTTPServer: @unchecked Sendable {
             if let w = m.weightKg { out["weight_kg"] = w }
             if let s = m.sleepH { out["sleep_h"] = s }
             return jsonRPCResponse(id: id, result: JSONValue.fromJSONObject(out), error: nil)
+        case "diet.delete_meal":
+            guard let id = p["id"] as? String, !id.isEmpty else {
+                return jsonRPCResponse(id: id, result: nil, error: .invalidParams)
+            }
+            try diet.deleteMeal(id: id)
+            return jsonRPCResponse(id: id, result: .object(["deleted": .bool(true)]), error: nil)
+        case "diet.delete_workout":
+            guard let id = p["id"] as? String, !id.isEmpty else {
+                return jsonRPCResponse(id: id, result: nil, error: .invalidParams)
+            }
+            try diet.deleteWorkout(id: id)
+            return jsonRPCResponse(id: id, result: .object(["deleted": .bool(true)]), error: nil)
+        case "diet.suggest":
+            let s = diet.suggestedAction()
+            var obj: [String: Any] = ["title": s.title, "subtitle": s.subtitle]
+            if let slot = s.slot { obj["slot"] = slot.rawValue }
+            return jsonRPCResponse(id: id, result: JSONValue.fromJSONObject(obj), error: nil)
         case "diet.day_summary":
             return jsonRPCResponse(id: id, result: JSONValue.fromJSONObject(diet.daySummary()), error: nil)
         case "diet.week_review":

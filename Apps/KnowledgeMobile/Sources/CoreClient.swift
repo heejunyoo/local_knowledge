@@ -17,6 +17,8 @@ public final class CoreClient: ObservableObject {
     @Published public var connected: Bool = false
     @Published public var reviewCount: Int = 0
     @Published public var dietLine: String = ""
+    @Published public var dietSuggestTitle: String = ""
+    @Published public var dietSuggestSubtitle: String = ""
 
     public init() {
         self.baseURL = UserDefaults.standard.string(forKey: "core.baseURL") ?? "http://100.x.y.z:8741"
@@ -201,6 +203,23 @@ public final class CoreClient: ObservableObject {
         ])
     }
 
+    public func dietDeleteMeal(id: String) async throws {
+        _ = try await dietRPC("diet.delete_meal", params: ["id": id])
+    }
+
+    public func dietDeleteWorkout(id: String) async throws {
+        _ = try await dietRPC("diet.delete_workout", params: ["id": id])
+    }
+
+    public func dietSuggest() async throws -> (title: String, subtitle: String, slot: String?) {
+        let r = try await dietRPC("diet.suggest", params: [:])
+        return (
+            r["title"] as? String ?? "기록해 볼까요?",
+            r["subtitle"] as? String ?? "",
+            r["slot"] as? String
+        )
+    }
+
     private func dietRPC(_ method: String, params: [String: Any]) async throws -> [String: Any] {
         let rpc = try await rpc(method: method, params: params)
         if let err = rpc["error"] as? [String: Any] {
@@ -210,7 +229,16 @@ public final class CoreClient: ObservableObject {
     }
 
     public func refreshDietLine() async {
-        guard isPaired else { dietLine = ""; return }
+        guard isPaired else {
+            dietLine = ""
+            dietSuggestTitle = ""
+            dietSuggestSubtitle = ""
+            return
+        }
+        if let s = try? await dietSuggest() {
+            dietSuggestTitle = s.title
+            dietSuggestSubtitle = s.subtitle
+        }
         if let dash = try? await dietDashboard(),
            let day = dash["day"] as? [String: Any],
            let text = day["summary_text"] as? String {

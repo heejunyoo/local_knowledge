@@ -164,17 +164,21 @@ struct HomeMobileView: View {
                             primaryAction()
                         }
 
-                        if !core.dietLine.isEmpty {
-                            KCard {
-                                VStack(alignment: .leading, spacing: 6) {
-                                    Text("오늘 식단")
-                                        .font(.system(size: 13, weight: .semibold))
-                                        .foregroundStyle(KColor.grey500)
-                                    Text(core.dietLine)
-                                        .font(.system(size: 15))
-                                        .foregroundStyle(KColor.grey900)
+                        if !core.dietSuggestTitle.isEmpty || !core.dietLine.isEmpty {
+                            Button { goDiet = true } label: {
+                                KCard {
+                                    VStack(alignment: .leading, spacing: 6) {
+                                        Text(core.dietSuggestTitle.isEmpty ? "오늘 식단" : core.dietSuggestTitle)
+                                            .font(.system(size: 15, weight: .semibold))
+                                            .foregroundStyle(KColor.grey900)
+                                        Text(core.dietSuggestSubtitle.isEmpty ? core.dietLine : core.dietSuggestSubtitle)
+                                            .font(.system(size: 13))
+                                            .foregroundStyle(KColor.grey500)
+                                            .lineLimit(2)
+                                    }
                                 }
                             }
+                            .buttonStyle(.plain)
                         }
 
                         KCard(padded: false) {
@@ -248,14 +252,18 @@ struct HomeMobileView: View {
 
     private var primaryTitle: String {
         if core.reviewCount > 0 { return "확인함 열기 (\(core.reviewCount))" }
-        if core.dietLine.isEmpty { return "오늘 식단 남기기" }
+        if !core.dietSuggestTitle.isEmpty, core.dietLine.contains("없어요") || core.dietLine.isEmpty {
+            return core.dietSuggestTitle
+        }
+        if core.dietLine.isEmpty || core.dietLine.contains("없어요") { return "오늘 식단 남기기" }
         return "지식에 물어보기"
     }
 
     private func primaryAction() {
         if core.reviewCount > 0 { goReview = true }
-        else if core.dietLine.isEmpty { goDiet = true }
-        else { goAsk = true }
+        else if core.dietLine.isEmpty || core.dietLine.contains("없어요") || !core.dietSuggestTitle.isEmpty && core.dietSuggestTitle.contains("?") {
+            goDiet = true
+        } else { goAsk = true }
     }
 }
 
