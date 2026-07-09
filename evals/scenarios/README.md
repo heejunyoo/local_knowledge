@@ -1,16 +1,21 @@
 # Eval scenarios
 
-Scenario **runner** lands in **PR-02**. This directory holds scenario definitions only.
+JSON scenarios executed by `KnowledgeCore.ScenarioRunner` (PR-02).
 
-| ID | Intent | Earliest PR |
-|----|--------|-------------|
-| S02 | State graph default-deny / legal edges only | PR-02 |
-| S03 | Stage2 evidence outcomes | PR-08 |
-| S04 | Quiet notifications (no success spam) | PR-10a |
-| S05 | Threshold keys docs == code | PR-02 (partial via unit test) |
-| S06 | Index does not become body SoT for meetings | PR-03 |
-| S11 | No wildcard committed transitions | PR-02 |
-| S12 | Timeout never equals success | PR-06 |
-| S13 | commit_pending reconcile | PR-11 |
+```bash
+cd ~/IdeaProjects/KnowledgeApp && swift test --filter ScenarioRunnerTests
+```
+
+| ID | File | Intent | Status |
+|----|------|--------|--------|
+| S02 | `S02_graph_edges.json` | Legal edges + default-deny guards | **active** |
+| S02b | `S02b_recovery.json` | Crash recovery R1–R4 | **active** |
+| S05 | `S05_threshold_keys.json` | Threshold key SoT list | **active** |
+| S11 | `S11_no_wildcard_committed.json` | Only `commit_pending → committed` | **active** |
+| S12 | `S12_timeout_never_success.json` | Timeout ≠ success | **active** |
+| S03 | — | Stage2 evidence outcomes | PR-08 |
+| S04 | — | Quiet notifications | PR-10a |
+| S06 | — | Index vs body SoT | PR-03 |
+| S13 | — | commit_pending reconcile | PR-11 |
 
 Add a scenario in the **same change** as the layer it protects (Harness P2 / AP-08).

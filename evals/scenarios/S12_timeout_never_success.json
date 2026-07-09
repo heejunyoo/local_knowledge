@@ -1,0 +1,17 @@
+{
+  "id": "S12",
+  "title": "Timeout error_code never equals success transition targets",
+  "kind": "timeout",
+  "assertions": [
+    { "type": "timeout_policy", "to": "transcribed", "expect_violation": true },
+    { "type": "timeout_policy", "to": "summarized_candidate", "expect_violation": true },
+    { "type": "timeout_policy", "to": "review_needed", "expect_violation": true },
+    { "type": "timeout_policy", "to": "committed", "expect_violation": true },
+    { "type": "timeout_policy", "to": "transcribe_failed", "expect_violation": false },
+    { "type": "timeout_policy", "to": "summary_failed", "expect_violation": false },
+    { "type": "timeout_policy", "to": "critic_failed", "expect_violation": false },
+    { "type": "edge_exists", "from": "transcribing", "to": "transcribe_failed", "expected": true },
+    { "type": "edge_exists", "from": "summarizing", "to": "summary_failed", "expected": true },
+    { "type": "can_transition", "from": "transcribing", "to": "transcribed", "fixture": "empty", "expected": false }
+  ]
+}

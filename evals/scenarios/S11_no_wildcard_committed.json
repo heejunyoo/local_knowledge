@@ -1,0 +1,13 @@
+{
+  "id": "S11",
+  "title": "No wildcard transitions into committed; only commit_pending",
+  "kind": "graph",
+  "assertions": [
+    { "type": "no_wildcard_to_committed" },
+    { "type": "edge_exists", "from": "commit_pending", "to": "committed", "expected": true },
+    { "type": "edge_exists", "from": "review_needed", "to": "committed", "expected": false },
+    { "type": "edge_exists", "from": "summarized_candidate", "to": "committed", "expected": false },
+    { "type": "edge_exists", "from": "critic_running", "to": "committed", "expected": false },
+    { "type": "edge_exists", "from": "transcribing", "to": "committed", "expected": false }
+  ]
+}

@@ -1,0 +1,8 @@
+{
+  "id": "S05",
+  "title": "Threshold documentation keys present in code SoT list",
+  "kind": "thresholds",
+  "assertions": [
+    { "type": "threshold_keys_present" }
+  ]
+}

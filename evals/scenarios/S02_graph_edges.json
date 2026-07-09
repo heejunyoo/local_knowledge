@@ -1,0 +1,32 @@
+{
+  "id": "S02",
+  "title": "Pipeline graph legal edges and default-deny happy path",
+  "kind": "graph",
+  "assertions": [
+    { "type": "edge_exists", "from": "recording", "to": "recorded", "expected": true },
+    { "type": "edge_exists", "from": "recorded", "to": "transcribing", "expected": true },
+    { "type": "edge_exists", "from": "transcribing", "to": "transcribed", "expected": true },
+    { "type": "edge_exists", "from": "transcribed", "to": "summarizing", "expected": true },
+    { "type": "edge_exists", "from": "summarizing", "to": "summarized_candidate", "expected": true },
+    { "type": "edge_exists", "from": "summarized_candidate", "to": "review_needed", "expected": true },
+    { "type": "edge_exists", "from": "review_needed", "to": "commit_pending", "expected": true },
+    { "type": "edge_exists", "from": "commit_pending", "to": "committed", "expected": true },
+    { "type": "edge_exists", "from": "recording", "to": "committed", "expected": false },
+    { "type": "edge_exists", "from": "transcribed", "to": "committed", "expected": false },
+    { "type": "edge_exists", "from": "summarized_candidate", "to": "committed", "expected": false },
+    { "type": "edge_exists", "from": "review_needed", "to": "committed", "expected": false },
+    { "type": "can_transition", "from": "recording", "to": "recorded", "fixture": "empty", "expected": false },
+    { "type": "can_transition", "from": "recording", "to": "recorded", "fixture": "audio_only", "expected": true },
+    { "type": "can_transition", "from": "recorded", "to": "transcribing", "fixture": "audio_busy", "expected": false },
+    { "type": "can_transition", "from": "recorded", "to": "transcribing", "fixture": "audio_only", "expected": true },
+    { "type": "can_transition", "from": "summarizing", "to": "summarized_candidate", "fixture": "summary_fail_stage2", "expected": false },
+    { "type": "can_transition", "from": "summarizing", "to": "summarized_candidate", "fixture": "summary_pass", "expected": true },
+    { "type": "can_transition", "from": "summarized_candidate", "to": "review_needed", "fixture": "summary_pass", "expected": true },
+    { "type": "can_transition", "from": "summarized_candidate", "to": "critic_running", "fixture": "summary_pass", "expected": false },
+    { "type": "can_transition", "from": "summarized_candidate", "to": "critic_running", "fixture": "critic_on", "expected": true },
+    { "type": "can_transition", "from": "review_needed", "to": "commit_pending", "fixture": "empty", "expected": false },
+    { "type": "can_transition", "from": "review_needed", "to": "commit_pending", "fixture": "human_accept", "expected": true },
+    { "type": "can_transition", "from": "commit_pending", "to": "committed", "fixture": "commit_ready", "expected": true },
+    { "type": "can_transition", "from": "commit_pending", "to": "committed", "fixture": "empty", "expected": false }
+  ]
+}

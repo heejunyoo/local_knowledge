@@ -1,0 +1,47 @@
+{
+  "id": "S02b",
+  "title": "Crash recovery R1 R2 R3",
+  "kind": "recovery",
+  "assertions": [
+    {
+      "type": "recovery",
+      "from_status": "recording",
+      "has_audio": false,
+      "duration_ms": 0,
+      "age_s": 0,
+      "heartbeat": false,
+      "expect_to": "record_failed",
+      "expect_rule": "R1"
+    },
+    {
+      "type": "recovery",
+      "from_status": "recording",
+      "has_audio": true,
+      "duration_ms": 5000,
+      "age_s": 180,
+      "heartbeat": false,
+      "expect_to": "recorded",
+      "expect_rule": "R2"
+    },
+    {
+      "type": "recovery",
+      "from_status": "transcribing",
+      "has_audio": true,
+      "duration_ms": 5000,
+      "age_s": 0,
+      "heartbeat": true,
+      "attempts": 2,
+      "expect_to": "transcribe_failed",
+      "expect_rule": "R3"
+    },
+    {
+      "type": "recovery",
+      "from_status": "commit_pending",
+      "has_audio": true,
+      "duration_ms": 5000,
+      "age_s": 0,
+      "heartbeat": true,
+      "expect_rule": "R4"
+    }
+  ]
+}

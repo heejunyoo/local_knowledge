@@ -45,7 +45,7 @@ Runtime machine-local tree (created by the app, not committed):
 | Xcode | 15+ / current with Swift 5.9+ |
 | Obsidian vault | Separate path from `~/Knowledge` (no symlink of vault under Knowledge root) |
 
-## Quick start (PR-01)
+## Quick start
 
 ```bash
 cd ~/IdeaProjects/KnowledgeApp
@@ -58,6 +58,13 @@ Install example config into the runtime root (idempotent):
 ./scripts/bootstrap-knowledge-root.sh
 ```
 
+Eval scenarios (graph / recovery / thresholds):
+
+```bash
+swift test --filter ScenarioRunnerTests
+# definitions: evals/scenarios/*.json
+```
+
 ## Feature flags
 
 **Only** `~/Knowledge/config/features.json` (never duplicate in `app.json`).
@@ -68,8 +75,8 @@ MVP defaults: all automation extras off (`critic`, `vector_search`, `notes_inges
 
 | PR | Scope |
 |----|--------|
-| **01** | Monorepo + policy SoT + schema + `KnowledgeCore` thresholds/types ← *you are here* |
-| 02 | Pipeline state graph (default deny) + ScenarioRunner |
+| 01 | Monorepo + policy SoT + schema + `KnowledgeCore` thresholds/types |
+| **02** | Pipeline state graph (default deny) + recovery R1–R6 + ScenarioRunner ← *current* |
 | 03 | SQLite index |
 | 04 | Daemon + UDS JSON-RPC |
 | 05w / 05–08 | Workers, mic, ASR, summarize, Stage2 |
