@@ -66,6 +66,16 @@ public enum AudioArtifactBuilder {
     }
 }
 
+/// Bridge so UI can log identity without importing ScreenCaptureKit availability awkwardly.
+public enum SystemAudioRecorderIdentity {
+    public static func snapshot() -> String {
+        if #available(macOS 13.0, *) {
+            return SystemAudioRecorder.identityDescription()
+        }
+        return "macOS < 13"
+    }
+}
+
 public enum CaptureError: Error, Equatable, CustomStringConvertible, LocalizedError {
     case alreadyRecording
     case notRecording

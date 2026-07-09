@@ -3,13 +3,11 @@ import KnowledgeCore
 import KnowledgeRPC
 
 public enum CaptureMode: String, Sendable {
-    /// ScreenCaptureKit display system audio (default for Mac mini).
     case systemAudio = "system_audio"
-    /// Optional external mic path.
     case offlineMic = "offline_mic"
 }
 
-/// Coordinates capture + daemon RPC handoff. Default = system audio.
+/// Capture first, then register meeting — avoids orphan `recording` rows on SCK/TCC failure.
 public final class CaptureSessionController: @unchecked Sendable {
     private let knowledgeRoot: URL
     private let socketPath: String
@@ -34,50 +32,50 @@ public final class CaptureSessionController: @unchecked Sendable {
     }
 
     public func startSession(title: String? = nil) async throws -> String {
-        let client = UnixDomainClient(socketPath: socketPath)
-        try client.connect()
-        defer { client.close() }
+        // Provisional id used for audio filename before RPC create
+        let id = UUID().uuidString
 
-        var params: [String: JSONValue] = [
-            "mode": .string(mode.rawValue),
-        ]
-        if let title {
-            params["title"] = .string(title)
-        }
-        let res = try client.call(JSONRPCRequest(
-            method: RPCMethod.meetingCreate.rawValue,
-            params: .object(params)
-        ))
-        if let err = res.error {
-            throw CaptureError.engine(err.message)
-        }
-        guard let id = res.result?["id"]?.stringValue else {
-            throw CaptureError.engine("meeting.create missing id")
-        }
-
+        // 1) Start capture FIRST (fail here → no DB row)
         switch mode {
         case .systemAudio:
             if #available(macOS 13.0, *),
                let rec = systemRecorder as? SystemAudioRecorder {
-                do {
-                    try await rec.start(meetingId: id)
-                } catch {
-                    // Map common TCC failures
-                    let msg = error.localizedDescription
-                    if msg.localizedCaseInsensitiveContains("deny")
-                        || msg.localizedCaseInsensitiveContains("not authorized")
-                        || msg.localizedCaseInsensitiveContains("permission") {
-                        throw CaptureError.engine(
-                            "화면 기록 권한이 필요해요. 시스템 설정 → 개인정보 보호 및 보안 → 화면 기록 에서 Knowledge를 허용한 뒤 다시 시도해 주세요."
-                        )
-                    }
-                    throw CaptureError.engine(msg)
-                }
+                try await rec.start(meetingId: id)
             } else {
                 throw CaptureError.engine("이 macOS 버전에서는 시스템 오디오 녹음을 지원하지 않아요")
             }
         case .offlineMic:
             try micRecorder.start(meetingId: id)
+        }
+
+        // 2) Register meeting only after capture is live
+        do {
+            let client = UnixDomainClient(socketPath: socketPath)
+            try client.connect()
+            defer { client.close() }
+
+            // Clear orphans so create isn't blocked
+            _ = try? client.call(JSONRPCRequest(method: RPCMethod.meetingAbandonOrphans.rawValue))
+
+            var params: [String: JSONValue] = [
+                "id": .string(id),
+                "mode": .string(mode.rawValue),
+            ]
+            if let title {
+                params["title"] = .string(title)
+            }
+            let res = try client.call(JSONRPCRequest(
+                method: RPCMethod.meetingCreate.rawValue,
+                params: .object(params)
+            ))
+            if let err = res.error {
+                try cancelCaptureOnly()
+                throw CaptureError.engine(err.message)
+            }
+        } catch {
+            try cancelCaptureOnly()
+            if let c = error as? CaptureError { throw c }
+            throw CaptureError.engine(String(describing: error))
         }
 
         meetingId = id
@@ -122,15 +120,7 @@ public final class CaptureSessionController: @unchecked Sendable {
     }
 
     public func failSession() throws {
-        switch mode {
-        case .systemAudio:
-            if #available(macOS 13.0, *),
-               let rec = systemRecorder as? SystemAudioRecorder {
-                try rec.cancel()
-            }
-        case .offlineMic:
-            try micRecorder.cancel()
-        }
+        try cancelCaptureOnly()
         guard let id = meetingId else { return }
         meetingId = nil
         let client = UnixDomainClient(socketPath: socketPath)
@@ -144,5 +134,17 @@ public final class CaptureSessionController: @unchecked Sendable {
                 "error_code": .string("capture_cancelled"),
             ])
         ))
+    }
+
+    private func cancelCaptureOnly() throws {
+        switch mode {
+        case .systemAudio:
+            if #available(macOS 13.0, *),
+               let rec = systemRecorder as? SystemAudioRecorder {
+                try rec.cancel()
+            }
+        case .offlineMic:
+            try micRecorder.cancel()
+        }
     }
 }

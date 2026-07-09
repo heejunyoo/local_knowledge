@@ -79,7 +79,7 @@ public struct HomeView: View {
                     .foregroundStyle(TossColor.grey900)
                 Text(model.isRecording
                      ? "Mac에서 나는 회의 소리(Zoom/Meet 등)를 듣고 있어요. 끝나면 아래를 눌러 주세요."
-                     : "Mac mini처럼 내장 마이크가 없어도 됩니다. 디스플레이 시스템 오디오를 녹음해요. 첫 실행 시 화면 기록 권한을 허용해 주세요.")
+                     : "시스템 오디오 녹음입니다. 반드시 ~/Applications/Knowledge.app 으로 실행하세요. 터미널 실행은 다른 권한 대상이라 설정과 어긋납니다.")
                     .font(TossFont.body())
                     .foregroundStyle(TossColor.grey700)
                     .fixedSize(horizontal: false, vertical: true)

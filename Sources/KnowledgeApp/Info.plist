@@ -28,5 +28,7 @@
 	<string>미팅 음성을 텍스트로 변환하는 데 사용해요.</string>
 	<key>NSAudioCaptureUsageDescription</key>
 	<string>Zoom/Meet 등 회의 시스템 오디오를 녹음해 요약하는 데 사용해요.</string>
+	<key>NSScreenCaptureUsageDescription</key>
+	<string>회의 시스템 오디오를 캡처하기 위해 화면 기록이 필요해요. 화면 영상은 쓰지 않고 소리만 저장합니다.</string>
 </dict>
 </plist>

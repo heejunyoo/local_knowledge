@@ -5,7 +5,10 @@ import CoreMedia
 import CoreGraphics
 import AudioToolbox
 
-/// System audio via ScreenCaptureKit (display mix). Default for Mac mini (no built-in mic).
+/// System audio via ScreenCaptureKit (display mix). Default for Mac mini.
+///
+/// TCC note: Screen Recording is granted per **app identity** (bundle id + path),
+/// not "admin". CGPreflight can lag; we treat SCShareableContent / SCStream as source of truth.
 @available(macOS 13.0, *)
 public final class SystemAudioRecorder: NSObject, @unchecked Sendable {
     public private(set) var isRecording = false
@@ -30,11 +33,28 @@ public final class SystemAudioRecorder: NSObject, @unchecked Sendable {
         super.init()
     }
 
+    /// Soft prompt only — never treat CGPreflight false as hard failure (can lag after grant).
+    public static func requestScreenAccessIfNeeded() {
+        if !CGPreflightScreenCaptureAccess() {
+            _ = CGRequestScreenCaptureAccess()
+        }
+    }
+
+    public static func screenAccessGranted() -> Bool {
+        CGPreflightScreenCaptureAccess()
+    }
+
+    public static func identityDescription() -> String {
+        let bid = Bundle.main.bundleIdentifier ?? "(no bundle id)"
+        let path = Bundle.main.bundlePath
+        let exec = Bundle.main.executablePath ?? CommandLine.arguments[0]
+        return "bundle=\(bid)\npath=\(path)\nexec=\(exec)\nCGPreflight=\(CGPreflightScreenCaptureAccess())"
+    }
+
     public func start(meetingId: String) async throws {
         stateLock.lock()
         if isRecording {
             stateLock.unlock()
-            // Recover stuck state instead of opaque "error 0"
             try? cancel()
         } else {
             stateLock.unlock()
@@ -42,21 +62,7 @@ public final class SystemAudioRecorder: NSObject, @unchecked Sendable {
 
         lastError = nil
         sampleCount = 0
-
-        // Screen Recording TCC (system audio uses the same grant)
-        if !CGPreflightScreenCaptureAccess() {
-            _ = CGRequestScreenCaptureAccess()
-            // Wait for user to flip the toggle (first launch)
-            for _ in 0..<20 {
-                if CGPreflightScreenCaptureAccess() { break }
-                try await Task.sleep(nanoseconds: 250_000_000)
-            }
-            if !CGPreflightScreenCaptureAccess() {
-                throw CaptureError.engine(
-                    "화면 기록 권한이 꺼져 있어요. 시스템 설정 → 개인정보 보호 및 보안 → 화면 기록 에서 「Knowledge」를 켠 다음, 앱을 종료하고 다시 실행해 주세요."
-                )
-            }
-        }
+        Self.requestScreenAccessIfNeeded()
 
         let url = AudioArtifactBuilder.rawURL(
             knowledgeRoot: knowledgeRoot,
@@ -71,13 +77,12 @@ public final class SystemAudioRecorder: NSObject, @unchecked Sendable {
             try FileManager.default.removeItem(at: url)
         }
 
+        // Source of truth: actual SCK call (not CGPreflight alone)
         let content: SCShareableContent
         do {
             content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true)
         } catch {
-            throw CaptureError.engine(
-                "화면/시스템 오디오에 접근하지 못했어요. 화면 기록 권한에 Knowledge가 있는지 확인하고 앱을 재시작해 주세요. (\(error.localizedDescription))"
-            )
+            throw mapSCKError(error, phase: "SCShareableContent")
         }
         guard let display = content.displays.first else {
             throw CaptureError.engine("디스플레이를 찾지 못했어요")
@@ -102,14 +107,17 @@ public final class SystemAudioRecorder: NSObject, @unchecked Sendable {
         )!
         let file = try AVAudioFile(forWriting: url, settings: outFormat.settings)
 
-        // Tear down previous stream if any
         if let old = stream {
             old.stopCapture { _ in }
             stream = nil
         }
 
         let stream = SCStream(filter: filter, configuration: config, delegate: self)
-        try stream.addStreamOutput(self, type: .audio, sampleHandlerQueue: writeQueue)
+        do {
+            try stream.addStreamOutput(self, type: .audio, sampleHandlerQueue: writeQueue)
+        } catch {
+            throw mapSCKError(error, phase: "addStreamOutput")
+        }
 
         self.audioFile = file
         self.stream = stream
@@ -122,9 +130,9 @@ public final class SystemAudioRecorder: NSObject, @unchecked Sendable {
         } catch {
             self.stream = nil
             self.audioFile = nil
-            throw CaptureError.engine(
-                "시스템 오디오 캡처를 시작하지 못했어요. 화면 기록 권한 및 다른 캡처 앱 사용 여부를 확인해 주세요. (\(error.localizedDescription))"
-            )
+            self.meetingId = nil
+            self.outputURL = nil
+            throw mapSCKError(error, phase: "startCapture")
         }
 
         stateLock.lock()
@@ -132,6 +140,31 @@ public final class SystemAudioRecorder: NSObject, @unchecked Sendable {
         stateLock.unlock()
         try writeHeartbeat()
         startHeartbeatTimer()
+    }
+
+    private func mapSCKError(_ error: Error, phase: String) -> CaptureError {
+        let ns = error as NSError
+        let desc = error.localizedDescription
+        // SCStreamErrorDomain -3801 = user denied TCC
+        if ns.domain.contains("ScreenCaptureKit") || ns.domain.contains("SCStream") || ns.code == -3801
+            || desc.contains("TCC") || desc.contains("거절") || desc.localizedCaseInsensitiveContains("denied")
+            || desc.localizedCaseInsensitiveContains("not authorized") {
+            let id = Self.identityDescription()
+            return .engine(
+                """
+                화면 기록(TCC)이 이 앱에 허용되지 않았습니다. (phase=\(phase), code=\(ns.code))
+                \(desc)
+
+                허용해야 할 앱 정체:
+                \(id)
+
+                조치: 시스템 설정 → 개인정보 보호 및 보안 → 화면 기록 에서 위 path 의 Knowledge를 켠 뒤,
+                앱을 완전히 종료(⌘Q)하고 ~/Applications/Knowledge.app 을 다시 실행하세요.
+                터미널 실행은 다른 TCC 클라이언트라서 설정과 어긋날 수 있습니다.
+                """
+            )
+        }
+        return .engine("시스템 오디오 실패 (\(phase)): \(desc) [domain=\(ns.domain) code=\(ns.code)]")
     }
 
     public func stop() throws -> AudioArtifact {
@@ -157,21 +190,18 @@ public final class SystemAudioRecorder: NSObject, @unchecked Sendable {
         stateLock.unlock()
         try CaptureHeartbeat.clear(knowledgeRoot: knowledgeRoot)
 
-        writeQueue.sync {
-            self.audioFile = nil
-        }
+        writeQueue.sync { self.audioFile = nil }
         Thread.sleep(forTimeInterval: 0.15)
 
         if let lastError {
-            let msg = lastError.localizedDescription
-            throw CaptureError.engine(msg)
+            throw mapSCKError(lastError, phase: "stop")
         }
 
         let attrs = try FileManager.default.attributesOfItem(atPath: url.path)
         let size = (attrs[.size] as? NSNumber)?.intValue ?? 0
         if size < 1600 || sampleCount < 800 {
             throw CaptureError.engine(
-                "시스템 소리가 거의 없어요. 회의 탭에서 소리가 나고 있는지, 화면 기록이 허용됐는지 확인해 주세요."
+                "시스템 소리가 거의 캡처되지 않았어요 (bytes=\(size), samples=\(sampleCount)). 회의 소리가 실제로 재생 중인지 확인해 주세요."
             )
         }
 
@@ -258,7 +288,6 @@ public final class SystemAudioRecorder: NSObject, @unchecked Sendable {
             blockBufferOut: &blockBuffer
         )
         guard status == noErr else { return }
-        defer { if let blockBuffer { /* retained, released by ARC via CF */ } }
 
         guard let asbdPtr = CMAudioFormatDescriptionGetStreamBasicDescription(formatDesc) else { return }
         var asbd = asbdPtr.pointee
@@ -286,7 +315,8 @@ public final class SystemAudioRecorder: NSObject, @unchecked Sendable {
         }
 
         let outFormat = audioFile.processingFormat
-        if inFormat.sampleRate == outFormat.sampleRate && inFormat.channelCount == outFormat.channelCount
+        if inFormat.sampleRate == outFormat.sampleRate
+            && inFormat.channelCount == outFormat.channelCount
             && inFormat.commonFormat == outFormat.commonFormat {
             try? audioFile.write(from: inBuffer)
             sampleCount += Int64(inBuffer.frameLength)

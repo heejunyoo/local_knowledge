@@ -234,7 +234,9 @@ public final class AppModel: ObservableObject {
                 lastError = msg
                 statusMessage = "녹음을 시작하지 못했어요"
                 appendUILog("startRecording error \(msg)")
-                if msg.contains("화면 기록") || msg.localizedCaseInsensitiveContains("screen") {
+                appendUILog("identity \(SystemAudioRecorderIdentity.snapshot())")
+                if msg.contains("TCC") || msg.contains("화면 기록") || msg.contains("거절")
+                    || msg.localizedCaseInsensitiveContains("screen") {
                     Self.openScreenRecordingSettings()
                 }
                 refresh()
