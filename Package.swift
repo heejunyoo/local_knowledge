@@ -12,7 +12,9 @@ let package = Package(
         .library(name: "KnowledgeRPC", targets: ["KnowledgeRPC"]),
         .library(name: "KnowledgeCapture", targets: ["KnowledgeCapture"]),
         .library(name: "KnowledgeWorkers", targets: ["KnowledgeWorkers"]),
+        .library(name: "KnowledgeUI", targets: ["KnowledgeUI"]),
         .executable(name: "knowledged", targets: ["knowledged"]),
+        .executable(name: "KnowledgeApp", targets: ["KnowledgeApp"]),
     ],
     targets: [
         .target(
@@ -59,18 +61,47 @@ let package = Package(
         ),
         .target(
             name: "KnowledgeWorkers",
-            dependencies: ["KnowledgeCore"],
+            dependencies: ["KnowledgeCore", "KnowledgeIndex"],
             path: "Packages/KnowledgeWorkers/Sources/KnowledgeWorkers"
         ),
         .testTarget(
             name: "KnowledgeWorkersTests",
-            dependencies: ["KnowledgeWorkers", "KnowledgeCore"],
+            dependencies: ["KnowledgeWorkers", "KnowledgeCore", "KnowledgeIndex"],
             path: "Packages/KnowledgeWorkers/Tests/KnowledgeWorkersTests"
+        ),
+        .target(
+            name: "KnowledgeUI",
+            dependencies: [
+                "KnowledgeCore",
+                "KnowledgeIndex",
+                "KnowledgeRPC",
+                "KnowledgeCapture",
+            ],
+            path: "Packages/KnowledgeUI/Sources/KnowledgeUI"
+        ),
+        .testTarget(
+            name: "KnowledgeUITests",
+            dependencies: ["KnowledgeUI"],
+            path: "Packages/KnowledgeUI/Tests/KnowledgeUITests"
         ),
         .executableTarget(
             name: "knowledged",
-            dependencies: ["KnowledgeRPC", "KnowledgeIndex", "KnowledgeCore"],
+            dependencies: [
+                "KnowledgeRPC",
+                "KnowledgeIndex",
+                "KnowledgeCore",
+                "KnowledgeWorkers",
+            ],
             path: "Sources/knowledged"
+        ),
+        .executableTarget(
+            name: "KnowledgeApp",
+            dependencies: [
+                "KnowledgeUI",
+                "KnowledgeCore",
+            ],
+            path: "Sources/KnowledgeApp",
+            exclude: ["Info.plist"]
         ),
     ]
 )

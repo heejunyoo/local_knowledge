@@ -25,3 +25,8 @@ public struct HealthResult: Codable, Sendable {
         self.reviewNeededCount = reviewNeededCount
     }
 }
+
+// Bump when daemon capabilities change (pipeline tick, etc.)
+public enum DaemonVersion {
+    public static let current = "0.2.0-pr06"
+}

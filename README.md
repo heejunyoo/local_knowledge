@@ -71,6 +71,15 @@ Run pipeline daemon (dev):
 swift run knowledged --root ~/Knowledge
 # UDS: ~/Knowledge/cache/daemon.sock  (mode 0600)
 # methods: ping, health, meeting.create, meeting.transition, meeting.get, meeting.list
+# Auto-tick: recorded → ASR → transcribed (or transcribe_failed, never silent success)
+```
+
+Menu bar UI (Toss-inspired):
+
+```bash
+./scripts/run-ui.sh
+# or: swift run KnowledgeApp
+# Design tokens: docs/ui/toss_design.md
 ```
 
 ## Feature flags
@@ -89,9 +98,10 @@ MVP defaults: all automation extras off (`critic`, `vector_search`, `notes_inges
 | 04 | Daemon + UDS JSON-RPC (`knowledged`) |
 | **05w** | Tool bootstrap + sha256 verify |
 | **05** | Mic capture library + heartbeat + RPC handoff |
-| **06a** | Whisper invoker (runs only if binary installed) |
+| 06a / **06** | Whisper invoker + daemon auto tick |
+| **UI** | Menu bar app — Toss design philosophy |
 | 07–08 | Summarize Stage1/2 |
-| 10a–11 | Menu bar, review, vault commit → **MVP exit** |
+| 10b–11 | Review accept + vault commit → **MVP exit** |
 
 Priority rationale: `docs/mvp_priority_scoring.md`  
 Design SoT: `~/Documents/PKM-native-app-design.md`

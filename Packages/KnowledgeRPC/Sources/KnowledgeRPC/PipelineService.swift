@@ -4,7 +4,7 @@ import KnowledgeIndex
 
 /// In-process request handler used by the daemon (and tests).
 public final class PipelineService: @unchecked Sendable {
-    public static let version = "0.1.0-pr04"
+    public static let version = DaemonVersion.current
     private let store: KnowledgeStore
     private let policy: PeerPolicy
 
