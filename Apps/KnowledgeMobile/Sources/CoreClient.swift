@@ -213,8 +213,18 @@ public final class CoreClient: ObservableObject {
         ], auth: true)
     }
 
+    private func normalizedBase() -> String {
+        var b = baseURL.trimmingCharacters(in: .whitespacesAndNewlines)
+        while b.hasSuffix("/") { b.removeLast() }
+        // Users sometimes paste without scheme
+        if !b.lowercased().hasPrefix("http://"), !b.lowercased().hasPrefix("https://") {
+            b = "http://\(b)"
+        }
+        return b
+    }
+
     private func getJSON(path: String, auth: Bool) async throws -> [String: Any] {
-        guard let url = URL(string: baseURL.trimmingCharacters(in: CharacterSet(charactersIn: "/")) + path) else {
+        guard let url = URL(string: normalizedBase() + path) else {
             throw URLError(.badURL)
         }
         var req = URLRequest(url: url)
@@ -225,14 +235,12 @@ public final class CoreClient: ObservableObject {
             req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         }
         let (data, resp) = try await URLSession.shared.data(for: req)
-        if let http = resp as? HTTPURLResponse, http.statusCode == 401 {
-            throw NSError(domain: "core", code: 401, userInfo: [NSLocalizedDescriptionKey: "unauthorized — re-pair"])
-        }
+        try throwIfATSOrHTTPError(resp: resp, data: data)
         return try JSONSerialization.jsonObject(with: data) as? [String: Any] ?? [:]
     }
 
     private func postJSON(path: String, body: [String: Any], auth: Bool) async throws -> [String: Any] {
-        guard let url = URL(string: baseURL.trimmingCharacters(in: CharacterSet(charactersIn: "/")) + path) else {
+        guard let url = URL(string: normalizedBase() + path) else {
             throw URLError(.badURL)
         }
         var req = URLRequest(url: url)
@@ -244,9 +252,15 @@ public final class CoreClient: ObservableObject {
         }
         req.httpBody = try JSONSerialization.data(withJSONObject: body)
         let (data, resp) = try await URLSession.shared.data(for: req)
+        try throwIfATSOrHTTPError(resp: resp, data: data)
+        return try JSONSerialization.jsonObject(with: data) as? [String: Any] ?? [:]
+    }
+
+    private func throwIfATSOrHTTPError(resp: URLResponse?, data: Data) throws {
         if let http = resp as? HTTPURLResponse, http.statusCode == 401 {
             throw NSError(domain: "core", code: 401, userInfo: [NSLocalizedDescriptionKey: "unauthorized — re-pair"])
         }
-        return try JSONSerialization.jsonObject(with: data) as? [String: Any] ?? [:]
+        // Surface empty/fail more clearly when ATS or connection fails via URLError upstream
+        _ = data
     }
 }

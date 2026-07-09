@@ -39,6 +39,11 @@ open Apps/KnowledgeMobile/KnowledgeMobile.xcodeproj
 - **확인함** — `knowledge.review.list` / `.accept`  
 - **설정** — URL · 서버 revoke  
 
-## Network
+## Network / ATS
 
-Cleartext HTTP to Tailscale IPs is allowed via `NSAllowsLocalNetworking` / `NSAllowsArbitraryLoads` (dev). Production path remains private mesh only — no public port forward.
+Core uses **HTTP** on Tailscale (`http://100.x.x.x:8741`).  
+`Info.plist` sets `NSAllowsArbitraryLoads` + `NSAllowsLocalNetworking` (Tailscale 100.x is not always “local” to ATS).
+
+After changing Info.plist: Xcode **Product → Clean Build Folder**, delete app from iPhone, **Run** again.
+
+If you still see *App Transport Security policy requires secure connection*, the installed build is stale — reinstall from Xcode.

@@ -16,11 +16,15 @@ struct PairingView: View {
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                 }
-                Section("Core (Tailscale IP)") {
+                Section("Core URL") {
+                    Text("Mac 설정 → 모바일 연결에 있는 주소를 그대로 넣으세요. http:// 로 시작해야 해요.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                     TextField("http://100.x.y.z:8741", text: $core.baseURL)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
                         .keyboardType(.URL)
+                        .textContentType(.URL)
                 }
                 Section("페어링") {
                     TextField("6자리 코드", text: $code)
