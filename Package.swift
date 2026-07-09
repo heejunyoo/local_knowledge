@@ -8,6 +8,7 @@ let package = Package(
     ],
     products: [
         .library(name: "KnowledgeCore", targets: ["KnowledgeCore"]),
+        .library(name: "KnowledgeIndex", targets: ["KnowledgeIndex"]),
     ],
     targets: [
         .target(
@@ -18,6 +19,19 @@ let package = Package(
             name: "KnowledgeCoreTests",
             dependencies: ["KnowledgeCore"],
             path: "Packages/KnowledgeCore/Tests/KnowledgeCoreTests"
+        ),
+        .target(
+            name: "KnowledgeIndex",
+            dependencies: ["KnowledgeCore"],
+            path: "Packages/KnowledgeIndex/Sources/KnowledgeIndex",
+            linkerSettings: [
+                .linkedLibrary("sqlite3"),
+            ]
+        ),
+        .testTarget(
+            name: "KnowledgeIndexTests",
+            dependencies: ["KnowledgeIndex", "KnowledgeCore"],
+            path: "Packages/KnowledgeIndex/Tests/KnowledgeIndexTests"
         ),
     ]
 )

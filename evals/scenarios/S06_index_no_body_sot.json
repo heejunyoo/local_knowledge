@@ -1,0 +1,9 @@
+{
+  "id": "S06",
+  "title": "Meeting index has no body/markdown SoT column (pointer only)",
+  "kind": "graph",
+  "assertions": [
+    { "type": "edge_exists", "from": "commit_pending", "to": "committed", "expected": true },
+    { "type": "edge_exists", "from": "review_needed", "to": "committed", "expected": false }
+  ]
+}

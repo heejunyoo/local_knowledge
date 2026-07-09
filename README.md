@@ -76,8 +76,8 @@ MVP defaults: all automation extras off (`critic`, `vector_search`, `notes_inges
 | PR | Scope |
 |----|--------|
 | 01 | Monorepo + policy SoT + schema + `KnowledgeCore` thresholds/types |
-| **02** | Pipeline state graph (default deny) + recovery R1–R6 + ScenarioRunner ← *current* |
-| 03 | SQLite index |
+| 02 | Pipeline state graph (default deny) + recovery R1–R6 + ScenarioRunner |
+| **03** | SQLite index (meetings, FTS, pipeline_events) ← *current* |
 | 04 | Daemon + UDS JSON-RPC |
 | 05w / 05–08 | Workers, mic, ASR, summarize, Stage2 |
 | 10a–11 | Menu bar, review, vault commit → **MVP exit** |
