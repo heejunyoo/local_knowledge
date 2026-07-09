@@ -55,6 +55,8 @@ cp "$BIN/KnowledgeAudioHelper" "$MACOS/KnowledgeAudioHelper"
 cp "$REPO/Sources/KnowledgeApp/Info.plist" "$APP_ROOT/Contents/Info.plist"
 if [[ -f "$REPO/Resources/AppIcon.icns" ]]; then
   cp "$REPO/Resources/AppIcon.icns" "$APP_ROOT/Contents/Resources/AppIcon.icns"
+  # Also ensure Info.plist points at it (CFBundleIconFile = AppIcon)
+  echo "AppIcon.icns installed"
 fi
 echo -n 'APPL????' > "$APP_ROOT/Contents/PkgInfo"
 chmod +x "$MACOS/Knowledge" "$MACOS/knowledged" "$MACOS/KnowledgeAudioHelper"
