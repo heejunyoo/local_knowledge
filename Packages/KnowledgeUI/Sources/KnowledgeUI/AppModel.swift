@@ -27,6 +27,7 @@ public final class AppModel: ObservableObject {
     private var pollTimer: Timer?
     private let supervisor: DaemonSupervisor
     private var asrInFlight = Set<String>()
+    private var isStartingCapture = false
     private let dbPath: String
 
     public struct MeetingRow: Identifiable, Equatable {
@@ -188,15 +189,31 @@ public final class AppModel: ObservableObject {
 
     public func startRecording() {
         lastError = nil
+        if isStartingCapture || isRecording {
+            statusMessage = "이미 녹음을 준비하고 있어요"
+            return
+        }
         if !healthOK { bootstrapBackendIfNeeded() }
         guard healthOK else {
             statusMessage = "아직 준비가 덜 됐어요. 잠깐만요"
             return
         }
+        isStartingCapture = true
         Task { @MainActor in
+            defer { isStartingCapture = false }
             do {
+                // Cancel any in-memory capture left over
+                if let old = capture {
+                    try? old.failSession()
+                    capture = nil
+                    isRecording = false
+                    activeMeetingId = nil
+                }
                 // Clear leftover recording rows from crashes before create
                 try? abandonOrphanRecordings()
+                // Also force-clear via local DB (belt and suspenders)
+                try? forceAbandonRecordingRowsLocally()
+
                 let ctrl = CaptureSessionController(
                     knowledgeRoot: knowledgeRoot,
                     socketPath: socketPath,
@@ -211,14 +228,27 @@ public final class AppModel: ObservableObject {
                 appendUILog("system audio recording started \(id)")
                 refresh()
             } catch {
-                lastError = error.localizedDescription
+                let msg = (error as? LocalizedError)?.errorDescription
+                    ?? (error as? CaptureError)?.description
+                    ?? String(describing: error)
+                lastError = msg
                 statusMessage = "녹음을 시작하지 못했어요"
-                appendUILog("startRecording error \(error)")
-                // Offer Settings for screen capture denial
-                if error.localizedDescription.contains("화면 기록") {
+                appendUILog("startRecording error \(msg)")
+                if msg.contains("화면 기록") || msg.localizedCaseInsensitiveContains("screen") {
                     Self.openScreenRecordingSettings()
                 }
+                refresh()
             }
+        }
+    }
+
+    private func forceAbandonRecordingRowsLocally() throws {
+        let store = try KnowledgeStore(path: dbPath)
+        for m in try store.meetings(withStatus: .recording) {
+            var copy = m
+            copy.status = .abandoned
+            copy.errorCode = "stale_recording_cleared"
+            try store.upsertMeeting(copy)
         }
     }
 

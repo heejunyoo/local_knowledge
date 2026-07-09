@@ -66,7 +66,7 @@ public enum AudioArtifactBuilder {
     }
 }
 
-public enum CaptureError: Error, Equatable, CustomStringConvertible {
+public enum CaptureError: Error, Equatable, CustomStringConvertible, LocalizedError {
     case alreadyRecording
     case notRecording
     case permissionDenied
@@ -76,12 +76,14 @@ public enum CaptureError: Error, Equatable, CustomStringConvertible {
 
     public var description: String {
         switch self {
-        case .alreadyRecording: return "already recording"
-        case .notRecording: return "not recording"
-        case .permissionDenied: return "microphone permission denied"
-        case .emptyAudio: return "empty audio file"
+        case .alreadyRecording: return "이미 녹음 중이에요"
+        case .notRecording: return "녹음이 시작되지 않았어요"
+        case .permissionDenied: return "녹음 권한이 없어요"
+        case .emptyAudio: return "녹음 파일이 비어 있어요"
         case let .engine(m): return m
-        case .cancelled: return "cancelled"
+        case .cancelled: return "녹음이 취소됐어요"
         }
     }
+
+    public var errorDescription: String? { description }
 }

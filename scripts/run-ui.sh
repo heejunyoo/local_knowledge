@@ -1,24 +1,27 @@
 #!/usr/bin/env bash
-# Build .app + start daemon + open UI window (visible).
+# 제품 실행 경로: ~/Applications/Knowledge.app (터미널 권한 빌려쓰기 아님)
 set -euo pipefail
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$REPO"
 
 export KNOWLEDGE_ROOT="${KNOWLEDGE_ROOT:-$HOME/Knowledge}"
 "$REPO/scripts/bootstrap-knowledge-root.sh" >/dev/null 2>&1 || true
-
-echo "==> Build Knowledge.app"
 "$REPO/scripts/package-app.sh" debug
-APP="$REPO/.build/debug/Knowledge.app"
-DAEMON="$REPO/.build/debug/knowledged"
 
-# Stop stale UI only — daemon is app-managed; leave existing if healthy
+APP="$HOME/Applications/Knowledge.app"
 killall Knowledge 2>/dev/null || true
-killall KnowledgeApp 2>/dev/null || true
 sleep 0.3
 
-echo "==> Open UI (daemon auto-starts inside the app)"
+# 데몬은 앱이 자동 기동. 개발 중 소켓만 미리 띄우고 싶으면 WITH_DAEMON=1
+if [[ "${WITH_DAEMON:-0}" == "1" ]]; then
+  nohup "$APP/Contents/MacOS/knowledged" --root "$KNOWLEDGE_ROOT" \
+    >>"$KNOWLEDGE_ROOT/logs/knowledged.stdout.log" 2>&1 &
+  sleep 0.4
+fi
+
+echo "Opening $APP"
 open "$APP"
 echo ""
-echo "사용자는 CLI로 데몬을 켤 필요 없습니다."
-echo "창이 안 보이면 Dock에서 Knowledge 를 클릭하세요."
+echo "※ 터미널에서 swift run 하면 Terminal 권한이 섞일 수 있어요."
+echo "  권한은 시스템 설정 → 화면 기록 → Knowledge 에 주세요."
+echo "  권한 변경 후: killall Knowledge; open \"$APP\""
