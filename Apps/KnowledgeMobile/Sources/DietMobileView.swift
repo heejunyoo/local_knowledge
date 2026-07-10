@@ -36,6 +36,12 @@ struct DietMobileView: View {
     @State private var planEta: String?
     @State private var planDetail: String?
     @State private var needsProfile = true
+    @State private var profileBusy = false
+    @State private var profileMessage: String?
+    @State private var profileError: String?
+    @State private var goalsBusy = false
+    @State private var goalsMessage: String?
+    @State private var goalsError: String?
 
     private let slots = ["아침", "점심", "저녁", "간식"]
     /// name, grams, unit, kcal, protein — default serving (approx)
@@ -54,7 +60,7 @@ struct DietMobileView: View {
 
     var body: some View {
         NavigationStack {
-            ZStack {
+            ZStack(alignment: .top) {
                 KPageBackground()
                 ScrollView {
                     VStack(alignment: .leading, spacing: KSpace.x5) {
@@ -72,9 +78,6 @@ struct DietMobileView: View {
                             secondaryBtn("주간") { showWeek = true }
                             secondaryBtn("목표") { loadGoals(); showGoals = true }
                         }
-                        if let flash {
-                            Text(flash).font(.caption).fontWeight(.semibold).foregroundStyle(KColor.blue500)
-                        }
                         if let err {
                             Text(err).font(.caption).foregroundStyle(KColor.red500)
                         }
@@ -83,14 +86,47 @@ struct DietMobileView: View {
                     .padding(.vertical, KSpace.x4)
                 }
                 .scrollDismissesKeyboard(.interactively)
+
+                // Always-visible toast (was buried at bottom of scroll before)
+                if let flash {
+                    HStack(alignment: .top, spacing: 10) {
+                        Image(systemName: "checkmark.circle.fill")
+                            .foregroundStyle(KColor.green500)
+                            .font(.system(size: 20))
+                        Text(flash)
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundStyle(KColor.grey900)
+                            .fixedSize(horizontal: false, vertical: true)
+                        Spacer(minLength: 0)
+                        Button {
+                            self.flash = nil
+                        } label: {
+                            Image(systemName: "xmark")
+                                .font(.system(size: 12, weight: .bold))
+                                .foregroundStyle(KColor.grey500)
+                        }
+                    }
+                    .padding(14)
+                    .background(.ultraThinMaterial)
+                    .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                    .shadow(color: .black.opacity(0.12), radius: 12, y: 4)
+                    .padding(.horizontal, KSpace.x6)
+                    .padding(.top, 8)
+                    .transition(.move(edge: .top).combined(with: .opacity))
+                    .zIndex(10)
+                }
             }
+            .animation(.easeInOut(duration: 0.25), value: flash)
             .navigationBarTitleDisplayMode(.inline)
             .refreshable { await reload() }
             .task { await reload() }
             .sheet(isPresented: $showLog) { logSheet }
             .sheet(isPresented: $showWeek) { weekSheet }
             .sheet(isPresented: $showGoals) { goalsSheet }
-            .sheet(isPresented: $showProfile) { profileSheet }
+            .sheet(isPresented: $showProfile) {
+                profileSheet
+                    .onAppear { loadProfileFields() }
+            }
             .toolbar {
                 ToolbarItemGroup(placement: .keyboard) {
                     Spacer()
@@ -113,7 +149,12 @@ struct DietMobileView: View {
                     .foregroundStyle(KColor.grey500)
             }
             Spacer()
-            Button("내 정보") { showProfile = true }
+            Button("내 정보") {
+                loadProfileFields()
+                profileMessage = nil
+                profileError = nil
+                showProfile = true
+            }
                 .font(.system(size: 15, weight: .semibold))
                 .foregroundStyle(KColor.blue500)
         }
@@ -531,7 +572,24 @@ struct DietMobileView: View {
                 Section {
                     Text("초보라면 「내 정보」에서 키·몸무게만 넣으면 여기가 자동으로 채워져요.\n% = 오늘 기록 ÷ 목표")
                         .font(.caption).foregroundStyle(.secondary)
-                    Button("내 정보로 자동 계산") { showGoals = false; showProfile = true }
+                    Button("내 정보로 자동 계산") {
+                        showGoals = false
+                        showProfile = true
+                    }
+                }
+                if let goalsMessage {
+                    Section {
+                        Label(goalsMessage, systemImage: "checkmark.circle.fill")
+                            .foregroundStyle(KColor.green500)
+                            .font(.system(size: 14, weight: .semibold))
+                    }
+                }
+                if let goalsError {
+                    Section {
+                        Text(goalsError)
+                            .font(.caption)
+                            .foregroundStyle(KColor.red500)
+                    }
                 }
                 Section {
                     TextField("숫자", text: $goalKcal).keyboardType(.numberPad)
@@ -549,11 +607,32 @@ struct DietMobileView: View {
                 Section {
                     TextField("분", text: $goalDayMin).keyboardType(.numberPad)
                 } header: { Text("하루 운동 시간") }
-                Button("저장") { Task { await saveGoals() } }
+                Section {
+                    Button {
+                        Task { await saveGoals() }
+                    } label: {
+                        HStack {
+                            Spacer()
+                            if goalsBusy {
+                                ProgressView()
+                            } else {
+                                Text("목표 저장").fontWeight(.semibold)
+                            }
+                            Spacer()
+                        }
+                    }
+                    .disabled(goalsBusy)
+                }
             }
             .navigationTitle("목표")
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("닫기") { showGoals = false } }
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("닫기") {
+                        showGoals = false
+                        goalsMessage = nil
+                        goalsError = nil
+                    }
+                }
                 ToolbarItemGroup(placement: .keyboard) {
                     Spacer()
                     Button("완료") {
@@ -563,6 +642,7 @@ struct DietMobileView: View {
             }
         }
         .presentationDetents([.medium, .large])
+        .onAppear { goalsMessage = nil; goalsError = nil }
     }
 
     private var profileSheet: some View {
@@ -571,6 +651,22 @@ struct DietMobileView: View {
                 Section {
                     Text("다이어트 막 시작할 때 쓰는 최소 정보예요. 저장하면 목표 칼로리·단백질을 자동으로 넣고, 도달 시점도 계산해요.")
                         .font(.caption).foregroundStyle(.secondary)
+                }
+                if let profileMessage {
+                    Section {
+                        Label(profileMessage, systemImage: "checkmark.circle.fill")
+                            .foregroundStyle(KColor.green500)
+                            .font(.system(size: 14, weight: .semibold))
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+                if let profileError {
+                    Section {
+                        Text(profileError)
+                            .font(.caption)
+                            .foregroundStyle(KColor.red500)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
                 }
                 Section("기본") {
                     TextField("키 (cm)", text: $pHeight).keyboardType(.decimalPad)
@@ -591,13 +687,35 @@ struct DietMobileView: View {
                         Text("많이 (주 6–7)").tag("active")
                     }
                 }
-                Button("저장하고 목표 자동 적용") {
-                    Task { await saveProfile() }
+                Section {
+                    Button {
+                        Task { await saveProfile() }
+                    } label: {
+                        HStack {
+                            Spacer()
+                            if profileBusy {
+                                ProgressView()
+                            } else {
+                                Text("저장하고 목표 자동 적용").fontWeight(.semibold)
+                            }
+                            Spacer()
+                        }
+                    }
+                    .disabled(profileBusy)
+                } footer: {
+                    Text("저장되면 위에 초록 확인 문구가 보인 뒤 닫혀요.")
+                        .font(.caption2)
                 }
             }
             .navigationTitle("내 정보")
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("닫기") { showProfile = false } }
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("닫기") {
+                        showProfile = false
+                        profileMessage = nil
+                        profileError = nil
+                    }
+                }
                 ToolbarItemGroup(placement: .keyboard) {
                     Spacer()
                     Button("완료") {
@@ -607,6 +725,7 @@ struct DietMobileView: View {
             }
         }
         .presentationDetents([.large])
+        .onAppear { profileMessage = nil; profileError = nil }
     }
 
     private func reload() async {
@@ -641,23 +760,92 @@ struct DietMobileView: View {
     }
 
     private func saveProfile() async {
-        guard let h = Double(pHeight), let w = Double(pWeight),
-              let age = Int(pAge), let t = Double(pTarget) else {
-            err = "숫자를 확인해 주세요"
+        profileError = nil
+        profileMessage = nil
+        // Accept "165.0" / whitespace / full-width digits lightly
+        let hStr = pHeight.trimmingCharacters(in: .whitespacesAndNewlines)
+        let wStr = pWeight.trimmingCharacters(in: .whitespacesAndNewlines)
+        let ageStr = pAge.trimmingCharacters(in: .whitespacesAndNewlines)
+        let tStr = pTarget.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let h = Double(hStr), let w = Double(wStr),
+              let age = Int(ageStr), let t = Double(tStr),
+              h > 50, h < 250, w > 20, w < 300, age > 10, age < 120, t > 20, t < 300 else {
+            profileError = "키·몸무게·나이·목표 몸무게 숫자를 다시 확인해 주세요."
+            kHapticLight()
             return
         }
+        profileBusy = true
+        defer { profileBusy = false }
         do {
-            _ = try await core.dietSetProfile(
+            let result = try await core.dietSetProfile(
                 heightCm: h, weightKg: w, age: age, sex: pSex,
                 targetWeightKg: t, activity: pActivity, applyGoals: true
             )
+            let goals = result["goals"] as? [String: Any] ?? [:]
+            let kcal = intVal(goals["target_kcal"])
+            let protein = intVal(goals["target_protein_g"])
+            let plan = result["plan"] as? [String: Any]
+            let eta = plan?["eta_text"] as? String
+            var lines = ["저장됐어요. 목표가 적용됐어요."]
+            if kcal > 0 || protein > 0 {
+                lines.append("하루 \(kcal) kcal · 단백질 \(protein)g")
+            }
+            if let eta, !eta.isEmpty {
+                lines.append(eta)
+            }
+            let msg = lines.joined(separator: "\n")
+            profileMessage = msg
+            err = nil
             kHapticSuccess()
-            flash = "프로필 저장 · 목표 적용"
-            showProfile = false
             await reload()
+            // Let user read confirmation in-sheet before close
+            try? await Task.sleep(nanoseconds: 1_600_000_000)
+            showProfile = false
+            profileMessage = nil
+            profileError = nil
+            // Main screen toast after sheet dismisses
+            showFlash("저장 완료 · 목표 \(kcal)kcal · 단백질 \(protein)g 적용됨")
         } catch {
+            profileError = "저장 실패: \(error.localizedDescription)\nMac Core가 켜져 있고 페어링됐는지 확인해 주세요."
             err = error.localizedDescription
+            kHapticLight()
         }
+    }
+
+    private func showFlash(_ text: String) {
+        flash = text
+        Task {
+            try? await Task.sleep(nanoseconds: 4_500_000_000)
+            if flash == text { flash = nil }
+        }
+    }
+
+    private func loadProfileFields() {
+        let p = dashboard["profile"] as? [String: Any] ?? [:]
+        if let h = doubleValOpt(p["height_cm"]) { pHeight = formatNum(h) }
+        if let w = doubleValOpt(p["weight_kg"]) { pWeight = formatNum(w) }
+        if let a = intValOpt(p["age"]) { pAge = "\(a)" }
+        if let s = p["sex"] as? String, !s.isEmpty { pSex = s }
+        if let t = doubleValOpt(p["target_weight_kg"]) { pTarget = formatNum(t) }
+        if let act = p["activity"] as? String, !act.isEmpty { pActivity = act }
+    }
+
+    private func formatNum(_ d: Double) -> String {
+        d.rounded() == d ? "\(Int(d))" : String(format: "%.1f", d)
+    }
+
+    private func doubleValOpt(_ any: Any?) -> Double? {
+        if let d = any as? Double { return d }
+        if let i = any as? Int { return Double(i) }
+        if let s = any as? String { return Double(s) }
+        return nil
+    }
+
+    private func intValOpt(_ any: Any?) -> Int? {
+        if let i = any as? Int { return i }
+        if let d = any as? Double { return Int(d) }
+        if let s = any as? String { return Int(s) }
+        return nil
     }
 
     private func quickMeal(name: String, grams: Int, unit: String, kcal: Double, protein: Double) async {
@@ -738,17 +926,38 @@ struct DietMobileView: View {
     }
 
     private func saveGoals() async {
+        goalsError = nil
+        goalsMessage = nil
+        let kcal = Double(goalKcal.trimmingCharacters(in: .whitespacesAndNewlines)) ?? 0
+        let protein = Double(goalProtein.trimmingCharacters(in: .whitespacesAndNewlines)) ?? 0
+        guard kcal > 500, kcal < 8000, protein > 0, protein < 500 else {
+            goalsError = "칼로리·단백질 숫자를 확인해 주세요."
+            kHapticLight()
+            return
+        }
+        goalsBusy = true
+        defer { goalsBusy = false }
         do {
             try await core.dietSetGoals(
-                kcal: Double(goalKcal) ?? 2000,
-                protein: Double(goalProtein) ?? 100,
-                weeklyWorkouts: Int(goalWeekly) ?? 4,
-                dayMinutes: Int(goalDayMin) ?? 30
+                kcal: kcal,
+                protein: protein,
+                weeklyWorkouts: Int(goalWeekly.trimmingCharacters(in: .whitespacesAndNewlines)) ?? 4,
+                dayMinutes: Int(goalDayMin.trimmingCharacters(in: .whitespacesAndNewlines)) ?? 30
             )
-            showGoals = false
-            flash = "목표 저장"
+            goalsMessage = "저장됐어요 · 하루 \(Int(kcal)) kcal · 단백질 \(Int(protein))g"
+            err = nil
+            kHapticSuccess()
             await reload()
-        } catch { err = error.localizedDescription }
+            try? await Task.sleep(nanoseconds: 1_400_000_000)
+            showGoals = false
+            goalsMessage = nil
+            goalsError = nil
+            showFlash("목표 저장 완료 · \(Int(kcal))kcal · 단백질 \(Int(protein))g")
+        } catch {
+            goalsError = "저장 실패: \(error.localizedDescription)\nMac Core 연결을 확인해 주세요."
+            err = error.localizedDescription
+            kHapticLight()
+        }
     }
 
     private func intVal(_ any: Any?) -> Int {
