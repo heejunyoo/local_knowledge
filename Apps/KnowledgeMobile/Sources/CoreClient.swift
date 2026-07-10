@@ -45,6 +45,13 @@ public final class CoreClient: ObservableObject {
         lastError = nil
         // Normalize URL before first request (ensure http://)
         baseURL = normalizedBase()
+        // Preflight: can we reach Core at all?
+        let probe = await probeCoreHealth()
+        if !probe.ok {
+            lastError = probe.message
+            connected = false
+            return
+        }
         do {
             let body: [String: Any] = ["code": code, "device_name": deviceName]
             let res = try await postJSON(path: "/v1/pair/complete", body: body, auth: false)
@@ -55,17 +62,51 @@ public final class CoreClient: ObservableObject {
                 connected = true
                 lastError = nil
             } else {
-                lastError = res["error"] as? String ?? "pair failed"
+                let raw = res["error"] as? String ?? "pair failed"
+                lastError = friendlyPairError(raw)
             }
         } catch {
-            let msg = error.localizedDescription
-            if msg.localizedCaseInsensitiveContains("App Transport Security")
-                || msg.localizedCaseInsensitiveContains("secure connection") {
-                lastError = "보안 정책 오류가 남아 있으면 앱을 삭제 후 Xcode에서 다시 설치하세요. (\(msg))"
-            } else {
-                lastError = msg
-            }
+            lastError = friendlyPairError(error.localizedDescription)
+            connected = false
         }
+    }
+
+    /// Unauthenticated health probe for recovery UX (G8).
+    public func probeCoreHealth() async -> (ok: Bool, message: String, core: String?) {
+        baseURL = normalizedBase()
+        do {
+            let res = try await getJSON(path: "/v1/health", auth: false)
+            let ok = (res["ok"] as? Bool) ?? true
+            let name = res["core"] as? String
+            if ok {
+                return (true, "Core 응답 OK\(name.map { " · \($0)" } ?? "")", name)
+            }
+            return (false, "Core가 응답했지만 ok=false 예요. Mac 앱을 재시작해 보세요.", name)
+        } catch {
+            return (false, friendlyPairError(error.localizedDescription), nil)
+        }
+    }
+
+    public func friendlyPairError(_ msg: String) -> String {
+        let m = msg.lowercased()
+        if m.contains("app transport security") || m.contains("secure connection") {
+            return "보안 정책 오류예요. 앱을 삭제 후 Xcode에서 다시 설치해 주세요."
+        }
+        if m.contains("timed out") || m.contains("timeout") || m.contains("time out") {
+            return "연결 시간이 초과됐어요. Mac·Tailscale이 켜져 있는지, URL의 IP가 맞는지 확인하세요."
+        }
+        if m.contains("could not connect") || m.contains("connection refused") || m.contains("offline")
+            || m.contains("network") || m.contains("//1") || m.contains("failed to connect") {
+            return "Mac Core에 닿지 않아요. ① Knowledge.app 실행 ② Tailscale 연결 ③ URL이 http://100.x:8741 형태인지 확인하세요."
+        }
+        if m.contains("401") || m.contains("unauthorized") || m.contains("invalid") || m.contains("code")
+            || m.contains("expired") {
+            return "코드가 틀리거나 만료됐을 수 있어요. Mac 설정 → 모바일 연결에서 새 코드를 받아 주세요."
+        }
+        if m.contains("404") {
+            return "주소를 찾을 수 없어요. 포트 8741과 경로가 맞는지 확인하세요."
+        }
+        return msg
     }
 
     public func refreshStatus() async {

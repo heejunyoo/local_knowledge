@@ -88,19 +88,23 @@ echo "Main DR:   $(codesign -d -r- "$INSTALL" 2>&1 | tail -1)"
 echo "Run: open \"$INSTALL\""
 codesign -dv "$INSTALL" 2>&1 | head -12
 
-# Force Dock/Finder icon (CFBundleIconFile alone is often cached stale)
-if [[ -f "$REPO/Resources/AppIcon-1024.png" ]]; then
+# Force Dock/Finder icon with *rounded* master (transparent corners).
+# Full-bleed AppIcon.icns stays for system mask; setIcon needs pre-rounded for correct Dock look.
+ICON_FOR_DOCK="$REPO/Resources/AppIcon-1024-rounded.png"
+if [[ ! -f "$ICON_FOR_DOCK" && -f "$REPO/Resources/AppIcon-1024.png" ]]; then
+  ICON_FOR_DOCK="$REPO/Resources/AppIcon-1024.png"
+fi
+if [[ -f "$ICON_FOR_DOCK" ]]; then
   /usr/bin/swift -e "
 import AppKit
 let app = \"$INSTALL\"
-let icon = \"$REPO/Resources/AppIcon-1024.png\"
+let icon = \"$ICON_FOR_DOCK\"
 if let img = NSImage(contentsOfFile: icon) {
   let ok = NSWorkspace.shared.setIcon(img, forFile: app, options: [])
-  fputs(ok ? \"Dock icon applied via NSWorkspace\\n\" : \"Dock icon apply failed\\n\", stderr)
+  fputs(ok ? \"Dock icon applied (rounded)\\n\" : \"Dock icon apply failed\\n\", stderr)
 }
 " 2>/dev/null || true
   /System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -f "$INSTALL" 2>/dev/null || true
-  # Soft Dock refresh without killing user session hard if Dock already relaunching
   killall Dock 2>/dev/null || true
 fi
 

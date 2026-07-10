@@ -7,8 +7,10 @@ struct PairingView: View {
     @State private var code = ""
     @State private var name = UIDevice.current.name
     @State private var busy = false
+    @State private var probeBusy = false
     @State private var showScanner = false
     @State private var pasteHint: String?
+    @State private var probeLine: String?
 
     var body: some View {
         ZStack {
@@ -24,6 +26,18 @@ struct PairingView: View {
                         .font(.system(size: 15))
                         .foregroundStyle(KColor.grey700)
                         .fixedSize(horizontal: false, vertical: true)
+
+                    KCard {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("연결 전 체크")
+                                .font(.system(size: 13, weight: .semibold))
+                                .foregroundStyle(KColor.grey500)
+                            recoveryStep("1", "Mac에서 Knowledge.app 실행")
+                            recoveryStep("2", "Tailscale 켜기 (같은 tailnet)")
+                            recoveryStep("3", "Mac 설정 → 모바일 연결 → 코드/QR")
+                            recoveryStep("4", "아래 URL이 http://100.x.x.x:8741 형태인지 확인")
+                        }
+                    }
 
                     KPrimaryButton(title: "QR 스캔으로 채우기") {
                         showScanner = true
@@ -58,6 +72,31 @@ struct PairingView: View {
                                 .background(KColor.grey100)
                                 .clipShape(RoundedRectangle(cornerRadius: 12))
 
+                            Button {
+                                Task {
+                                    probeBusy = true
+                                    let r = await core.probeCoreHealth()
+                                    probeLine = r.message
+                                    if !r.ok { core.lastError = r.message }
+                                    probeBusy = false
+                                }
+                            } label: {
+                                HStack {
+                                    if probeBusy { ProgressView() }
+                                    Text(probeBusy ? "확인 중…" : "이 주소로 Core 응답 확인")
+                                        .font(.system(size: 14, weight: .semibold))
+                                }
+                                .foregroundStyle(KColor.blue500)
+                            }
+                            .disabled(probeBusy || core.baseURL.trimmingCharacters(in: .whitespaces).isEmpty)
+
+                            if let probeLine {
+                                Text(probeLine)
+                                    .font(.caption)
+                                    .foregroundStyle(probeLine.contains("OK") ? KColor.green500 : KColor.grey700)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+
                             fieldLabel("페어링 코드")
                             TextField("6자리", text: $code)
                                 .keyboardType(.numberPad)
@@ -77,6 +116,7 @@ struct PairingView: View {
                         Text(err)
                             .font(.system(size: 14))
                             .foregroundStyle(KColor.red500)
+                            .fixedSize(horizontal: false, vertical: true)
                     }
 
                     KPrimaryButton(title: busy ? "연결 중…" : "연결하기", enabled: !busy && code.count >= 4 && !core.baseURL.isEmpty) {
@@ -85,6 +125,7 @@ struct PairingView: View {
                             await core.completePair(code: code, deviceName: name)
                             busy = false
                             if core.isPaired { kHapticSuccess() }
+                            else { kHapticLight() }
                         }
                     }
                 }
@@ -101,6 +142,19 @@ struct PairingView: View {
                 onClose: { showScanner = false }
             )
             .ignoresSafeArea()
+        }
+    }
+
+    private func recoveryStep(_ n: String, _ text: String) -> some View {
+        HStack(alignment: .top, spacing: 8) {
+            Text(n)
+                .font(.system(size: 12, weight: .bold))
+                .foregroundStyle(KColor.blue500)
+                .frame(width: 18)
+            Text(text)
+                .font(.system(size: 14))
+                .foregroundStyle(KColor.grey900)
+                .fixedSize(horizontal: false, vertical: true)
         }
     }
 
@@ -716,6 +770,8 @@ struct SettingsMobileView: View {
     @EnvironmentObject var core: CoreClient
     @State private var revoking = false
     @State private var healthBusy = false
+    @State private var probeBusy = false
+    @State private var probeLine: String?
     @ObservedObject private var hk = HealthKitBridge.shared
 
     var body: some View {
@@ -726,7 +782,46 @@ struct SettingsMobileView: View {
                     .autocorrectionDisabled()
                     .keyboardType(.URL)
                 LabeledContent("기기", value: core.deviceId.isEmpty ? "—" : String(core.deviceId.prefix(8)) + "…")
-                LabeledContent("상태", value: core.connected ? "연결됨" : "끊김")
+                LabeledContent("상태", value: core.connected ? "연결됨 · \(core.coreName.isEmpty ? "Core" : core.coreName)" : "끊김")
+                if let err = core.lastError, !core.connected {
+                    Text(err)
+                        .font(.caption)
+                        .foregroundStyle(KColor.red500)
+                }
+            }
+            Section("연결 문제 해결") {
+                Text("안 될 때 순서대로 확인해 주세요.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Text("1. Mac Knowledge.app 실행")
+                Text("2. Tailscale 연결")
+                Text("3. Mac 설정 → 모바일 연결에서 새 코드")
+                Text("4. 아래 「Core 응답 확인」")
+                    .font(.subheadline)
+                Button {
+                    Task {
+                        probeBusy = true
+                        let r = await core.probeCoreHealth()
+                        probeLine = r.message
+                        if r.ok {
+                            await core.refreshStatus()
+                        } else {
+                            core.lastError = r.message
+                        }
+                        probeBusy = false
+                    }
+                } label: {
+                    if probeBusy { ProgressView() } else { Text("Core 응답 확인") }
+                }
+                .disabled(probeBusy)
+                if let probeLine {
+                    Text(probeLine)
+                        .font(.caption)
+                        .foregroundStyle(probeLine.contains("OK") ? KColor.green500 : .secondary)
+                }
+                Button("연결 새로고침") {
+                    Task { await core.refreshStatus() }
+                }
             }
             Section("Apple 건강 (W1)") {
                 if !hk.isAvailable {
@@ -762,7 +857,6 @@ struct SettingsMobileView: View {
                 }
             }
             Section {
-                Button("연결 새로고침") { Task { await core.refreshStatus() } }
                 Button(role: .destructive) {
                     Task {
                         revoking = true
@@ -770,8 +864,10 @@ struct SettingsMobileView: View {
                         revoking = false
                     }
                 } label: {
-                    if revoking { ProgressView() } else { Text("페어링 해제") }
+                    if revoking { ProgressView() } else { Text("페어링 해제 · 다시 연결") }
                 }
+            } footer: {
+                Text("페어링을 해제하면 처음부터 QR/코드로 다시 연결해요.")
             }
             Section {
                 Text("데이터는 Mac에 있어요. Free 계정은 약 7일마다 재설치가 필요할 수 있어요.")
