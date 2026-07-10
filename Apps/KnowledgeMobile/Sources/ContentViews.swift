@@ -160,6 +160,34 @@ struct HomeMobileView: View {
 
                         connectionChip
 
+                        if !core.connected && core.isPaired {
+                            KCard {
+                                VStack(alignment: .leading, spacing: 10) {
+                                    Text("Mac에 연결되지 않았어요")
+                                        .font(.system(size: 15, weight: .semibold))
+                                        .foregroundStyle(KColor.grey900)
+                                    Text("Knowledge.app이 켜져 있는지, Tailscale·Core URL을 확인해 주세요.")
+                                        .font(.system(size: 13))
+                                        .foregroundStyle(KColor.grey500)
+                                        .fixedSize(horizontal: false, vertical: true)
+                                    HStack(spacing: 12) {
+                                        Button("다시 연결") {
+                                            Task { await core.refreshStatus() }
+                                        }
+                                        .font(.system(size: 14, weight: .semibold))
+                                        .foregroundStyle(KColor.blue500)
+                                        NavigationLink {
+                                            SettingsMobileView()
+                                        } label: {
+                                            Text("설정 열기")
+                                                .font(.system(size: 14, weight: .semibold))
+                                                .foregroundStyle(KColor.blue500)
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
                         // W0 Assistant Hub — body / knowledge / next (one screen)
                         KCard {
                             VStack(alignment: .leading, spacing: 12) {
@@ -510,7 +538,13 @@ struct AskMobileView: View {
             do {
                 status = "답 만드는 중…"
                 // Prefer /v1/chat for intent routing (knowledge / diet / mixed) + sources transparency.
-                if let chat = try? await core.chat(message: q), !chat.answer.isEmpty {
+                if !core.connected {
+                    messages.append(ChatBubble(
+                        role: "assistant",
+                        text: "Mac에 연결되지 않았어요. 더보기 → 설정에서 Core URL·페어링을 확인해 주세요.",
+                        meta: "연결 필요"
+                    ))
+                } else if let chat = try? await core.chat(message: q), !chat.answer.isEmpty {
                     let src = chat.sources.prefix(4).compactMap { s -> String? in
                         let svc = s["service"] as? String ?? ""
                         let title = s["title"] as? String ?? ""
@@ -522,13 +556,25 @@ struct AskMobileView: View {
                     messages.append(ChatBubble(role: "assistant", text: chat.answer, meta: meta))
                 } else {
                     let full = try await core.ask(q: q)
-                    let cites = full.citations.prefix(3).compactMap { $0["title"] as? String }.joined(separator: " · ")
-                    let meta = [full.engine.isEmpty ? nil : full.engine, cites.isEmpty ? nil : "출처 \(cites)"]
-                        .compactMap { $0 }.joined(separator: " · ")
-                    messages.append(ChatBubble(role: "assistant", text: full.answer, meta: meta))
+                    if full.answer.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                        messages.append(ChatBubble(
+                            role: "assistant",
+                            text: "답을 만들지 못했어요. Mac Core와 클라우드 키(설정)를 확인해 주세요.",
+                            meta: "빈 응답"
+                        ))
+                    } else {
+                        let cites = full.citations.prefix(3).compactMap { $0["title"] as? String }.joined(separator: " · ")
+                        let meta = [full.engine.isEmpty ? nil : full.engine, cites.isEmpty ? nil : "출처 \(cites)"]
+                            .compactMap { $0 }.joined(separator: " · ")
+                        messages.append(ChatBubble(role: "assistant", text: full.answer, meta: meta))
+                    }
                 }
             } catch {
-                messages.append(ChatBubble(role: "assistant", text: "오류: \(error.localizedDescription)", meta: ""))
+                messages.append(ChatBubble(
+                    role: "assistant",
+                    text: "질문을 처리하지 못했어요.\n\(error.localizedDescription)\nMac 앱이 켜져 있는지 확인해 주세요.",
+                    meta: "오류"
+                ))
             }
             busy = false
             status = ""

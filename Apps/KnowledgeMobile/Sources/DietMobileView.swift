@@ -466,7 +466,7 @@ struct DietMobileView: View {
                     .foregroundStyle(KColor.grey500)
                 Spacer()
                 if !meals.isEmpty || !workouts.isEmpty {
-                    Text("왼쪽으로 밀면 삭제")
+                    Text("삭제 버튼 · 길게 눌러도 삭제")
                         .font(.system(size: 11))
                         .foregroundStyle(KColor.grey500)
                 }
@@ -1002,9 +1002,13 @@ struct DietMobileView: View {
                 note: "기본 \(grams)\(unit)"
             )
             kHapticSuccess()
-            flash = "\(name) \(grams)\(unit) · ~\(Int(kcal))kcal"
+            showFlash("\(name) \(grams)\(unit) · ~\(Int(kcal))kcal 저장됐어요")
             await reload()
-        } catch { err = error.localizedDescription }
+        } catch {
+            err = error.localizedDescription
+            showFlash("저장 실패: \(error.localizedDescription)")
+            kHapticLight()
+        }
     }
 
     private func commitQuick() async {
@@ -1014,51 +1018,76 @@ struct DietMobileView: View {
             if line.contains("운동") || line.lowercased().contains("workout") {
                 let minutes = Int(line.filter(\.isNumber)) ?? 20
                 try await core.dietLogWorkout(kind: line, minutes: minutes, intensity: nil)
+                showFlash("운동 \(minutes)분 저장됐어요")
             } else {
                 let digits = line.components(separatedBy: CharacterSet.decimalDigits.inverted).filter { !$0.isEmpty }
                 let kcal = digits.first.flatMap { Double($0) }
                 let text = line.contains(selectedSlot) ? line : "\(selectedSlot) \(line)"
                 try await core.dietLogMeal(items: [text], kcal: kcal, proteinG: nil, note: line)
+                showFlash("식사 저장됐어요")
             }
             quickLine = ""
             kHapticSuccess()
-            flash = "저장"
             await reload()
-        } catch { err = error.localizedDescription }
+        } catch {
+            err = error.localizedDescription
+            showFlash("저장 실패: \(error.localizedDescription)")
+            kHapticLight()
+        }
     }
 
     private func saveMeal() async {
         let items = mealItems.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
-        guard !items.isEmpty else { return }
+        guard !items.isEmpty else {
+            showFlash("음식 이름을 입력해 주세요")
+            return
+        }
         let labeled = items.map { $0.contains(selectedSlot) ? $0 : "\(selectedSlot) \($0)" }
         do {
             try await core.dietLogMeal(items: labeled, kcal: Double(mealKcal), proteinG: Double(mealProtein), note: nil)
             mealItems = ""; mealKcal = ""; mealProtein = ""
-            flash = "식사 저장"
             showLog = false
             kHapticSuccess()
+            showFlash("식사 저장됐어요")
             await reload()
-        } catch { err = error.localizedDescription }
+        } catch {
+            err = error.localizedDescription
+            showFlash("식사 저장 실패: \(error.localizedDescription)")
+            kHapticLight()
+        }
     }
 
     private func saveWorkout() async {
         do {
             try await core.dietLogWorkout(kind: workoutKind, minutes: Int(workoutMin) ?? 0, intensity: nil)
-            flash = "운동 저장"
             showLog = false
             kHapticSuccess()
+            showFlash("운동 저장됐어요")
             await reload()
-        } catch { err = error.localizedDescription }
+        } catch {
+            err = error.localizedDescription
+            showFlash("운동 저장 실패: \(error.localizedDescription)")
+            kHapticLight()
+        }
     }
 
     private func saveMetric() async {
+        guard Double(weightKg) != nil || Double(sleepH) != nil else {
+            showFlash("체중 또는 수면을 입력해 주세요")
+            return
+        }
         do {
             try await core.dietLogMetric(weightKg: Double(weightKg), sleepH: Double(sleepH))
             weightKg = ""; sleepH = ""
-            flash = "지표 저장"
             showLog = false
+            kHapticSuccess()
+            showFlash("지표 저장됐어요")
             await reload()
-        } catch { err = error.localizedDescription }
+        } catch {
+            err = error.localizedDescription
+            showFlash("지표 저장 실패: \(error.localizedDescription)")
+            kHapticLight()
+        }
     }
 
     private func loadGoals() {

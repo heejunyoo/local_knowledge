@@ -56,7 +56,7 @@ public struct DietView: View {
     }
 
     public var body: some View {
-        ZStack {
+        ZStack(alignment: .top) {
             TossColor.grey100.ignoresSafeArea()
             ScrollView(showsIndicators: false) {
                 VStack(alignment: .leading, spacing: TossSpace.x5) {
@@ -73,20 +73,44 @@ public struct DietView: View {
                     }
                     todayList
                     secondaryActions
-                    if let flash {
-                        Text(flash)
-                            .font(TossFont.caption())
-                            .fontWeight(.semibold)
-                            .foregroundStyle(TossColor.blue500)
-                    }
                     Spacer(minLength: TossSpace.x8)
                 }
                 .padding(.horizontal, TossSpace.x6)
                 .padding(.top, TossSpace.x6)
                 .animation(TossMotion.soft, value: dash.day.meals.count)
-                .animation(TossMotion.soft, value: flash)
+            }
+
+            if let flash {
+                HStack(alignment: .top, spacing: 10) {
+                    Image(systemName: flash.contains("실패") || flash.contains("확인")
+                          ? "exclamationmark.circle.fill" : "checkmark.circle.fill")
+                        .foregroundStyle(
+                            flash.contains("실패") || flash.contains("확인")
+                            ? TossColor.red500 : TossColor.blue500
+                        )
+                    Text(flash)
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(TossColor.grey900)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Spacer(minLength: 0)
+                    Button { self.flash = nil } label: {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 11, weight: .bold))
+                            .foregroundStyle(TossColor.grey500)
+                    }
+                    .buttonStyle(.plain)
+                }
+                .padding(14)
+                .background(.ultraThinMaterial)
+                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                .shadow(color: .black.opacity(0.1), radius: 10, y: 3)
+                .padding(.horizontal, TossSpace.x6)
+                .padding(.top, TossSpace.x4)
+                .transition(.move(edge: .top).combined(with: .opacity))
+                .zIndex(20)
             }
         }
+        .animation(TossMotion.soft, value: flash)
         .sheet(item: $sheet) { kind in
             switch kind {
             case .log: logSheet
@@ -96,6 +120,24 @@ public struct DietView: View {
             }
         }
         .onAppear { refresh() }
+    }
+
+    private func notify(_ text: String) {
+        flash = text
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 4_000_000_000)
+            if flash == text { flash = nil }
+        }
+    }
+
+    private func runStore(_ label: String, _ body: () throws -> Void) {
+        do {
+            try body()
+            notify(label)
+            refresh()
+        } catch {
+            notify("실패: \(error.localizedDescription)")
+        }
     }
 
     private var planCard: some View {
@@ -437,9 +479,9 @@ public struct DietView: View {
                 HStack(spacing: TossSpace.x2) {
                     ForEach(workoutPresets) { item in
                         Button {
-                            _ = try? store.logWorkout(kind: item.name, minutes: item.minutes, intensity: nil)
-                            flash = "\(item.chipTitle) 저장"
-                            refresh()
+                            runStore("\(item.chipTitle) 저장됐어요") {
+                                _ = try store.logWorkout(kind: item.name, minutes: item.minutes, intensity: nil)
+                            }
                         } label: {
                             Text(item.chipTitle)
                                 .font(.system(size: 13, weight: .medium))
@@ -494,10 +536,10 @@ public struct DietView: View {
                             ) {
                                 do {
                                     let ok = try store.deleteMeal(id: m.id)
-                                    flash = ok ? "식사 삭제됨" : "이미 없는 기록"
+                                    notify(ok ? "식사 삭제됐어요" : "이미 없는 기록이에요")
                                     refresh()
                                 } catch {
-                                    flash = "삭제 실패"
+                                    notify("삭제 실패: \(error.localizedDescription)")
                                 }
                             }
                         }
@@ -505,10 +547,10 @@ public struct DietView: View {
                             row(icon: "figure.walk", title: w.kind, sub: "\(w.minutes)분") {
                                 do {
                                     let ok = try store.deleteWorkout(id: w.id)
-                                    flash = ok ? "운동 삭제됨" : "이미 없는 기록"
+                                    notify(ok ? "운동 삭제됐어요" : "이미 없는 기록이에요")
                                     refresh()
                                 } catch {
-                                    flash = "삭제 실패"
+                                    notify("삭제 실패: \(error.localizedDescription)")
                                 }
                             }
                         }
@@ -556,7 +598,7 @@ public struct DietView: View {
             .buttonStyle(.plain)
             Button {
                 refresh()
-                flash = "새로고침"
+                notify("새로고침했어요")
             } label: {
                 Text("새로고침")
                     .font(TossFont.button())
@@ -791,7 +833,7 @@ public struct DietView: View {
     private func saveProfile(applyGoals: Bool) {
         guard let h = Double(pHeight), let w = Double(pWeight),
               let age = Int(pAge), let t = Double(pTarget) else {
-            flash = "숫자를 확인해 주세요"
+            notify("숫자를 확인해 주세요")
             return
         }
         let p = DietProfile(
@@ -801,10 +843,12 @@ public struct DietView: View {
         do {
             try store.setProfile(p)
             if applyGoals { try store.applyRecommendedGoalsFromProfile() }
-            flash = "프로필 저장 · 목표 적용"
+            let g = store.goals()
+            notify("저장됐어요 · 목표 \(Int(g.targetKcal))kcal · 단백질 \(Int(g.targetProteinG))g")
             refresh()
+            sheet = nil
         } catch {
-            flash = "저장 실패"
+            notify("저장 실패: \(error.localizedDescription)")
         }
     }
 
@@ -818,15 +862,15 @@ public struct DietView: View {
     }
 
     private func quickAddMeal(_ p: DietMealPreset) {
-        _ = try? store.logMealWithSlot(
-            slot: selectedSlot ?? .lunch,
-            items: [p.logItem],
-            kcal: p.kcal,
-            proteinG: p.proteinG,
-            note: "기본 \(p.grams)\(p.unit)"
-        )
-        flash = "\(p.chipTitle) · ~\(Int(p.kcal))kcal 저장"
-        refresh()
+        runStore("\(p.chipTitle) · ~\(Int(p.kcal))kcal 저장됐어요") {
+            _ = try store.logMealWithSlot(
+                slot: selectedSlot ?? .lunch,
+                items: [p.logItem],
+                kcal: p.kcal,
+                proteinG: p.proteinG,
+                note: "기본 \(p.grams)\(p.unit)"
+            )
+        }
     }
 
     private func commitQuickLine() {
@@ -840,8 +884,13 @@ public struct DietView: View {
                 kind = re.stringByReplacingMatches(in: kind, range: NSRange(kind.startIndex..., in: kind), withTemplate: "")
             }
             kind = kind.trimmingCharacters(in: .whitespacesAndNewlines)
-            _ = try? store.logWorkout(kind: kind.isEmpty ? "workout" : kind, minutes: minutes, intensity: nil)
-            flash = "운동 저장"
+            runStore("운동 \(minutes)분 저장됐어요") {
+                _ = try store.logWorkout(
+                    kind: kind.isEmpty ? "workout" : kind,
+                    minutes: minutes,
+                    intensity: nil
+                )
+            }
         } else {
             let kcal: Double? = {
                 if let r = try? NSRegularExpression(pattern: "(\\d+(?:\\.\\d+)?)"),
@@ -851,45 +900,55 @@ public struct DietView: View {
                 }
                 return nil
             }()
-            _ = try? store.logMealWithSlot(
-                slot: selectedSlot,
-                items: [line],
-                kcal: kcal,
-                proteinG: nil,
-                note: line
-            )
-            flash = "식사 저장"
+            runStore("식사 저장됐어요") {
+                _ = try store.logMealWithSlot(
+                    slot: selectedSlot,
+                    items: [line],
+                    kcal: kcal,
+                    proteinG: nil,
+                    note: line
+                )
+            }
         }
         quickLine = ""
-        refresh()
     }
 
     private func saveMeal() {
         let items = mealItems.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
-        guard !items.isEmpty else { return }
-        _ = try? store.logMealWithSlot(
-            slot: selectedSlot,
-            items: items,
-            kcal: Double(mealKcal),
-            proteinG: Double(mealProtein),
-            note: nil
-        )
-        mealItems = ""; mealKcal = ""; mealProtein = ""
-        flash = "식사 저장"
-        refresh()
+        guard !items.isEmpty else {
+            notify("음식 이름을 입력해 주세요")
+            return
+        }
+        runStore("식사 저장됐어요") {
+            _ = try store.logMealWithSlot(
+                slot: selectedSlot,
+                items: items,
+                kcal: Double(mealKcal),
+                proteinG: Double(mealProtein),
+                note: nil
+            )
+            mealItems = ""; mealKcal = ""; mealProtein = ""
+            sheet = nil
+        }
     }
 
     private func saveWorkout() {
-        _ = try? store.logWorkout(kind: workoutKind, minutes: Int(workoutMinutes) ?? 0, intensity: nil)
-        flash = "운동 저장"
-        refresh()
+        runStore("운동 저장됐어요") {
+            _ = try store.logWorkout(kind: workoutKind, minutes: Int(workoutMinutes) ?? 0, intensity: nil)
+            sheet = nil
+        }
     }
 
     private func saveMetric() {
-        _ = try? store.logMetric(weightKg: Double(weightKg), sleepH: Double(sleepH))
-        weightKg = ""; sleepH = ""
-        flash = "지표 저장"
-        refresh()
+        guard Double(weightKg) != nil || Double(sleepH) != nil else {
+            notify("체중 또는 수면을 입력해 주세요")
+            return
+        }
+        runStore("지표 저장됐어요") {
+            _ = try store.logMetric(weightKg: Double(weightKg), sleepH: Double(sleepH))
+            weightKg = ""; sleepH = ""
+            sheet = nil
+        }
     }
 
     private func loadGoalsForm() {
@@ -902,12 +961,18 @@ public struct DietView: View {
 
     private func saveGoals() {
         var g = store.goals()
-        if let v = Double(goalKcal) { g.targetKcal = v }
-        if let v = Double(goalProtein) { g.targetProteinG = v }
+        guard let kcal = Double(goalKcal), let protein = Double(goalProtein),
+              kcal > 500, protein > 0 else {
+            notify("칼로리·단백질 숫자를 확인해 주세요")
+            return
+        }
+        g.targetKcal = kcal
+        g.targetProteinG = protein
         if let v = Int(goalWeeklyWO) { g.weeklyWorkouts = v }
         if let v = Int(goalDayMin) { g.targetWorkoutMinutesPerDay = v }
-        try? store.setGoals(g)
-        flash = "목표 저장"
-        refresh()
+        runStore("목표 저장됐어요 · \(Int(kcal))kcal · 단백질 \(Int(protein))g") {
+            try store.setGoals(g)
+            sheet = nil
+        }
     }
 }
