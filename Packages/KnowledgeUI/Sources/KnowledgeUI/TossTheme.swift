@@ -316,6 +316,41 @@ public struct TossScreenHeader: View {
     }
 }
 
+/// Top toast for action results (save / delete / error) — Mac UI consistency.
+public struct TossToastBanner: View {
+    public var message: String
+    public var isError: Bool
+    public var onDismiss: () -> Void
+
+    public init(message: String, isError: Bool = false, onDismiss: @escaping () -> Void) {
+        self.message = message
+        self.isError = isError
+        self.onDismiss = onDismiss
+    }
+
+    public var body: some View {
+        HStack(alignment: .top, spacing: 10) {
+            Image(systemName: isError ? "exclamationmark.circle.fill" : "checkmark.circle.fill")
+                .foregroundStyle(isError ? TossColor.red500 : TossColor.blue500)
+            Text(message)
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(TossColor.grey900)
+                .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 0)
+            Button(action: onDismiss) {
+                Image(systemName: "xmark")
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundStyle(TossColor.grey500)
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(14)
+        .background(.ultraThinMaterial)
+        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .shadow(color: .black.opacity(0.1), radius: 10, y: 3)
+    }
+}
+
 /// Quiet empty / zero state — one icon, one line, optional action.
 public struct TossEmptyState: View {
     public var systemImage: String

@@ -4,6 +4,7 @@ import SwiftUI
 
 struct PairingView: View {
     @EnvironmentObject var core: CoreClient
+    @EnvironmentObject var feedback: ActionFeedback
     @State private var code = ""
     @State private var name = UIDevice.current.name
     @State private var busy = false
@@ -124,8 +125,13 @@ struct PairingView: View {
                             busy = true
                             await core.completePair(code: code, deviceName: name)
                             busy = false
-                            if core.isPaired { kHapticSuccess() }
-                            else { kHapticLight() }
+                            if core.isPaired {
+                                feedback.success("연결됐어요 · \(core.coreName.isEmpty ? "Core" : core.coreName)")
+                            } else if let e = core.lastError {
+                                feedback.error(e)
+                            } else {
+                                feedback.error("연결에 실패했어요")
+                            }
                         }
                     }
                 }
@@ -648,10 +654,11 @@ private struct ChatBubble: Identifiable {
 
 struct SearchMobileView: View {
     @EnvironmentObject var core: CoreClient
+    @EnvironmentObject var feedback: ActionFeedback
     @State private var q = ""
     @State private var hits: [[String: Any]] = []
     @State private var busy = false
-    @State private var err: String?
+    @State private var emptyHint: String?
 
     var body: some View {
         List {
@@ -667,8 +674,19 @@ struct SearchMobileView: View {
                     }
                 }
             }
-            if let err {
-                Section { Text(err).foregroundStyle(KColor.red500).font(.caption) }
+            if let emptyHint {
+                Section {
+                    Text(emptyHint)
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            if hits.isEmpty && !busy && emptyHint == nil {
+                Section {
+                    Text("키워드를 입력하고 찾기를 눌러 보세요.")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
             }
             ForEach(Array(hits.enumerated()), id: \.offset) { _, h in
                 VStack(alignment: .leading, spacing: 4) {
@@ -685,34 +703,48 @@ struct SearchMobileView: View {
     }
 
     private func run() async {
+        let query = q.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !query.isEmpty else {
+            feedback.info("검색어를 입력해 주세요")
+            return
+        }
+        if !core.connected {
+            feedback.error("Mac에 연결되지 않았어요")
+            return
+        }
         busy = true
-        err = nil
+        emptyHint = nil
         defer { busy = false }
         do {
-            hits = try await core.search(q: q)
-            if hits.isEmpty { err = "결과 없음" }
+            hits = try await core.search(q: query)
+            if hits.isEmpty {
+                emptyHint = "「\(query)」 결과가 없어요. 다른 키워드를 시도해 보세요."
+                feedback.info("검색 결과 없음")
+            } else {
+                feedback.success("\(hits.count)건 찾았어요")
+            }
         } catch {
             hits = []
-            err = error.localizedDescription
+            emptyHint = nil
+            feedback.error("검색 실패: \(error.localizedDescription)")
         }
     }
 }
 
 struct ReviewMobileView: View {
     @EnvironmentObject var core: CoreClient
+    @EnvironmentObject var feedback: ActionFeedback
     @State private var items: [[String: Any]] = []
     @State private var busy = false
-    @State private var err: String?
     @State private var acceptingId: String?
 
     var body: some View {
         List {
-            if let err {
-                Section { Text(err).foregroundStyle(KColor.red500).font(.caption) }
-            }
             if items.isEmpty && !busy {
                 Section {
-                    Text("확인할 요약이 없어요.")
+                    Text(core.connected
+                        ? "확인할 요약이 없어요. Mac에서 녹음이 끝나면 여기로 와요."
+                        : "Mac에 연결되지 않았어요. 설정에서 Core를 확인해 주세요.")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                 }
@@ -731,7 +763,7 @@ struct ReviewMobileView: View {
                         if acceptingId == id { ProgressView() }
                         else { Text("노트에 저장").fontWeight(.semibold) }
                     }
-                    .disabled(id.isEmpty || acceptingId != nil)
+                    .disabled(id.isEmpty || acceptingId != nil || !core.connected)
                 }
                 .padding(.vertical, 4)
             }
@@ -744,30 +776,35 @@ struct ReviewMobileView: View {
 
     private func load() async {
         busy = true
-        err = nil
         defer { busy = false }
         do {
             items = try await core.reviewList()
             core.reviewCount = items.count
         } catch {
-            err = error.localizedDescription
+            feedback.error("확인함을 불러오지 못했어요: \(error.localizedDescription)")
         }
     }
 
     private func accept(id: String) async {
+        guard !id.isEmpty else {
+            feedback.error("저장할 항목 id가 없어요")
+            return
+        }
         acceptingId = id
         defer { acceptingId = nil }
         do {
             try await core.reviewAccept(id: id)
+            feedback.success("노트에 저장했어요")
             await load()
         } catch {
-            err = error.localizedDescription
+            feedback.error("저장 실패: \(error.localizedDescription)")
         }
     }
 }
 
 struct SettingsMobileView: View {
     @EnvironmentObject var core: CoreClient
+    @EnvironmentObject var feedback: ActionFeedback
     @State private var revoking = false
     @State private var healthBusy = false
     @State private var probeBusy = false
@@ -805,8 +842,10 @@ struct SettingsMobileView: View {
                         probeLine = r.message
                         if r.ok {
                             await core.refreshStatus()
+                            feedback.success(r.message)
                         } else {
                             core.lastError = r.message
+                            feedback.error(r.message)
                         }
                         probeBusy = false
                     }
@@ -820,7 +859,14 @@ struct SettingsMobileView: View {
                         .foregroundStyle(probeLine.contains("OK") ? KColor.green500 : .secondary)
                 }
                 Button("연결 새로고침") {
-                    Task { await core.refreshStatus() }
+                    Task {
+                        await core.refreshStatus()
+                        if core.connected {
+                            feedback.success("연결 상태: 연결됨")
+                        } else {
+                            feedback.error(core.lastError ?? "여전히 연결되지 않았어요")
+                        }
+                    }
                 }
             }
             Section("Apple 건강 (W1)") {
@@ -837,6 +883,17 @@ struct SettingsMobileView: View {
                             healthBusy = true
                             await core.syncHealthKitIfPossible(forceAuth: true)
                             healthBusy = false
+                            if let e = hk.lastError, !e.isEmpty, core.healthSyncLine.contains("실패") || core.healthSyncLine == e {
+                                feedback.error(e)
+                            } else if !core.healthSyncLine.isEmpty {
+                                if core.healthSyncLine.contains("실패") || core.healthSyncLine.contains("권한") {
+                                    feedback.error(core.healthSyncLine)
+                                } else {
+                                    feedback.success(core.healthSyncLine)
+                                }
+                            } else {
+                                feedback.info("동기화할 건강 데이터가 없거나 권한이 필요해요")
+                            }
                         }
                     } label: {
                         if healthBusy {
@@ -862,6 +919,7 @@ struct SettingsMobileView: View {
                         revoking = true
                         await core.revokeRemote()
                         revoking = false
+                        feedback.info("페어링을 해제했어요. 다시 연결해 주세요.")
                     }
                 } label: {
                     if revoking { ProgressView() } else { Text("페어링 해제 · 다시 연결") }

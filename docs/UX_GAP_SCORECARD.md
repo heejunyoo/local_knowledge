@@ -72,4 +72,14 @@
 
 **아직 최선 아님.** P0 피드백 축은 코드상 크게 올렸고, 사용자 dogfood 게이트는 미통과.
 
+## Consistency pass (2026-07-10 후속)
+
+| 조치 | 내용 |
+|------|------|
+| 전역 토스트 | 모바일 `ActionFeedback` + `KToastOverlay` — 모든 탭 위 고정 |
+| 인박스/확인함/검색 | 성공·실패·빈 결과·로딩 전부 표면화 |
+| 설정/페어링 | probe·해제·건강 동기 결과 토스트 |
+| Mac | `TossToastBanner` 공용화 — 식단·설정·확인함 |
+| 규칙 | 저장/삭제/연결: **항상** 성공 또는 실패 메시지 (침묵 금지) |
+
 *Scoring is expert judgment for single-user local-first stack.*

@@ -81,29 +81,11 @@ public struct DietView: View {
             }
 
             if let flash {
-                HStack(alignment: .top, spacing: 10) {
-                    Image(systemName: flash.contains("실패") || flash.contains("확인")
-                          ? "exclamationmark.circle.fill" : "checkmark.circle.fill")
-                        .foregroundStyle(
-                            flash.contains("실패") || flash.contains("확인")
-                            ? TossColor.red500 : TossColor.blue500
-                        )
-                    Text(flash)
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(TossColor.grey900)
-                        .fixedSize(horizontal: false, vertical: true)
-                    Spacer(minLength: 0)
-                    Button { self.flash = nil } label: {
-                        Image(systemName: "xmark")
-                            .font(.system(size: 11, weight: .bold))
-                            .foregroundStyle(TossColor.grey500)
-                    }
-                    .buttonStyle(.plain)
-                }
-                .padding(14)
-                .background(.ultraThinMaterial)
-                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-                .shadow(color: .black.opacity(0.1), radius: 10, y: 3)
+                TossToastBanner(
+                    message: flash,
+                    isError: flash.contains("실패") || flash.contains("확인"),
+                    onDismiss: { self.flash = nil }
+                )
                 .padding(.horizontal, TossSpace.x6)
                 .padding(.top, TossSpace.x4)
                 .transition(.move(edge: .top).combined(with: .opacity))

@@ -46,18 +46,28 @@ public struct SettingsView: View {
                         cloudKeysBlock
                         local7BBlock
                         retentionBlock
-                        if let savedFlash {
-                            Text(savedFlash)
-                                .font(TossFont.caption())
-                                .foregroundStyle(TossColor.blue500)
-                        }
                         TossPrimaryButton("저장하기") { save() }
                     }
                     .padding(.horizontal, TossSpace.x6)
                     .padding(.bottom, TossSpace.x8)
                 }
             }
+            if let savedFlash {
+                VStack {
+                    TossToastBanner(
+                        message: savedFlash,
+                        isError: savedFlash.contains("실패"),
+                        onDismiss: { self.savedFlash = nil }
+                    )
+                    .padding(.horizontal, TossSpace.x6)
+                    .padding(.top, TossSpace.x4)
+                    Spacer()
+                }
+                .transition(.move(edge: .top).combined(with: .opacity))
+                .zIndex(20)
+            }
         }
+        .animation(TossMotion.soft, value: savedFlash)
         .onAppear { load() }
     }
 
@@ -645,8 +655,12 @@ public struct SettingsView: View {
             llmDetail = st.detail
             savedFlash = "저장했어요"
             model.appendUILog("settings saved cloud=\(cloudEnabled) local7b=\(useLocal7B) keys=\(secrets.keys.sorted())")
+            Task { @MainActor in
+                try? await Task.sleep(nanoseconds: 3_500_000_000)
+                if savedFlash == "저장했어요" { savedFlash = nil }
+            }
         } catch {
-            savedFlash = "저장에 실패했어요"
+            savedFlash = "저장에 실패했어요: \(error.localizedDescription)"
             model.appendUILog("settings save failed \(error)")
         }
     }

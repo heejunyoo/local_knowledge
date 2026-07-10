@@ -18,7 +18,7 @@ public struct ReviewInboxView: View {
     }
 
     public var body: some View {
-        ZStack {
+        ZStack(alignment: .top) {
             TossColor.grey100.ignoresSafeArea()
             VStack(spacing: 0) {
                 nav
@@ -52,7 +52,21 @@ public struct ReviewInboxView: View {
                     .padding(.bottom, TossSpace.x8)
                 }
             }
+            if !model.statusMessage.isEmpty {
+                TossToastBanner(
+                    message: model.statusMessage,
+                    isError: model.statusMessage.contains("못")
+                        || model.statusMessage.contains("실패")
+                        || model.lastError != nil,
+                    onDismiss: { model.statusMessage = "" }
+                )
+                .padding(.horizontal, TossSpace.x6)
+                .padding(.top, TossSpace.x2)
+                .transition(.move(edge: .top).combined(with: .opacity))
+                .zIndex(20)
+            }
         }
+        .animation(TossMotion.soft, value: model.statusMessage)
         .onAppear { model.refresh() }
     }
 

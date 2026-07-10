@@ -3,6 +3,7 @@ import SwiftUI
 /// Diet hub — suggest, slots, chips, rings, NL, delete. Aligned with Mac DietView.
 struct DietMobileView: View {
     @EnvironmentObject var core: CoreClient
+    @EnvironmentObject var feedback: ActionFeedback
 
     @State private var dashboard: [String: Any] = [:]
     @State private var suggestTitle = "오늘 기록을 남겨 보세요"
@@ -957,7 +958,10 @@ struct DietMobileView: View {
     }
 
     private func showFlash(_ text: String) {
+        // Dual surface: local banner + global toast (always visible above tabs)
         flash = text
+        let isErr = text.contains("실패") || text.contains("확인") || text.contains("입력")
+        if isErr { feedback.error(text) } else { feedback.success(text) }
         Task {
             try? await Task.sleep(nanoseconds: 4_500_000_000)
             if flash == text { flash = nil }

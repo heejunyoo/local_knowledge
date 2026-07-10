@@ -3,11 +3,13 @@ import SwiftUI
 @main
 struct KnowledgeMobileApp: App {
     @StateObject private var core = CoreClient()
+    @StateObject private var feedback = ActionFeedback()
 
     var body: some Scene {
         WindowGroup {
             RootView()
                 .environmentObject(core)
+                .environmentObject(feedback)
                 .tint(KColor.blue500)
         }
     }
@@ -15,14 +17,18 @@ struct KnowledgeMobileApp: App {
 
 struct RootView: View {
     @EnvironmentObject var core: CoreClient
+    @EnvironmentObject var feedback: ActionFeedback
 
     var body: some View {
-        Group {
-            if core.isPaired {
-                MainTabs()
-            } else {
-                PairingView()
+        ZStack(alignment: .top) {
+            Group {
+                if core.isPaired {
+                    MainTabs()
+                } else {
+                    PairingView()
+                }
             }
+            KToastOverlay(feedback: feedback)
         }
         .task { await core.refreshStatus() }
     }
