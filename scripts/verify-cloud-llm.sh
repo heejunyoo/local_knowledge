@@ -55,4 +55,10 @@ if "error" in d:
 text=d["choices"][0]["message"]["content"].strip().replace("\n"," ")
 print("  answer:", text[:100])
 print("── PASS (Groq free tier reachable) ──")
+print("── cache paths ──")
+from pathlib import Path
+root = Path.home() / "Knowledge"
+print("  answer cache:", root/"cache/llm_answer_cache.json")
+print("  usage file:  ", root/"cache/llm_cloud_usage.json")
+print("  (files created after first successful complete())")
 PY

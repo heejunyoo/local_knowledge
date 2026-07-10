@@ -29,11 +29,27 @@ public enum LLMRouter {
         let cfg = AppConfig.load(knowledgeRoot: knowledgeRoot)
         let hasCloudKey = LLMSecrets.hasAnyCloudKey(knowledgeRoot: knowledgeRoot, catalog: catalog)
 
-        // 1) Cloud free tiers — only when keys exist; redaction preflight first
+        // 0) Disk cache — same prompt must not re-hit free-tier RPD/TPM
+        if let hit = LLMAnswerCache.get(knowledgeRoot: knowledgeRoot, prompt: prompt, maxTokens: maxTokens) {
+            return Answer(text: hit.text, engine: hit.engine)
+        }
+
+        // 1) Cloud free tiers — only when keys exist; redaction + soft rate gate
         if preferCloud && cfg.cloudEnabled && hasCloudKey {
             let redaction = RedactionPreflight.scan(prompt, knowledgeRoot: knowledgeRoot)
             if redaction.allowed {
-                if let cloud = tryCloud(prompt: prompt, knowledgeRoot: knowledgeRoot, catalog: catalog, maxTokens: maxTokens) {
+                if let block = LLMAnswerCache.cloudCallBlockReason(knowledgeRoot: knowledgeRoot) {
+                    // Skip cloud this turn; try local 7B / extractive instead of burning RPD
+                    _ = block
+                } else if let cloud = tryCloud(prompt: prompt, knowledgeRoot: knowledgeRoot, catalog: catalog, maxTokens: maxTokens) {
+                    LLMAnswerCache.recordCloudCall(knowledgeRoot: knowledgeRoot)
+                    LLMAnswerCache.put(
+                        knowledgeRoot: knowledgeRoot,
+                        prompt: prompt,
+                        maxTokens: maxTokens,
+                        text: cloud.text,
+                        engine: cloud.engine
+                    )
                     return cloud
                 }
             }
@@ -48,7 +64,15 @@ public enum LLMRouter {
                 maxTokens: maxTokens,
                 timeout: localTimeout
             ), !text.isEmpty {
-                return Answer(text: text, engine: "local-7b/llama")
+                let ans = Answer(text: text, engine: "local-7b/llama")
+                LLMAnswerCache.put(
+                    knowledgeRoot: knowledgeRoot,
+                    prompt: prompt,
+                    maxTokens: maxTokens,
+                    text: ans.text,
+                    engine: ans.engine
+                )
+                return ans
             }
         }
 
@@ -91,6 +115,7 @@ public enum LLMRouter {
             if !modelHints.isEmpty {
                 parts.append("모델 \(modelHints.joined(separator: ", "))")
             }
+            parts.append(LLMAnswerCache.usageSummary(knowledgeRoot: knowledgeRoot))
         } else if local {
             parts.append("지금: 로컬 7B (기본)")
             if cfg.cloudEnabled {

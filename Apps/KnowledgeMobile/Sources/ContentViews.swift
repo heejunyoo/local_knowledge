@@ -597,36 +597,36 @@ struct AskMobileView: View {
         Task {
             do {
                 status = "답 만드는 중…"
-                // Prefer /v1/chat for intent routing (knowledge / diet / mixed) + sources transparency.
+                // Single Core path only — never chat then ask (would double free-tier spend).
                 if !core.connected {
                     messages.append(ChatBubble(
                         role: "assistant",
                         text: "Mac에 연결되지 않았어요. 더보기 → 설정에서 Core URL·페어링을 확인해 주세요.",
                         meta: "연결 필요"
                     ))
-                } else if let chat = try? await core.chat(message: q), !chat.answer.isEmpty {
-                    let src = chat.sources.prefix(4).compactMap { s -> String? in
-                        let svc = s["service"] as? String ?? ""
-                        let title = s["title"] as? String ?? ""
-                        if title.isEmpty { return nil }
-                        return svc.isEmpty ? title : "\(svc):\(title)"
-                    }.joined(separator: " · ")
-                    let meta = [chat.engine.isEmpty ? nil : chat.engine, src.isEmpty ? nil : "출처 \(src)"]
-                        .compactMap { $0 }.joined(separator: " · ")
-                    messages.append(ChatBubble(role: "assistant", text: chat.answer, meta: meta))
                 } else {
-                    let full = try await core.ask(q: q)
-                    if full.answer.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    // /v1/chat: intent routing (diet/mixed/knowledge) + one server-side refine max
+                    let chat = try await core.chat(message: q)
+                    if chat.answer.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                         messages.append(ChatBubble(
                             role: "assistant",
-                            text: "답을 만들지 못했어요. Mac Core와 클라우드 키(설정)를 확인해 주세요.",
+                            text: "답을 만들지 못했어요. Mac Core·Groq 한도·키를 확인해 주세요.",
                             meta: "빈 응답"
                         ))
                     } else {
-                        let cites = full.citations.prefix(3).compactMap { $0["title"] as? String }.joined(separator: " · ")
-                        let meta = [full.engine.isEmpty ? nil : full.engine, cites.isEmpty ? nil : "출처 \(cites)"]
-                            .compactMap { $0 }.joined(separator: " · ")
-                        messages.append(ChatBubble(role: "assistant", text: full.answer, meta: meta))
+                        let src = chat.sources.prefix(4).compactMap { s -> String? in
+                            let svc = s["service"] as? String ?? ""
+                            let title = s["title"] as? String ?? ""
+                            if title.isEmpty { return nil }
+                            return svc.isEmpty ? title : "\(svc):\(title)"
+                        }.joined(separator: " · ")
+                        let cached = chat.engine.contains("cache") ? "캐시" : nil
+                        let meta = [
+                            chat.engine.isEmpty ? nil : chat.engine,
+                            cached,
+                            src.isEmpty ? nil : "출처 \(src)",
+                        ].compactMap { $0 }.joined(separator: " · ")
+                        messages.append(ChatBubble(role: "assistant", text: chat.answer, meta: meta))
                     }
                 }
             } catch {

@@ -75,8 +75,8 @@ public struct ChatView: View {
     }
 
     private var engineBadge: String {
-        if model.llmEngine.contains("cloud") { return "클라우드 우선" }
-        if model.llmEngine.contains("7b") || model.llmEngine.contains("llama") { return "빠른답+7B" }
+        if model.llmEngine.contains("cloud") { return "클라우드 free" }
+        if model.llmEngine.contains("7b") || model.llmEngine.contains("llama") { return "로컬 7B" }
         return "근거 모음"
     }
 
@@ -171,7 +171,7 @@ public struct ChatView: View {
                 if msg.role == .assistant, msg.isRefining {
                     HStack(spacing: 6) {
                         ProgressView().controlSize(.mini)
-                        Text("AI로 문장 다듬는 중… (첫 실행은 최대 30초)")
+                        Text("다듬는 중… (캐시에 있으면 재호출 없음)")
                             .font(.system(size: 12, weight: .medium))
                             .foregroundStyle(TossColor.grey500)
                     }
@@ -181,6 +181,12 @@ public struct ChatView: View {
             .padding(.vertical, 12)
             .background(msg.role == .user ? TossColor.blue500 : TossColor.white)
             .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+
+            if msg.role == .assistant, !msg.engine.isEmpty {
+                Text(engineLine(msg.engine))
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(TossColor.grey500)
+            }
 
             if !msg.citations.isEmpty {
                 VStack(alignment: .leading, spacing: 8) {
@@ -231,6 +237,19 @@ public struct ChatView: View {
         case "file": return "파일"
         default: return t
         }
+    }
+
+    private func engineLine(_ engine: String) -> String {
+        var parts: [String] = []
+        if engine.contains("cache") { parts.append("캐시 재사용 · 클라우드 재호출 없음") }
+        if engine.contains("groq") { parts.append("Groq") }
+        if engine.contains("70b") { parts.append("70B") }
+        else if engine.contains("8b") { parts.append("8B") }
+        else if engine.contains("scout") { parts.append("Scout") }
+        if engine.contains("extractive") { parts.append("근거 모음") }
+        if engine.contains("local-7b") { parts.append("로컬 7B") }
+        if parts.isEmpty { parts.append(engine) }
+        return parts.joined(separator: " · ")
     }
 
     private var composer: some View {

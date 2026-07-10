@@ -110,19 +110,23 @@ public final class AppModel: ObservableObject {
         public var citations: [RAGCitation]
         /// True while a fast extractive answer may still be upgraded by cloud/7B.
         public var isRefining: Bool
+        /// e.g. cloud/groq/…+cache — shown under bubble for trust/cost transparency.
+        public var engine: String
 
         public init(
             id: String = UUID().uuidString,
             role: Role,
             text: String,
             citations: [RAGCitation] = [],
-            isRefining: Bool = false
+            isRefining: Bool = false,
+            engine: String = ""
         ) {
             self.id = id
             self.role = role
             self.text = text
             self.citations = citations
             self.isRefining = isRefining
+            self.engine = engine
         }
     }
 
@@ -820,14 +824,15 @@ public final class AppModel: ObservableObject {
                         role: .assistant,
                         text: fast.answer,
                         citations: cites,
-                        isRefining: willRefine
+                        isRefining: willRefine,
+                        engine: fast.engine
                     ))
                     self.isChatBusy = false
                     self.chatBusyLabel = ""
                     self.appendUILog("rag.fast cites=\(cites.count) engine=\(fast.engine) refine=\(willRefine)")
                 }
 
-                // 2) Background refine — cloud first, then 7B (≤35s); keep extractive if slow
+                // 2) At most one refine (cloud/7B) — disk cache inside LLMRouter avoids re-spend
                 guard willRefine else { return }
                 await MainActor.run {
                     if let i = self.chatMessages.firstIndex(where: { $0.id == assistantId }) {
@@ -844,6 +849,7 @@ public final class AppModel: ObservableObject {
                     guard let i = self.chatMessages.firstIndex(where: { $0.id == assistantId }) else { return }
                     if let refined, refined.answer != self.chatMessages[i].text {
                         self.chatMessages[i].text = refined.answer
+                        self.chatMessages[i].engine = refined.engine
                         self.chatMessages[i].isRefining = false
                         self.appendUILog("rag.refine engine=\(refined.engine)")
                     } else {
