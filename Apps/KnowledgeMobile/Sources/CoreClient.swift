@@ -220,6 +220,26 @@ public final class CoreClient: ObservableObject {
         )
     }
 
+    public func dietSetProfile(
+        heightCm: Double,
+        weightKg: Double,
+        age: Int,
+        sex: String,
+        targetWeightKg: Double,
+        activity: String,
+        applyGoals: Bool = true
+    ) async throws -> [String: Any] {
+        try await dietRPC("diet.profile.set", params: [
+            "height_cm": heightCm,
+            "weight_kg": weightKg,
+            "age": age,
+            "sex": sex,
+            "target_weight_kg": targetWeightKg,
+            "activity": activity,
+            "apply_goals": applyGoals,
+        ])
+    }
+
     private func dietRPC(_ method: String, params: [String: Any]) async throws -> [String: Any] {
         let rpc = try await rpc(method: method, params: params)
         if let err = rpc["error"] as? [String: Any] {

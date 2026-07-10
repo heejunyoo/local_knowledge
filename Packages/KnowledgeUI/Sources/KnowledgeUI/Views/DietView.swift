@@ -24,16 +24,25 @@ public struct DietView: View {
     @State private var goalWeeklyWO = "4"
     @State private var goalDayMin = "30"
 
+    // Profile (beginner)
+    @State private var pHeight = "165"
+    @State private var pWeight = "65"
+    @State private var pAge = "30"
+    @State private var pSex: DietProfile.Sex = .female
+    @State private var pTarget = "60"
+    @State private var pActivity: DietProfile.Activity = .light
+
     private let mealPresets = DietMealPreset.all
     private let workoutPresets = DietWorkoutPreset.all
 
     private enum DietSheet: Identifiable {
-        case log, week, goals
+        case log, week, goals, profile
         var id: String {
             switch self {
             case .log: return "log"
             case .week: return "week"
             case .goals: return "goals"
+            case .profile: return "profile"
             }
         }
     }
@@ -52,13 +61,14 @@ public struct DietView: View {
             ScrollView(showsIndicators: false) {
                 VStack(alignment: .leading, spacing: TossSpace.x5) {
                     header.tossAppear()
+                    planCard
                     suggestCard
                     todayHero
                     slotChips
                     quickNL
                     mealPresetRow
                     workoutPresetRow
-                    if let line = dash.analysisLines.first {
+                    ForEach(Array(dash.analysisLines.prefix(3).enumerated()), id: \.offset) { _, line in
                         insightCard(line)
                     }
                     todayList
@@ -82,9 +92,80 @@ public struct DietView: View {
             case .log: logSheet
             case .week: weekSheet
             case .goals: goalsSheet
+            case .profile: profileSheet
             }
         }
         .onAppear { refresh() }
+    }
+
+    private var planCard: some View {
+        Group {
+            if let plan = dash.plan {
+                TossCard {
+                    VStack(alignment: .leading, spacing: TossSpace.x3) {
+                        HStack {
+                            Text("목표 도달 예상")
+                                .font(.system(size: 15, weight: .semibold))
+                                .foregroundStyle(TossColor.grey500)
+                            Spacer()
+                            Button("내 정보") {
+                                loadProfileForm()
+                                sheet = .profile
+                            }
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundStyle(TossColor.blue500)
+                            .buttonStyle(.plain)
+                        }
+                        Text(plan.etaText)
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundStyle(TossColor.grey900)
+                            .fixedSize(horizontal: false, vertical: true)
+                        Text("기초대사 \(Int(plan.bmr)) · 유지 \(Int(plan.tdee))kcal · 권장 섭취 \(Int(plan.recommendedKcal))kcal · 단백질 \(Int(plan.recommendedProteinG))g")
+                            .font(TossFont.caption())
+                            .foregroundStyle(TossColor.grey500)
+                            .fixedSize(horizontal: false, vertical: true)
+                        Text(plan.paceText)
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundStyle(TossColor.blue500)
+                        if let avg = plan.avgIntakeUsed {
+                            Text("최근 기록 평균 섭취 약 \(Int(avg))kcal/일 기준으로 계산했어요.")
+                                .font(.system(size: 11))
+                                .foregroundStyle(TossColor.grey500)
+                        } else {
+                            Text("식사 기록이 쌓이면 실제 섭취 기준으로 더 정확해져요. 지금은 권장 칼로리 기준 예상이에요.")
+                                .font(.system(size: 11))
+                                .foregroundStyle(TossColor.grey500)
+                        }
+                    }
+                }
+            } else {
+                Button {
+                    loadProfileForm()
+                    sheet = .profile
+                } label: {
+                    HStack(spacing: TossSpace.x3) {
+                        Image(systemName: "person.crop.circle.badge.plus")
+                            .font(.system(size: 28))
+                            .foregroundStyle(TossColor.blue500)
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("건강 정보 입력하기")
+                                .font(.system(size: 17, weight: .semibold))
+                                .foregroundStyle(TossColor.grey900)
+                            Text("키·몸무게·나이·성별·목표 체중만 넣으면 칼로리·단백질·도달 시점을 알아서 잡아 줘요.")
+                                .font(TossFont.caption())
+                                .foregroundStyle(TossColor.grey500)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                        Spacer()
+                        Image(systemName: "chevron.right").foregroundStyle(TossColor.grey200)
+                    }
+                    .padding(TossSpace.x5)
+                    .background(TossColor.white)
+                    .clipShape(RoundedRectangle(cornerRadius: TossRadius.card, style: .continuous))
+                }
+                .buttonStyle(.plain)
+            }
+        }
     }
 
     // MARK: Header / suggest
@@ -100,6 +181,14 @@ public struct DietView: View {
                     .foregroundStyle(TossColor.grey500)
             }
             Spacer()
+            Button("내 정보") {
+                loadProfileForm()
+                sheet = .profile
+            }
+            .font(TossFont.body())
+            .fontWeight(.semibold)
+            .foregroundStyle(TossColor.blue500)
+            .buttonStyle(.plain)
             Button("목표") {
                 loadGoalsForm()
                 sheet = .goals
@@ -570,13 +659,17 @@ public struct DietView: View {
         NavigationStack {
             Form {
                 Section {
-                    Text("링의 %는 「오늘 기록 ÷ 여기 목표」예요. 대략값으로 잡아도 됩니다.")
+                    Text("다이어트 초보라면 「내 정보」에서 키·몸무게만 넣으면 여기 숫자가 자동으로 채워져요. 직접 고쳐도 됩니다.\n\n링의 % = 오늘 기록 ÷ 이 목표")
                         .font(.caption)
                         .foregroundStyle(.secondary)
+                    Button("내 정보로 자동 계산") {
+                        loadProfileForm()
+                        sheet = .profile
+                    }
                 }
                 Section {
                     TextField("숫자", text: $goalKcal)
-                    Text("하루 목표 칼로리 (kcal)\n오늘 먹은 열량의 목표치예요.")
+                    Text("하루 목표 칼로리 (kcal) — 오늘 먹을 열량 목표")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 } header: {
@@ -584,7 +677,7 @@ public struct DietView: View {
                 }
                 Section {
                     TextField("숫자", text: $goalProtein)
-                    Text("하루 목표 단백질 (g)\n근육·포만감 관리용 단백질 목표예요.")
+                    Text("하루 목표 단백질 (g)")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 } header: {
@@ -592,7 +685,7 @@ public struct DietView: View {
                 }
                 Section {
                     TextField("횟수", text: $goalWeeklyWO)
-                    Text("일주일에 운동할 횟수 목표예요. (주간 바)")
+                    Text("일주일에 운동할 횟수 목표 (주간 바)")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 } header: {
@@ -600,7 +693,7 @@ public struct DietView: View {
                 }
                 Section {
                     TextField("분", text: $goalDayMin)
-                    Text("하루에 움직이고 싶은 운동 시간(분) 목표예요.")
+                    Text("하루 운동 시간(분) 목표")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 } header: {
@@ -618,7 +711,93 @@ public struct DietView: View {
                 }
             }
         }
-        .frame(minWidth: 380, minHeight: 480)
+        .frame(minWidth: 380, minHeight: 520)
+    }
+
+    private var profileSheet: some View {
+        NavigationStack {
+            Form {
+                Section {
+                    Text("키·몸무게·나이·성별·목표 체중을 넣으면 목표 칼로리·단백질을 자동으로 잡고, 지금 먹는 페이스로 언제쯤 목표에 닿을지 알려 줘요.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                Section("기본") {
+                    TextField("키 (cm)", text: $pHeight)
+                    TextField("지금 몸무게 (kg)", text: $pWeight)
+                    TextField("나이", text: $pAge)
+                    Picker("성별", selection: $pSex) {
+                        Text("여성").tag(DietProfile.Sex.female)
+                        Text("남성").tag(DietProfile.Sex.male)
+                    }
+                    .pickerStyle(.segmented)
+                }
+                Section("목표") {
+                    TextField("목표 몸무게 (kg)", text: $pTarget)
+                    Picker("평소 활동", selection: $pActivity) {
+                        ForEach(DietProfile.Activity.allCases, id: \.rawValue) { a in
+                            Text(a.labelKO).tag(a)
+                        }
+                    }
+                }
+                if let h = Double(pHeight), let w = Double(pWeight), let t = Double(pTarget),
+                   let age = Int(pAge), h > 100, w > 30 {
+                    let preview = DietProfile(
+                        heightCm: h, weightKg: w, age: age, sex: pSex,
+                        targetWeightKg: t, activity: pActivity
+                    )
+                    Section("자동 계산 미리보기") {
+                        Text("유지 칼로리 약 \(Int(preview.tdee))kcal")
+                        Text("권장 섭취 \(Int(preview.recommendedKcal))kcal / 단백질 \(Int(preview.recommendedProteinG))g")
+                        Text(preview.planSummary(avgDailyIntakeKcal: nil, plannedKcal: preview.recommendedKcal).etaText)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                Button("저장하고 목표 자동 적용") {
+                    saveProfile(applyGoals: true)
+                    sheet = nil
+                }
+            }
+            .navigationTitle("내 정보")
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("닫기") { sheet = nil }
+                }
+            }
+        }
+        .frame(minWidth: 400, minHeight: 560)
+    }
+
+    private func loadProfileForm() {
+        if let p = store.profile() {
+            pHeight = "\(Int(p.heightCm))"
+            pWeight = String(format: "%.1f", p.weightKg)
+            pAge = "\(p.age)"
+            pSex = p.sex
+            pTarget = String(format: "%.1f", p.targetWeightKg)
+            pActivity = p.activity
+        }
+    }
+
+    private func saveProfile(applyGoals: Bool) {
+        guard let h = Double(pHeight), let w = Double(pWeight),
+              let age = Int(pAge), let t = Double(pTarget) else {
+            flash = "숫자를 확인해 주세요"
+            return
+        }
+        let p = DietProfile(
+            heightCm: h, weightKg: w, age: age, sex: pSex,
+            targetWeightKg: t, activity: pActivity
+        )
+        do {
+            try store.setProfile(p)
+            if applyGoals { try store.applyRecommendedGoalsFromProfile() }
+            flash = "프로필 저장 · 목표 적용"
+            refresh()
+        } catch {
+            flash = "저장 실패"
+        }
     }
 
     // MARK: Actions

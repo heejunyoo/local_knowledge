@@ -336,6 +336,41 @@ public final class MobileHTTPServer: @unchecked Sendable {
             var obj: [String: Any] = ["title": s.title, "subtitle": s.subtitle]
             if let slot = s.slot { obj["slot"] = slot.rawValue }
             return jsonRPCResponse(id: id, result: JSONValue.fromJSONObject(obj), error: nil)
+        case "diet.profile.get":
+            if let pd = diet.profileDict() {
+                return jsonRPCResponse(id: id, result: JSONValue.fromJSONObject(pd), error: nil)
+            }
+            return jsonRPCResponse(id: id, result: .object(["exists": .bool(false)]), error: nil)
+        case "diet.profile.set":
+            let sexRaw = (p["sex"] as? String) ?? "female"
+            let actRaw = (p["activity"] as? String) ?? "light"
+            let sex = DietProfile.Sex(rawValue: sexRaw) ?? .female
+            let act = DietProfile.Activity(rawValue: actRaw) ?? .light
+            let profile = DietProfile(
+                heightCm: doubleParam(p["height_cm"]) ?? 165,
+                weightKg: doubleParam(p["weight_kg"]) ?? 65,
+                age: intParam(p["age"]) ?? 30,
+                sex: sex,
+                targetWeightKg: doubleParam(p["target_weight_kg"]) ?? 60,
+                activity: act
+            )
+            try diet.setProfile(profile)
+            let apply = (p["apply_goals"] as? Bool) ?? true
+            if apply { try diet.applyRecommendedGoalsFromProfile() }
+            var out: [String: Any] = diet.profileDict() ?? [:]
+            out["goals"] = diet.goalsDict()
+            if let plan = diet.planProjection() {
+                out["plan"] = plan.asDict()
+            }
+            return jsonRPCResponse(id: id, result: JSONValue.fromJSONObject(out), error: nil)
+        case "diet.plan":
+            if let plan = diet.planProjection() {
+                return jsonRPCResponse(id: id, result: JSONValue.fromJSONObject(plan.asDict()), error: nil)
+            }
+            return jsonRPCResponse(id: id, result: .object([
+                "needs_profile": .bool(true),
+                "eta_text": .string("키·몸무게·나이·성별·목표 체중을 입력하면 도달 시점을 계산해요."),
+            ]), error: nil)
         case "diet.day_summary":
             return jsonRPCResponse(id: id, result: JSONValue.fromJSONObject(diet.daySummary()), error: nil)
         case "diet.week_review":

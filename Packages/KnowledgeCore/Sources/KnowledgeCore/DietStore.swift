@@ -108,6 +108,8 @@ public final class DietStore: @unchecked Sendable {
         public var weekWorkoutMinutes: Int
         public var analysisLines: [String]
         public var latestWeightKg: Double?
+        public var profile: DietProfile?
+        public var plan: DietPlanProjection?
     }
 
     private struct FileModel: Codable {
@@ -115,9 +117,10 @@ public final class DietStore: @unchecked Sendable {
         var workouts: [Workout]
         var metrics: [Metric]
         var goals: Goals?
+        var profile: DietProfile?
 
         enum CodingKeys: String, CodingKey {
-            case meals, workouts, metrics, goals
+            case meals, workouts, metrics, goals, profile
         }
     }
 
@@ -132,7 +135,7 @@ public final class DietStore: @unchecked Sendable {
            let m = try? JSONDecoder().decode(FileModel.self, from: data) {
             self.model = m
         } else {
-            self.model = FileModel(meals: [], workouts: [], metrics: [], goals: .default)
+            self.model = FileModel(meals: [], workouts: [], metrics: [], goals: .default, profile: nil)
         }
         if model.goals == nil { model.goals = .default }
     }
@@ -156,6 +159,54 @@ public final class DietStore: @unchecked Sendable {
         lock.lock(); defer { lock.unlock() }
         model.goals = g
         try persist()
+    }
+
+    public func profile() -> DietProfile? {
+        lock.lock(); defer { lock.unlock() }
+        return model.profile
+    }
+
+    public func setProfile(_ p: DietProfile) throws {
+        lock.lock(); defer { lock.unlock() }
+        model.profile = p
+        // Sync latest metric weight if empty history
+        if p.weightKg > 0 {
+            let m = Metric(id: UUID().uuidString, ts: iso(Date()), weightKg: p.weightKg, sleepH: nil)
+            model.metrics.append(m)
+        }
+        try persist()
+    }
+
+    /// Overwrite kcal/protein goals from profile recommendations (beginner-friendly).
+    public func applyRecommendedGoalsFromProfile() throws {
+        lock.lock(); defer { lock.unlock() }
+        guard let p = model.profile, p.isComplete else { return }
+        var g = model.goals ?? .default
+        g.targetKcal = p.recommendedKcal
+        g.targetProteinG = p.recommendedProteinG
+        g.weeklyWorkouts = p.recommendedWeeklyWorkouts
+        g.targetWorkoutMinutesPerDay = p.recommendedWorkoutMinutesPerDay
+        model.goals = g
+        try persist()
+    }
+
+    /// Average daily kcal over last N days that have any meal logged.
+    public func averageDailyKcal(days: Int = 7) -> Double? {
+        lock.lock(); defer { lock.unlock() }
+        return averageDailyKcalLocked(days: days)
+    }
+
+    public func planProjection() -> DietPlanProjection? {
+        lock.lock()
+        var p = model.profile
+        let g = model.goals ?? .default
+        if let w = (model.metrics.reversed().compactMap(\.weightKg).first) {
+            p?.weightKg = w
+        }
+        let avg = averageDailyKcalLocked(days: 7)
+        lock.unlock()
+        guard let profile = p, profile.isComplete else { return nil }
+        return profile.planSummary(avgDailyIntakeKcal: avg, plannedKcal: g.targetKcal)
     }
 
     public func logMeal(
@@ -382,7 +433,7 @@ public final class DietStore: @unchecked Sendable {
             if let w = m.weightKg { latestWeight = w; break }
         }
 
-        let lines = analysisLocked(
+        var lines = analysisLocked(
             day: day,
             goals: goals,
             weekWorkoutCount: weekWO,
@@ -392,6 +443,22 @@ public final class DietStore: @unchecked Sendable {
             workoutProgress: workP,
             weeklyWorkoutProgress: weekWP
         )
+
+        let profile = model.profile
+        let plan: DietPlanProjection? = {
+            guard var p = profile, p.isComplete else { return nil }
+            if let w = latestWeight { p.weightKg = w }
+            let avg = averageDailyKcalLocked(days: 7)
+            return p.planSummary(avgDailyIntakeKcal: avg, plannedKcal: goals.targetKcal)
+        }()
+        if let plan {
+            lines.insert(plan.etaText, at: 0)
+            if !plan.paceText.isEmpty {
+                lines.insert("유지 칼로리 약 \(Int(plan.tdee))kcal · 권장 섭취 \(Int(plan.recommendedKcal))kcal · \(plan.paceText)", at: 1)
+            }
+        } else {
+            lines.insert("키·몸무게·나이·성별·목표 체중을 입력하면 목표 칼로리와 도달 시점을 자동으로 알려 드려요.", at: 0)
+        }
 
         return Dashboard(
             day: day,
@@ -405,7 +472,9 @@ public final class DietStore: @unchecked Sendable {
             weekWorkoutCount: weekWO,
             weekWorkoutMinutes: weekMin,
             analysisLines: lines,
-            latestWeightKg: latestWeight
+            latestWeightKg: latestWeight,
+            profile: profile,
+            plan: plan
         )
     }
 
@@ -416,6 +485,22 @@ public final class DietStore: @unchecked Sendable {
             "target_protein_g": x.targetProteinG,
             "weekly_workouts": x.weeklyWorkouts,
             "target_workout_minutes_per_day": x.targetWorkoutMinutesPerDay,
+        ]
+    }
+
+    public func profileDict(_ p: DietProfile? = nil) -> [String: Any]? {
+        guard let p = p ?? profile() else { return nil }
+        return [
+            "height_cm": p.heightCm,
+            "weight_kg": p.weightKg,
+            "age": p.age,
+            "sex": p.sex.rawValue,
+            "target_weight_kg": p.targetWeightKg,
+            "activity": p.activity.rawValue,
+            "bmr": p.bmr.rounded(),
+            "tdee": p.tdee.rounded(),
+            "recommended_kcal": p.recommendedKcal,
+            "recommended_protein_g": p.recommendedProteinG,
         ]
     }
 
@@ -448,11 +533,34 @@ public final class DietStore: @unchecked Sendable {
             ] as [String: Any],
             "analysis": d.analysisLines,
             "summary_text": d.day.summaryText,
+            "needs_profile": d.profile == nil || !(d.profile?.isComplete ?? false),
         ]
         if let w = d.latestWeightKg {
             out["latest_weight_kg"] = w
         }
+        if let pd = profileDict(d.profile) {
+            out["profile"] = pd
+        }
+        if let plan = d.plan {
+            out["plan"] = plan.asDict()
+        }
         return out
+    }
+
+    /// Call only while lock is held.
+    private func averageDailyKcalLocked(days: Int) -> Double? {
+        let cal = Calendar.current
+        let end = cal.startOfDay(for: Date())
+        var totals: [Double] = []
+        for offset in 0..<days {
+            guard let d = cal.date(byAdding: .day, value: -offset, to: end) else { continue }
+            let key = dayKey(d)
+            let meals = model.meals.filter { $0.ts.hasPrefix(key) }
+            guard !meals.isEmpty else { continue }
+            totals.append(meals.compactMap(\.kcal).reduce(0, +))
+        }
+        guard !totals.isEmpty else { return nil }
+        return totals.reduce(0, +) / Double(totals.count)
     }
 
     // MARK: - private
