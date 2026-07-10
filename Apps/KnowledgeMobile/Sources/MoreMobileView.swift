@@ -32,6 +32,28 @@ struct MoreMobileView: View {
                                 }
                                 Divider().padding(.leading, 56)
                                 NavigationLink {
+                                    InboxMobileView()
+                                } label: {
+                                    rowLabel(
+                                        title: "인박스",
+                                        subtitle: "빠른 메모 → Mac vault",
+                                        icon: "tray.fill",
+                                        trailing: core.inboxOpenCount > 0 ? "\(core.inboxOpenCount)" : nil
+                                    )
+                                }
+                                Divider().padding(.leading, 56)
+                                NavigationLink {
+                                    WeekReviewMobileView()
+                                } label: {
+                                    rowLabel(
+                                        title: "주간 리뷰",
+                                        subtitle: core.streakDays > 0 ? "연속 \(core.streakDays)일" : "7일 요약",
+                                        icon: "chart.bar.fill",
+                                        trailing: nil
+                                    )
+                                }
+                                Divider().padding(.leading, 56)
+                                NavigationLink {
                                     SearchMobileView()
                                 } label: {
                                     rowLabel(title: "검색", subtitle: "키워드로 찾기", icon: "magnifyingglass", trailing: nil)
@@ -40,7 +62,7 @@ struct MoreMobileView: View {
                                 NavigationLink {
                                     SettingsMobileView()
                                 } label: {
-                                    rowLabel(title: "설정", subtitle: "연결 · 페어링 해제", icon: "gearshape.fill", trailing: nil)
+                                    rowLabel(title: "설정", subtitle: "연결 · 건강 · 페어링", icon: "gearshape.fill", trailing: nil)
                                 }
                             }
                             .padding(.horizontal, KSpace.x4)

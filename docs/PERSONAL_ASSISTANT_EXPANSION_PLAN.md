@@ -5,7 +5,7 @@
 | Date | **2026-07-10** |
 | Version | **2.1 — Implementable best + strategy kill + P0 compress** |
 | Horizon | 2026-07 ~ 2027-Q1 |
-| Status | Strategy + **W0 landed** · **W1 HealthKit started** |
+| Status | **W0–W2 delivered** (see `ASSISTANT_DELIVERY_REPORT.md`) · W3 EDGE deferred |
 | Principle | **현재 상황에서 구현 가능한 최선 (Implementable Best)** — 항상 이 기준 |
 | HTML | `docs/PERSONAL_ASSISTANT_EXPANSION_REPORT.html` |
 | Related | `FEATURE_SCORECARD_AND_IMPROVEMENT_PLAN.md` · `core_platform_sketch.md` |
@@ -510,49 +510,46 @@ Wave는 **시간 구간이 겹치지 않음**. 각 기능은 **단일 Wave prima
 
 ## 6.2 Wave × 기능 (배타 배치)
 
-### W0 — Implementable Best slice (P0 only)
-
-| ID | 산출물 | DoD |
-|----|--------|-----|
-| C7-F1 | `assistant.today` (+ `timeline.list` 최소) | JSON 스키마 안정, 빈 날 OK |
-| C3-F1 | 오늘 meal/workout/metric/review 이벤트 조립 | 홈·API 동일 소스 |
-| C6-F1·F2 | Mac·iOS 홈 3블록 (몸 / 지식 / 다음) | G-Hub |
-| C5-F3 | 기존 `diet.suggest`를 홈 CTA로 연결 | 신규 코치 로직 최소 |
-| C1-F1 | refine 답에 근거 푸터; 무검색 시 환각 금지 | G-Trust |
-
-**완료 정의:** §0.3 게이트 4개. Assistant 체감 2→5.  
-**비범위:** HK, 인박스, 주간 내러티브, intent 고도화.
-
-### W1 — Body bridge + cognition
+### W0 — Implementable Best slice (P0 only) — **DONE**
 
 | ID | 산출물 | 상태 |
 |----|--------|------|
-| C2-F1 · C2-F2 | HK pull-on-open + 매핑 | **코드 착수** (iOS HealthKitBridge) |
-| C7-F2 | `health.ingest` idempotent | **구현** |
-| C5-F1 · C5-F2 | intent · 빠진 로그 | 대기 |
-| C3-F2 | 주간 버킷 (숫자) | 대기 |
-| C4-F2 | Mac 단축키 | 대기 |
+| C7-F1 · C3-F1 | assistant.today / timeline | ✅ |
+| C6-F1·F2 | Hub 3블록 | ✅ |
+| C5-F3 | suggest CTA | ✅ |
+| C1-F1 | RAG citation footer | ✅ |
 
-**완료 정의:** 설정에서 건강 연결 1회 → 이후 앱 오픈 시 pull; 운동/수면 source=healthkit 타임라인 배지; dogfood 삭제율 관찰.
+### W1 — Body bridge + cognition — **DONE**
 
-### W2 — Retention loop
+| ID | 산출물 | 상태 |
+|----|--------|------|
+| C2-F1 · C2-F2 | HK pull + 매핑 | ✅ |
+| C7-F2 | health.ingest | ✅ |
+| C5-F1 · C5-F2 | intent · 빠진 로그 | ✅ |
+| C3-F2 | 주간 버킷 / week_review | ✅ |
+| C4-F2 | Mac ⌘⇧R | ✅ |
 
-| ID | 산출물 |
-|----|--------|
-| C5-F4 · C5-F5 · C5-F6 | 크로스 질의 · 투명성 · 주간 내러티브 |
-| C4-F1 | iOS 인박스 |
-| C6-F3 · C6-F4 | 메뉴바 · 로컬 알림 |
-| C2-F3 · C2-F4 | 수면 입력 · 추세 |
-| C1-F2 · C1-F3 | 액션아이템 · 큐레이션 |
-| C7-F3 | 온보딩 |
+### W2 — Retention loop — **DONE**
 
-### W3 — Reach
+| ID | 산출물 | 상태 |
+|----|--------|------|
+| C5-F4 · C5-F5 · C5-F6 | mixed chat · sources · week narrative | ✅ |
+| C4-F1 | iOS 인박스 → vault/inbox | ✅ |
+| C6-F3 · C6-F4 | 메뉴바 한 줄 · 로컬 알림 | ✅ |
+| C2-F3 · C2-F4 | 수면 힌트 · streak/주간 | ✅ |
+| C1-F2 | 액션 기한 (기존 notifier) | ✅ 유지 |
+| C1-F3 | 풀 큐레이션 UI | ⏳ Next |
+| C7-F3 | 온보딩 카드 | ✅ |
 
-C4-F3, C4-F4, C3-F3, C6-F5, C6-F6, C1-F4, (조건부 C7-F5)
+### W3 — Reach — **DEFERRED (EDGE)**
 
-### W4+ / Park
+C4-F3 음성 ASR, C4-F4 Share, C3-F3 EventKit, C6-F5 위젯, C6-F6 Intents, C7-F5 HTTPS
 
-§5 표의 Later·Park 전부. 메일·에이전트·영양 DB 올인·APNs·멀티유저 포함.
+### W4+ / Park — **OUT**
+
+메일·에이전트·영양 DB 올인·APNs·멀티유저
+
+**일괄 보고:** `docs/ASSISTANT_DELIVERY_REPORT.md`
 
 ## 6.3 아키텍처 납품 (Wave에 묶인 계약만)
 

@@ -167,6 +167,18 @@ struct HomeMobileView: View {
                                     label: "몸",
                                     text: core.bodyLine.isEmpty ? (core.dietLine.isEmpty ? "아직 오늘 기록이 없어요" : core.dietLine) : core.bodyLine
                                 )
+                                if core.streakDays > 0 {
+                                    Text("연속 \(core.streakDays)일")
+                                        .font(.system(size: 12, weight: .semibold))
+                                        .foregroundStyle(KColor.blue500)
+                                        .padding(.leading, 48)
+                                }
+                                if !core.sleepHint.isEmpty {
+                                    Text(core.sleepHint)
+                                        .font(.system(size: 12))
+                                        .foregroundStyle(KColor.grey500)
+                                        .padding(.leading, 48)
+                                }
                                 Divider()
                                 briefingRow(
                                     label: "지식",
@@ -181,6 +193,30 @@ struct HomeMobileView: View {
                                         ? (core.dietSuggestTitle.isEmpty ? "기록하거나 물어보세요" : core.dietSuggestTitle)
                                         : core.nextActionLabel
                                 )
+                            }
+                        }
+
+                        if !core.gaps.isEmpty {
+                            KCard {
+                                VStack(alignment: .leading, spacing: 8) {
+                                    Text("빠진 기록")
+                                        .font(.system(size: 13, weight: .semibold))
+                                        .foregroundStyle(KColor.grey500)
+                                    ForEach(Array(core.gaps.prefix(4).enumerated()), id: \.offset) { _, g in
+                                        let label = g["label"] as? String ?? ""
+                                        Button { goDiet = true } label: {
+                                            HStack {
+                                                Image(systemName: "exclamationmark.circle")
+                                                    .foregroundStyle(KColor.blue500)
+                                                Text(label)
+                                                    .font(.system(size: 14, weight: .medium))
+                                                    .foregroundStyle(KColor.grey900)
+                                                Spacer()
+                                            }
+                                        }
+                                        .buttonStyle(.plain)
+                                    }
+                                }
                             }
                         }
 
@@ -357,7 +393,7 @@ struct AskMobileView: View {
                                 KEmptyState(
                                     systemImage: "bubble.left.and.bubble.right",
                                     title: "무엇이 궁금한가요?",
-                                    message: "지식에서 찾아 답해요. 보내기 후 키보드는 자동으로 닫혀요."
+                                    message: "지식·식단을 섞어 물어도 돼요. 예: 「이번 주 단백질이랑 회의 목표」"
                                 )
                             }
                             ForEach(messages) { m in
@@ -472,21 +508,25 @@ struct AskMobileView: View {
         status = "지식 찾는 중…"
         Task {
             do {
-                // Single full path (cloud refine first on Mac) — avoid flashing garbage extractive as final.
                 status = "답 만드는 중…"
-                let full = try await core.ask(q: q)
-                var answer = full.answer
-                var engine = full.engine
-                // If still extractive-only, try chat refine once more (knowledge mode).
-                if engine.contains("extractive"), let chat = try? await core.chat(message: q),
-                   !chat.answer.isEmpty, chat.answer != answer, !chat.engine.contains("extractive") {
-                    answer = chat.answer
-                    engine = chat.engine
+                // Prefer /v1/chat for intent routing (knowledge / diet / mixed) + sources transparency.
+                if let chat = try? await core.chat(message: q), !chat.answer.isEmpty {
+                    let src = chat.sources.prefix(4).compactMap { s -> String? in
+                        let svc = s["service"] as? String ?? ""
+                        let title = s["title"] as? String ?? ""
+                        if title.isEmpty { return nil }
+                        return svc.isEmpty ? title : "\(svc):\(title)"
+                    }.joined(separator: " · ")
+                    let meta = [chat.engine.isEmpty ? nil : chat.engine, src.isEmpty ? nil : "출처 \(src)"]
+                        .compactMap { $0 }.joined(separator: " · ")
+                    messages.append(ChatBubble(role: "assistant", text: chat.answer, meta: meta))
+                } else {
+                    let full = try await core.ask(q: q)
+                    let cites = full.citations.prefix(3).compactMap { $0["title"] as? String }.joined(separator: " · ")
+                    let meta = [full.engine.isEmpty ? nil : full.engine, cites.isEmpty ? nil : "출처 \(cites)"]
+                        .compactMap { $0 }.joined(separator: " · ")
+                    messages.append(ChatBubble(role: "assistant", text: full.answer, meta: meta))
                 }
-                let cites = full.citations.prefix(3).compactMap { $0["title"] as? String }.joined(separator: " · ")
-                let meta = [engine.isEmpty ? nil : engine, cites.isEmpty ? nil : "출처 \(cites)"]
-                    .compactMap { $0 }.joined(separator: " · ")
-                messages.append(ChatBubble(role: "assistant", text: answer, meta: meta))
             } catch {
                 messages.append(ChatBubble(role: "assistant", text: "오류: \(error.localizedDescription)", meta: ""))
             }

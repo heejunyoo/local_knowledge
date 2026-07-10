@@ -46,6 +46,21 @@ struct KnowledgeAppMain: App {
         .defaultSize(width: 480, height: 720)
         .commands {
             CommandGroup(replacing: .newItem) {}
+            CommandMenu("캡처") {
+                Button(model.isRecording ? "녹음 끝내기" : "녹음 시작") {
+                    if model.isRecording {
+                        model.stopRecording()
+                    } else {
+                        model.startRecording()
+                    }
+                }
+                .keyboardShortcut("r", modifiers: [.command, .shift])
+                Button("확인함 열기") {
+                    // Focus main window — user switches to 확인함 tab manually if needed
+                    NSApp.activate(ignoringOtherApps: true)
+                }
+                .keyboardShortcut("e", modifiers: [.command, .shift])
+            }
         }
 
         MenuBarExtra {
@@ -54,7 +69,8 @@ struct KnowledgeAppMain: App {
         } label: {
             MenuBarLabel(
                 isRecording: model.isRecording,
-                badge: model.reviewCount + model.failedCount + model.dueActionCount
+                badge: model.reviewCount + model.failedCount + model.dueActionCount,
+                statusLine: menuBarStatusLine
             )
         }
         .menuBarExtraStyle(.window)
@@ -86,5 +102,19 @@ struct KnowledgeAppMain: App {
             }
             .frame(width: 360, height: 260)
         }
+    }
+
+    /// Compact one-liner for menu bar (review / diet summary).
+    private var menuBarStatusLine: String {
+        if model.isRecording { return "녹음" }
+        if model.reviewCount > 0 { return "확인 \(model.reviewCount)" }
+        if model.dueActionCount > 0 { return "할일 \(model.dueActionCount)" }
+        let day = DietStore(knowledgeRoot: model.knowledgeRoot).daySummary()
+        if let line = day["summary_text"] as? String, !line.isEmpty {
+            // Keep menu bar short
+            if line.count > 22 { return String(line.prefix(20)) + "…" }
+            return line.replacingOccurrences(of: "kcal", with: "k")
+        }
+        return "오늘"
     }
 }

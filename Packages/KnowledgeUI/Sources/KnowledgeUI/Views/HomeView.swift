@@ -9,6 +9,11 @@ public struct HomeView: View {
     @State private var bodyLine: String = ""
     @State private var dietSuggestTitle: String = ""
     @State private var dietSuggestSubtitle: String = ""
+    @State private var gaps: [[String: Any]] = []
+    @State private var sleepHint: String = ""
+    @State private var streakDays: Int = 0
+    @State private var weekNarrative: String = ""
+    @AppStorage("assistant.onboarding.dismissed") private var onboardingDismissed = false
 
     public init(model: AppModel) {
         self.model = model
@@ -31,7 +36,19 @@ public struct HomeView: View {
                             errorBanner(err)
                         }
                         Spacer().frame(height: TossSpace.x8)
+                        if !onboardingDismissed {
+                            assistantOnboardingBlock
+                            Spacer().frame(height: TossSpace.x6)
+                        }
                         assistantBriefingBlock
+                        if !gaps.isEmpty {
+                            Spacer().frame(height: TossSpace.x6)
+                            gapsBlock
+                        }
+                        if !weekNarrative.isEmpty {
+                            Spacer().frame(height: TossSpace.x6)
+                            weekBlock
+                        }
                         Spacer().frame(height: TossSpace.x8)
                         primaryBlock
                         Spacer().frame(height: TossSpace.x8)
@@ -69,6 +86,13 @@ public struct HomeView: View {
         let s = store.suggestedAction()
         dietSuggestTitle = s.title
         dietSuggestSubtitle = s.subtitle
+        gaps = store.missingLogChecklist()
+        sleepHint = store.sleepCoachHint() ?? ""
+        streakDays = store.activityStreak()
+        let week = store.weekReview()
+        weekNarrative = week["summary_text"] as? String ?? ""
+        let inbox = InboxStore(knowledgeRoot: model.knowledgeRoot)
+        _ = inbox.openCount()
     }
 
     /// First-run / setup tips — quiet, dismissible by progress (no meetings + vault ok).
@@ -216,7 +240,34 @@ public struct HomeView: View {
         return "몸·지식·다음 할 일을 한곳에서 이어가요."
     }
 
-    // MARK: W0 Assistant Hub briefing
+    // MARK: W0–W2 Assistant Hub briefing
+
+    private var assistantOnboardingBlock: some View {
+        VStack(alignment: .leading, spacing: TossSpace.x3) {
+            HStack {
+                Text("개인 비서 안내")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(TossColor.grey500)
+                Spacer()
+                Button("닫기") { onboardingDismissed = true }
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(TossColor.blue500)
+                    .buttonStyle(.plain)
+            }
+            VStack(alignment: .leading, spacing: TossSpace.x2) {
+                Text("· 홈에서 오늘 몸·지식·다음 할 일을 한눈에 봐요")
+                Text("· 아이폰에서 Apple 건강을 연결하면 운동·수면이 자동으로 쌓여요")
+                Text("· 물어보기는 지식·식단을 섞어 답할 수 있어요")
+                Text("· ⌘⇧R 로 녹음을 시작·종료해요")
+            }
+            .font(.system(size: 14))
+            .foregroundStyle(TossColor.grey700)
+            .padding(TossSpace.x5)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(TossColor.blue50)
+            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        }
+    }
 
     private var assistantBriefingBlock: some View {
         VStack(alignment: .leading, spacing: TossSpace.x3) {
@@ -228,6 +279,18 @@ public struct HomeView: View {
                     label: "몸",
                     text: bodyLine.isEmpty ? "아직 오늘 식단·운동 기록이 없어요" : bodyLine
                 )
+                if streakDays > 0 {
+                    Text("연속 \(streakDays)일")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(TossColor.blue500)
+                        .padding(.leading, 44)
+                }
+                if !sleepHint.isEmpty {
+                    Text(sleepHint)
+                        .font(.system(size: 12))
+                        .foregroundStyle(TossColor.grey500)
+                        .padding(.leading, 44)
+                }
                 Divider().overlay(TossColor.grey200)
                 briefingLine(
                     label: "지식",
@@ -251,6 +314,53 @@ public struct HomeView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(TossColor.white)
             .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+        }
+    }
+
+    private var gapsBlock: some View {
+        VStack(alignment: .leading, spacing: TossSpace.x3) {
+            Text("빠진 기록")
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(TossColor.grey500)
+            VStack(alignment: .leading, spacing: TossSpace.x2) {
+                ForEach(Array(gaps.prefix(5).enumerated()), id: \.offset) { _, g in
+                    let label = g["label"] as? String ?? ""
+                    Button {
+                        path.append(AppRoute.diet)
+                    } label: {
+                        HStack(spacing: 8) {
+                            Image(systemName: "exclamationmark.circle.fill")
+                                .foregroundStyle(TossColor.blue500)
+                            Text(label)
+                                .font(.system(size: 15, weight: .medium))
+                                .foregroundStyle(TossColor.grey900)
+                            Spacer()
+                            Image(systemName: "chevron.right")
+                                .font(.system(size: 12, weight: .semibold))
+                                .foregroundStyle(TossColor.grey500)
+                        }
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(TossSpace.x5)
+            .background(TossColor.white)
+            .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+        }
+    }
+
+    private var weekBlock: some View {
+        VStack(alignment: .leading, spacing: TossSpace.x3) {
+            Text("주간")
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(TossColor.grey500)
+            Text(weekNarrative)
+                .font(.system(size: 14))
+                .foregroundStyle(TossColor.grey700)
+                .padding(TossSpace.x5)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(TossColor.white)
+                .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
         }
     }
 

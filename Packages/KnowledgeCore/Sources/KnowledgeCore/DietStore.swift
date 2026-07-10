@@ -375,6 +375,85 @@ public final class DietStore: @unchecked Sendable {
         case snack = "간식"
     }
 
+    /// W1 gaps checklist — what is still missing for “today”.
+    public func missingLogChecklist(now: Date = Date()) -> [[String: Any]] {
+        let hour = Calendar.current.component(.hour, from: now)
+        let day = daySnapshot(day: now)
+        let mealText = day.meals.map { $0.items.joined(separator: " ") }.joined(separator: " ")
+        func has(_ words: [String]) -> Bool { words.contains { mealText.contains($0) } }
+        var gaps: [[String: Any]] = []
+        if hour >= 9, !has(["아침", "조식", "breakfast"]) {
+            gaps.append(["kind": "meal", "slot": "아침", "label": "아침 기록이 없어요", "priority": 1])
+        }
+        if hour >= 14, !has(["점심", "중식", "lunch"]) {
+            gaps.append(["kind": "meal", "slot": "점심", "label": "점심 기록이 없어요", "priority": 2])
+        }
+        if hour >= 20, !has(["저녁", "석식", "dinner"]) {
+            gaps.append(["kind": "meal", "slot": "저녁", "label": "저녁 기록이 없어요", "priority": 3])
+        }
+        if hour >= 12, day.workoutMinutes == 0 {
+            gaps.append(["kind": "workout", "label": "오늘 운동 기록이 없어요", "priority": 4])
+        }
+        // Sleep: expect metric for *yesterday* if morning
+        if hour < 12 {
+            let cal = Calendar.current
+            if let y = cal.date(byAdding: .day, value: -1, to: now) {
+                let ySnap = daySnapshot(day: y)
+                let hasSleep = ySnap.metrics.contains { ($0.sleepH ?? 0) > 0 }
+                if !hasSleep {
+                    gaps.append(["kind": "sleep", "label": "어제 수면이 없어요", "priority": 5])
+                }
+            }
+        }
+        return gaps.sorted { ($0["priority"] as? Int ?? 99) < ($1["priority"] as? Int ?? 99) }
+    }
+
+    /// Sleep-based coach one-liner (aggregates first).
+    public func sleepCoachHint(now: Date = Date()) -> String? {
+        let cal = Calendar.current
+        // Prefer last 48h metrics with sleep
+        let recent = (0..<3).compactMap { offset -> Metric? in
+            guard let d = cal.date(byAdding: .day, value: -offset, to: now) else { return nil }
+            return daySnapshot(day: d).metrics.reversed().first { ($0.sleepH ?? 0) > 0 }
+        }
+        guard let h = recent.first?.sleepH else { return nil }
+        if h < 6 {
+            return String(format: "최근 수면 %.1f시간 — 오늘은 칼로리·운동 목표를 조금 낮춰도 괜찮아요.", h)
+        }
+        if h >= 8 {
+            return String(format: "최근 수면 %.1f시간 — 회복 좋음, 단백질 목표 유지해 보세요.", h)
+        }
+        return String(format: "최근 수면 %.1f시간.", h)
+    }
+
+    /// 7-day streak: consecutive days (ending today) with ≥1 meal or workout.
+    public func activityStreak(reference: Date = Date()) -> Int {
+        let cal = Calendar.current
+        var streak = 0
+        for offset in 0..<30 {
+            guard let d = cal.date(byAdding: .day, value: -offset, to: reference) else { break }
+            let snap = daySnapshot(day: d)
+            if snap.meals.isEmpty && snap.workouts.isEmpty {
+                if offset == 0 { continue } // today empty doesn't break yet if checking mid-day
+                break
+            }
+            streak += 1
+        }
+        // If today empty, streak is past days only
+        let today = daySnapshot(day: reference)
+        if today.meals.isEmpty && today.workouts.isEmpty, streak > 0 {
+            // recount from yesterday
+            streak = 0
+            for offset in 1..<30 {
+                guard let d = cal.date(byAdding: .day, value: -offset, to: reference) else { break }
+                let snap = daySnapshot(day: d)
+                if snap.meals.isEmpty && snap.workouts.isEmpty { break }
+                streak += 1
+            }
+        }
+        return streak
+    }
+
     /// Suggest next action from local hour (device TZ).
     public func suggestedAction(now: Date = Date()) -> (title: String, subtitle: String, slot: MealSlot?) {
         let hour = Calendar.current.component(.hour, from: now)
@@ -511,6 +590,13 @@ public final class DietStore: @unchecked Sendable {
     public func coach(message: String?) -> [String: Any] {
         let dash = dashboard()
         var lines = dash.analysisLines
+        if let hint = sleepCoachHint() {
+            lines.append(hint)
+        }
+        let streak = activityStreak()
+        if streak > 0 {
+            lines.append("연속 기록 \(streak)일")
+        }
         if let msg = message?.trimmingCharacters(in: .whitespacesAndNewlines), !msg.isEmpty {
             lines.append("질문 메모: \(msg)")
         }
@@ -524,6 +610,7 @@ public final class DietStore: @unchecked Sendable {
                 "workout": dash.workoutProgress,
                 "weekly_workouts": dash.weeklyWorkoutProgress,
             ] as [String: Any],
+            "streak_days": streak,
         ]
     }
 

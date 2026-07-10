@@ -15,6 +15,7 @@ public final class MobileHTTPServer: @unchecked Sendable {
     private let pipeline: PipelineService
     private let pairing: PairingStore
     private let diet: DietStore
+    private let inbox: InboxStore
     private let coreName: String
     private var serverFD: Int32 = -1
     private var acceptThread: Thread?
@@ -32,6 +33,7 @@ public final class MobileHTTPServer: @unchecked Sendable {
         self.pipeline = pipeline
         self.pairing = PairingStore(knowledgeRoot: knowledgeRoot)
         self.diet = DietStore(knowledgeRoot: knowledgeRoot)
+        self.inbox = InboxStore(knowledgeRoot: knowledgeRoot)
         self.coreName = coreName
     }
 
@@ -203,7 +205,7 @@ public final class MobileHTTPServer: @unchecked Sendable {
             "ok": true,
             "core": coreName,
             "gateway": "m4",
-            "services": ["knowledge": true, "diet": true],
+            "services": ["knowledge": true, "diet": true, "assistant": true, "inbox": true, "health": true],
         ]
         if let r = res.result { out["knowledge"] = jsonAny(r) }
         out["diet"] = diet.daySummary()
@@ -226,6 +228,9 @@ public final class MobileHTTPServer: @unchecked Sendable {
         }
         if method.hasPrefix("health.") {
             return try handleHealthMethod(method: method, id: id, params: params)
+        }
+        if method.hasPrefix("inbox.") {
+            return try handleInboxMethod(method: method, id: id, params: params)
         }
         if method.hasPrefix("diet.") {
             return try handleDietMethod(method: method, id: id, params: params)
@@ -280,11 +285,18 @@ public final class MobileHTTPServer: @unchecked Sendable {
         }
     }
 
-    /// W0 assistant surface — composes diet + review (no new SoT dump).
+    /// W0–W2 assistant surface — composes diet + review + gaps + week (no SoT dump).
     private func handleAssistantMethod(method: String, id: Any?, params: Any?) throws -> Data {
         switch method {
         case "assistant.today":
             return jsonRPCResponse(id: id, result: JSONValue.fromJSONObject(buildAssistantToday()), error: nil)
+        case "assistant.week_review":
+            return jsonRPCResponse(id: id, result: JSONValue.fromJSONObject(buildWeekReview()), error: nil)
+        case "assistant.gaps":
+            return jsonRPCResponse(id: id, result: JSONValue.fromJSONObject([
+                "gaps": diet.missingLogChecklist(),
+                "sleep_hint": diet.sleepCoachHint() as Any,
+            ]), error: nil)
         case "timeline.list":
             var events = diet.timelineEvents()
             let reviewN = reviewPendingCount()
@@ -306,12 +318,47 @@ public final class MobileHTTPServer: @unchecked Sendable {
         }
     }
 
+    private func handleInboxMethod(method: String, id: Any?, params: Any?) throws -> Data {
+        let p = params as? [String: Any] ?? [:]
+        switch method {
+        case "inbox.create":
+            let text = (p["text"] as? String) ?? (p["message"] as? String) ?? ""
+            let item = try inbox.create(text: text)
+            return jsonRPCResponse(id: id, result: JSONValue.fromJSONObject(inbox.asDict(item)), error: nil)
+        case "inbox.list":
+            let include = (p["include_promoted"] as? Bool) ?? false
+            let items = inbox.list(includePromoted: include).map { inbox.asDict($0) }
+            return jsonRPCResponse(id: id, result: JSONValue.fromJSONObject([
+                "items": items,
+                "open_count": inbox.openCount(),
+            ]), error: nil)
+        case "inbox.promote":
+            guard let iid = p["id"] as? String, !iid.isEmpty else {
+                return jsonRPCResponse(id: id, result: nil, error: .invalidParams)
+            }
+            let item = try inbox.promote(id: iid)
+            return jsonRPCResponse(id: id, result: JSONValue.fromJSONObject(inbox.asDict(item)), error: nil)
+        case "inbox.delete":
+            guard let iid = p["id"] as? String, !iid.isEmpty else {
+                return jsonRPCResponse(id: id, result: nil, error: .invalidParams)
+            }
+            try inbox.delete(id: iid)
+            return jsonRPCResponse(id: id, result: .object(["deleted": .bool(true)]), error: nil)
+        default:
+            return jsonRPCResponse(id: id, result: nil, error: .methodNotFound)
+        }
+    }
+
     private func buildAssistantToday() -> [String: Any] {
         let day = diet.daySummary()
         let totals = day["totals"] as? [String: Any] ?? [:]
         let goals = diet.goalsDict()
         let suggest = diet.suggestedAction()
         let reviewN = reviewPendingCount()
+        let gaps = diet.missingLogChecklist()
+        let sleepHint = diet.sleepCoachHint()
+        let streak = diet.activityStreak()
+        let inboxOpen = inbox.openCount()
         var timeline = diet.timelineEvents()
         if reviewN > 0 {
             timeline.append([
@@ -325,10 +372,17 @@ public final class MobileHTTPServer: @unchecked Sendable {
 
         var nextActions: [[String: Any]] = []
         if reviewN > 0 {
-            nextActions.append([
-                "kind": "review",
-                "label": "확인함 \(reviewN)건 보기",
-            ])
+            nextActions.append(["kind": "review", "label": "확인함 \(reviewN)건 보기"])
+        }
+        if let firstGap = gaps.first {
+            var gapAction: [String: Any] = [
+                "kind": "gap",
+                "label": firstGap["label"] as? String ?? "빠진 기록 채우기",
+            ]
+            if let slot = firstGap["slot"] as? String {
+                gapAction["slot"] = slot
+            }
+            nextActions.append(gapAction)
         }
         nextActions.append([
             "kind": "diet_suggest",
@@ -338,6 +392,9 @@ public final class MobileHTTPServer: @unchecked Sendable {
         if let slot = suggest.slot {
             nextActions[nextActions.count - 1]["slot"] = slot.rawValue
         }
+        if inboxOpen > 0 {
+            nextActions.append(["kind": "inbox", "label": "인박스 \(inboxOpen)건 정리"])
+        }
 
         let bodyLine: String = {
             if let text = day["summary_text"] as? String, !text.isEmpty { return text }
@@ -346,29 +403,55 @@ public final class MobileHTTPServer: @unchecked Sendable {
             return String(format: "오늘 %.0f kcal · 단백질 %.0fg", kcal, protein)
         }()
 
+        var body: [String: Any] = [
+            "line": bodyLine,
+            "kcal": totals["kcal"] as? Double ?? 0,
+            "protein_g": totals["protein_g"] as? Double ?? 0,
+            "workout_minutes": totals["workout_minutes"] as? Int ?? 0,
+            "meal_count": totals["meal_count"] as? Int ?? 0,
+            "target_kcal": goals["target_kcal"] as? Double ?? 0,
+            "target_protein_g": goals["target_protein_g"] as? Double ?? 0,
+            "suggest": [
+                "title": suggest.title,
+                "subtitle": suggest.subtitle,
+            ] as [String: Any],
+            "streak_days": streak,
+        ]
+        if let sleepHint { body["sleep_hint"] = sleepHint }
+
         return [
             "date": day["date"] as? String ?? "",
-            "body": [
-                "line": bodyLine,
-                "kcal": totals["kcal"] as? Double ?? 0,
-                "protein_g": totals["protein_g"] as? Double ?? 0,
-                "workout_minutes": totals["workout_minutes"] as? Int ?? 0,
-                "meal_count": totals["meal_count"] as? Int ?? 0,
-                "target_kcal": goals["target_kcal"] as? Double ?? goals["targetKcal"] as? Double ?? 0,
-                "target_protein_g": goals["target_protein_g"] as? Double ?? 0,
-                "suggest": [
-                    "title": suggest.title,
-                    "subtitle": suggest.subtitle,
-                ] as [String: Any],
-            ] as [String: Any],
+            "body": body,
             "knowledge": [
                 "review_pending": reviewN,
                 "line": reviewN > 0 ? "저장 전 요약 \(reviewN)건" : "확인할 요약 없음",
+                "inbox_open": inboxOpen,
             ] as [String: Any],
+            "gaps": gaps,
             "timeline": timeline,
             "next_actions": nextActions,
-            "version": 1,
+            "version": 2,
         ]
+    }
+
+    private func buildWeekReview() -> [String: Any] {
+        var week = diet.weekReview()
+        let streak = diet.activityStreak()
+        let sleepHint = diet.sleepCoachHint()
+        let reviewN = reviewPendingCount()
+        var narrative: [String] = []
+        if let summary = week["summary_text"] as? String { narrative.append(summary) }
+        narrative.append("연속 기록 \(streak)일")
+        if let sleepHint { narrative.append(sleepHint) }
+        if reviewN > 0 { narrative.append("확인 대기 요약 \(reviewN)건") }
+        week["streak_days"] = streak
+        week["narrative"] = narrative.joined(separator: "\n")
+        week["narrative_lines"] = narrative
+        week["review_pending"] = reviewN
+        week["inbox_open"] = inbox.openCount()
+        if let sleepHint { week["sleep_hint"] = sleepHint }
+        // week buckets = days array already
+        return week
     }
 
     private func reviewPendingCount() -> Int {
@@ -593,6 +676,9 @@ public final class MobileHTTPServer: @unchecked Sendable {
         if intent == "diet" {
             return try handleDietChat(message: message)
         }
+        if intent == "mixed" {
+            return try handleMixedChat(message: message)
+        }
 
         let fast = try KnowledgeRAG.askFast(question: message, store: store, topK: 8)
         let answer = KnowledgeRAG.refine(
@@ -602,13 +688,69 @@ public final class MobileHTTPServer: @unchecked Sendable {
             useLlama: true
         ) ?? fast
         let sources: [[String: Any]] = answer.citations.prefix(6).map {
-            ["service": "knowledge", "title": $0.title, "snippet": $0.snippet, "unit_id": $0.unitId]
+            [
+                "service": "knowledge",
+                "title": $0.title,
+                "snippet": $0.snippet,
+                "unit_id": $0.unitId,
+            ]
         }
         return http(200, [
             "answer": answer.answer,
             "engine": answer.engine,
             "sources": sources,
             "trace": ["intent:knowledge", "knowledge.ask"],
+            "intent": "knowledge",
+        ])
+    }
+
+    /// Cross-domain: aggregates body first, then knowledge retrieve (W2).
+    private func handleMixedChat(message: String) throws -> Data {
+        var trace: [String] = ["intent:mixed"]
+        let coach = diet.coach(message: message)
+        trace.append("diet.coach")
+        let dayLine = (diet.daySummary()["summary_text"] as? String) ?? ""
+        let sleep = diet.sleepCoachHint() ?? ""
+        let week = diet.weekReview()
+        let weekLine = (week["summary_text"] as? String) ?? ""
+
+        let fast = try KnowledgeRAG.askFast(question: message, store: store, topK: 6)
+        let knowledge = KnowledgeRAG.refine(
+            question: message,
+            citations: fast.citations,
+            knowledgeRoot: knowledgeRoot,
+            useLlama: true
+        ) ?? fast
+        trace.append("knowledge.ask")
+
+        var parts: [String] = []
+        parts.append("【몸】")
+        if let a = coach["answer"] as? String, !a.isEmpty { parts.append(a) }
+        if !dayLine.isEmpty { parts.append(dayLine) }
+        if !weekLine.isEmpty { parts.append(weekLine) }
+        if !sleep.isEmpty { parts.append(sleep) }
+        parts.append("")
+        parts.append("【지식】")
+        parts.append(knowledge.answer)
+
+        var sources: [[String: Any]] = [
+            ["service": "diet", "title": "오늘·주간", "snippet": dayLine],
+        ]
+        for c in knowledge.citations.prefix(4) {
+            sources.append([
+                "service": "knowledge",
+                "title": c.title,
+                "snippet": c.snippet,
+                "unit_id": c.unitId,
+            ])
+        }
+
+        return http(200, [
+            "answer": parts.joined(separator: "\n"),
+            "engine": "mixed/\(knowledge.engine)",
+            "sources": sources,
+            "trace": trace,
+            "intent": "mixed",
         ])
     }
 
@@ -661,9 +803,22 @@ public final class MobileHTTPServer: @unchecked Sendable {
     private func classifyIntent(message: String, mode: String) -> String {
         if mode == "diet" { return "diet" }
         if mode == "knowledge" { return "knowledge" }
+        if mode == "mixed" { return "mixed" }
         let lower = message.lowercased()
-        let dietCues = ["먹", "식사", "운동", "칼로리", "체중", "다이어트", "단백질", "수면", "workout", "calorie", "meal", "점심", "저녁", "아침", "kcal"]
-        if dietCues.contains(where: { lower.contains($0) }) { return "diet" }
+        let dietCues = ["먹", "식사", "운동", "칼로리", "체중", "다이어트", "단백질", "수면", "workout", "calorie", "meal", "점심", "저녁", "아침", "kcal", "체중"]
+        let knowledgeCues = ["회의", "미팅", "요약", "노트", "기억", "vault", "지난주", "지난번", "프로젝트", "액션", "할 일", "결정"]
+        let crossCues = ["그리고", "vs", "대비", "비교", "같이", "동시에", "이번 주", "이번주", "목표랑", "목표와"]
+        let hasDiet = dietCues.contains(where: { lower.contains($0) || message.contains($0) })
+        let hasKnowledge = knowledgeCues.contains(where: { message.contains($0) || lower.contains($0) })
+        let hasCross = crossCues.contains(where: { message.contains($0) || lower.contains($0) })
+        if (hasDiet && hasKnowledge) || (hasDiet && hasCross) || (hasKnowledge && hasCross && hasDiet) {
+            return "mixed"
+        }
+        // Explicit templates
+        if message.contains("단백질") && (message.contains("회의") || message.contains("목표")) {
+            return "mixed"
+        }
+        if hasDiet { return "diet" }
         return "knowledge"
     }
 

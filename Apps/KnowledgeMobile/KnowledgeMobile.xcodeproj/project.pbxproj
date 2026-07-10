@@ -19,6 +19,8 @@
 		A10000000000000000000025 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000024 /* Assets.xcassets */; };
 		A10000000000000000000027 /* HealthKitBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000026 /* HealthKitBridge.swift */; };
 		A10000000000000000000029 /* HealthKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = A10000000000000000000028 /* HealthKit.framework */; };
+		A1000000000000000000002C /* InboxMobileView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000002B /* InboxMobileView.swift */; };
+		A1000000000000000000002E /* LocalNotify.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000002D /* LocalNotify.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -37,6 +39,8 @@
 		A10000000000000000000026 /* HealthKitBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HealthKitBridge.swift; sourceTree = "<group>"; };
 		A10000000000000000000028 /* HealthKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = HealthKit.framework; path = System/Library/Frameworks/HealthKit.framework; sourceTree = SDKROOT; };
 		A1000000000000000000002A /* KnowledgeMobile.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = KnowledgeMobile.entitlements; sourceTree = "<group>"; };
+		A1000000000000000000002B /* InboxMobileView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InboxMobileView.swift; sourceTree = "<group>"; };
+		A1000000000000000000002D /* LocalNotify.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalNotify.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -72,8 +76,10 @@
 				A10000000000000000000020 /* PairingPayload.swift */,
 				A10000000000000000000022 /* QRScannerView.swift */,
 				A10000000000000000000026 /* HealthKitBridge.swift */,
+				A1000000000000000000002D /* LocalNotify.swift */,
 				A10000000000000000000012 /* ContentViews.swift */,
 				A10000000000000000000018 /* DietMobileView.swift */,
+				A1000000000000000000002B /* InboxMobileView.swift */,
 				A1000000000000000000001E /* MoreMobileView.swift */,
 			);
 			path = Sources;
@@ -165,7 +171,9 @@
 				A10000000000000000000023 /* QRScannerView.swift in Sources */,
 				A10000000000000000000016 /* ContentViews.swift in Sources */,
 				A10000000000000000000027 /* HealthKitBridge.swift in Sources */,
+				A1000000000000000000002E /* LocalNotify.swift in Sources */,
 				A10000000000000000000019 /* DietMobileView.swift in Sources */,
+				A1000000000000000000002C /* InboxMobileView.swift in Sources */,
 				A1000000000000000000001F /* MoreMobileView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -214,7 +222,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = KnowledgeMobile.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 13;
+				CURRENT_PROJECT_VERSION = 14;
 				DEVELOPMENT_TEAM = 7QXGG66FG5;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = NO;
@@ -226,7 +234,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 0.3.3;
+				MARKETING_VERSION = 0.4.0;
 				PRODUCT_BUNDLE_IDENTIFIER = local.knowledge.mobile.heejun;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
@@ -243,7 +251,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = KnowledgeMobile.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 13;
+				CURRENT_PROJECT_VERSION = 14;
 				DEVELOPMENT_TEAM = 7QXGG66FG5;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = NO;
@@ -255,7 +263,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 0.3.3;
+				MARKETING_VERSION = 0.4.0;
 				PRODUCT_BUNDLE_IDENTIFIER = local.knowledge.mobile.heejun;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";

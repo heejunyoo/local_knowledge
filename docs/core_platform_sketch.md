@@ -166,10 +166,13 @@ iPhone                         Core (:8741)                    Mac UI / CLI
 | `diet.dashboard` | Diet | — | progress + analysis + goals |
 | `diet.goals` / `diet.goals.set` | Diet | targets | goals |
 | `diet.coach` | Diet | message? | analysis text |
-| `assistant.today` | Assistant | date? | body + knowledge + timeline + next_actions (W0) |
+| `assistant.today` | Assistant | date? | body + knowledge + timeline + gaps + next_actions (W0–2) |
+| `assistant.week_review` | Assistant | — | 7-day buckets + narrative |
+| `assistant.gaps` | Assistant | — | missing log checklist |
 | `timeline.list` | Assistant | — | today events (meal/workout/metric/review) |
 | `health.ingest` | Body | samples[] (client_id, type, ts, …) | accepted / deduped (W1) |
 | `health.sync_status` | Body | — | pull_mode, mirror hints |
+| `inbox.create` / `list` / `promote` / `delete` | Inbox | text / id | open inbox → vault/inbox md |
 
 미등록 method → JSON-RPC `-32601 Method not found`.
 

@@ -25,6 +25,11 @@ public final class CoreClient: ObservableObject {
     @Published public var timelinePreview: [[String: Any]] = []
     @Published public var nextActionLabel: String = ""
     @Published public var healthSyncLine: String = ""
+    @Published public var gaps: [[String: Any]] = []
+    @Published public var sleepHint: String = ""
+    @Published public var streakDays: Int = 0
+    @Published public var weekNarrative: String = ""
+    @Published public var inboxOpenCount: Int = 0
 
     public init() {
         self.baseURL = UserDefaults.standard.string(forKey: "core.baseURL") ?? "http://100.x.y.z:8741"
@@ -128,6 +133,12 @@ public final class CoreClient: ObservableObject {
             let result = try await dietRPC("assistant.today", params: [:])
             if let body = result["body"] as? [String: Any] {
                 bodyLine = body["line"] as? String ?? ""
+                sleepHint = body["sleep_hint"] as? String ?? ""
+                if let s = body["streak_days"] as? Int {
+                    streakDays = s
+                } else if let s = body["streak_days"] as? Double {
+                    streakDays = Int(s)
+                }
                 if let suggest = body["suggest"] as? [String: Any] {
                     dietSuggestTitle = suggest["title"] as? String ?? dietSuggestTitle
                     dietSuggestSubtitle = suggest["subtitle"] as? String ?? dietSuggestSubtitle
@@ -140,7 +151,13 @@ public final class CoreClient: ObservableObject {
                 } else if let n = knowledge["review_pending"] as? Double {
                     reviewCount = Int(n)
                 }
+                if let n = knowledge["inbox_open"] as? Int {
+                    inboxOpenCount = n
+                } else if let n = knowledge["inbox_open"] as? Double {
+                    inboxOpenCount = Int(n)
+                }
             }
+            gaps = result["gaps"] as? [[String: Any]] ?? []
             if let events = result["timeline"] as? [[String: Any]] {
                 timelinePreview = Array(events.suffix(5))
             }
@@ -151,9 +168,37 @@ public final class CoreClient: ObservableObject {
             if bodyLine.isEmpty == false {
                 dietLine = bodyLine
             }
+            LocalNotify.scheduleGapsIfNeeded(gaps: gaps, reviewCount: reviewCount)
         } catch {
             // Older gateway without assistant.* — keep diet/review paths.
         }
+    }
+
+    public func fetchWeekReview() async throws -> [String: Any] {
+        let result = try await dietRPC("assistant.week_review", params: [:])
+        weekNarrative = result["narrative"] as? String ?? ""
+        return result
+    }
+
+    public func inboxList() async throws -> [[String: Any]] {
+        let result = try await dietRPC("inbox.list", params: [:])
+        if let n = result["open_count"] as? Int { inboxOpenCount = n }
+        return result["items"] as? [[String: Any]] ?? []
+    }
+
+    public func inboxCreate(text: String) async throws {
+        _ = try await dietRPC("inbox.create", params: ["text": text])
+        _ = try? await inboxList()
+    }
+
+    public func inboxPromote(id: String) async throws {
+        _ = try await dietRPC("inbox.promote", params: ["id": id])
+        _ = try? await inboxList()
+    }
+
+    public func inboxDelete(id: String) async throws {
+        _ = try await dietRPC("inbox.delete", params: ["id": id])
+        _ = try? await inboxList()
     }
 
     public func revokeRemote() async {
