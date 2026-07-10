@@ -88,25 +88,21 @@ echo "Main DR:   $(codesign -d -r- "$INSTALL" 2>&1 | tail -1)"
 echo "Run: open \"$INSTALL\""
 codesign -dv "$INSTALL" 2>&1 | head -12
 
-# Force Dock/Finder icon with *rounded* master (transparent corners).
-# Full-bleed AppIcon.icns stays for system mask; setIcon needs pre-rounded for correct Dock look.
-ICON_FOR_DOCK="$REPO/Resources/AppIcon-1024-rounded.png"
-if [[ ! -f "$ICON_FOR_DOCK" && -f "$REPO/Resources/AppIcon-1024.png" ]]; then
-  ICON_FOR_DOCK="$REPO/Resources/AppIcon-1024.png"
-fi
-if [[ -f "$ICON_FOR_DOCK" ]]; then
-  /usr/bin/swift -e "
+# Icon: full-bleed AppIcon.icns only (CFBundleIconFile). macOS applies squircle mask.
+# Never bake rounded corners + setIcon — double-masking looks broken on Dock.
+/usr/bin/swift -e '
 import AppKit
-let app = \"$INSTALL\"
-let icon = \"$ICON_FOR_DOCK\"
-if let img = NSImage(contentsOfFile: icon) {
-  let ok = NSWorkspace.shared.setIcon(img, forFile: app, options: [])
-  fputs(ok ? \"Dock icon applied (rounded)\\n\" : \"Dock icon apply failed\\n\", stderr)
-}
-" 2>/dev/null || true
-  /System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -f "$INSTALL" 2>/dev/null || true
-  killall Dock 2>/dev/null || true
-fi
+let app = "'"$INSTALL"'"
+_ = NSWorkspace.shared.setIcon(nil, forFile: app, options: [])
+fputs("using bundle AppIcon.icns (cleared custom icon)\n", stderr)
+' 2>/dev/null || true
+rm -f "$INSTALL/Icon"$'\r' 2>/dev/null || true
+rm -f "$INSTALL/Icon" 2>/dev/null || true
+xattr -d com.apple.FinderInfo "$INSTALL" 2>/dev/null || true
+/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -f "$INSTALL" 2>/dev/null || true
+# Touch + Dock refresh so new icns is picked up
+touch "$INSTALL" "$INSTALL/Contents/Info.plist" "$INSTALL/Contents/Resources/AppIcon.icns" 2>/dev/null || true
+killall Dock 2>/dev/null || true
 
 # Mobile Core (daemon starts with --http-port 8741 by default)
 HTTP_PORT="${KNOWLEDGE_HTTP_PORT:-8741}"
