@@ -221,6 +221,9 @@ public final class MobileHTTPServer: @unchecked Sendable {
         if method.hasPrefix("core.") {
             return try handleCoreMethod(method: method, id: id)
         }
+        if method.hasPrefix("assistant.") || method.hasPrefix("timeline.") {
+            return try handleAssistantMethod(method: method, id: id, params: params)
+        }
         if method.hasPrefix("diet.") {
             return try handleDietMethod(method: method, id: id, params: params)
         }
@@ -255,7 +258,11 @@ public final class MobileHTTPServer: @unchecked Sendable {
         case "core.ping":
             return jsonRPCResponse(id: id, result: .object(["pong": .bool(true)]), error: nil)
         case "core.services":
-            return jsonRPCResponse(id: id, result: .object(["knowledge": .bool(true), "diet": .bool(true)]), error: nil)
+            return jsonRPCResponse(id: id, result: .object([
+                "knowledge": .bool(true),
+                "diet": .bool(true),
+                "assistant": .bool(true),
+            ]), error: nil)
         case "core.health":
             let data = try handleCoreHealth()
             if let range = data.range(of: Data("\r\n\r\n".utf8)) {
@@ -268,6 +275,120 @@ public final class MobileHTTPServer: @unchecked Sendable {
         default:
             return jsonRPCResponse(id: id, result: nil, error: .methodNotFound)
         }
+    }
+
+    /// W0 assistant surface — composes diet + review (no new SoT dump).
+    private func handleAssistantMethod(method: String, id: Any?, params: Any?) throws -> Data {
+        switch method {
+        case "assistant.today":
+            return jsonRPCResponse(id: id, result: JSONValue.fromJSONObject(buildAssistantToday()), error: nil)
+        case "timeline.list":
+            var events = diet.timelineEvents()
+            let reviewN = reviewPendingCount()
+            if reviewN > 0 {
+                events.append([
+                    "ts": ISO8601DateFormatter().string(from: Date()),
+                    "type": "review",
+                    "title": "확인 대기 \(reviewN)건",
+                    "source": "knowledge",
+                    "id": "review-pending",
+                ])
+            }
+            return jsonRPCResponse(id: id, result: JSONValue.fromJSONObject([
+                "events": events,
+                "count": events.count,
+            ]), error: nil)
+        default:
+            return jsonRPCResponse(id: id, result: nil, error: .methodNotFound)
+        }
+    }
+
+    private func buildAssistantToday() -> [String: Any] {
+        let day = diet.daySummary()
+        let totals = day["totals"] as? [String: Any] ?? [:]
+        let goals = diet.goalsDict()
+        let suggest = diet.suggestedAction()
+        let reviewN = reviewPendingCount()
+        var timeline = diet.timelineEvents()
+        if reviewN > 0 {
+            timeline.append([
+                "ts": ISO8601DateFormatter().string(from: Date()),
+                "type": "review",
+                "title": "확인 대기 \(reviewN)건",
+                "source": "knowledge",
+                "id": "review-pending",
+            ])
+        }
+
+        var nextActions: [[String: Any]] = []
+        if reviewN > 0 {
+            nextActions.append([
+                "kind": "review",
+                "label": "확인함 \(reviewN)건 보기",
+            ])
+        }
+        nextActions.append([
+            "kind": "diet_suggest",
+            "label": suggest.title,
+            "subtitle": suggest.subtitle,
+        ])
+        if let slot = suggest.slot {
+            nextActions[nextActions.count - 1]["slot"] = slot.rawValue
+        }
+
+        let bodyLine: String = {
+            if let text = day["summary_text"] as? String, !text.isEmpty { return text }
+            let kcal = totals["kcal"] as? Double ?? 0
+            let protein = totals["protein_g"] as? Double ?? 0
+            return String(format: "오늘 %.0f kcal · 단백질 %.0fg", kcal, protein)
+        }()
+
+        return [
+            "date": day["date"] as? String ?? "",
+            "body": [
+                "line": bodyLine,
+                "kcal": totals["kcal"] as? Double ?? 0,
+                "protein_g": totals["protein_g"] as? Double ?? 0,
+                "workout_minutes": totals["workout_minutes"] as? Int ?? 0,
+                "meal_count": totals["meal_count"] as? Int ?? 0,
+                "target_kcal": goals["target_kcal"] as? Double ?? goals["targetKcal"] as? Double ?? 0,
+                "target_protein_g": goals["target_protein_g"] as? Double ?? 0,
+                "suggest": [
+                    "title": suggest.title,
+                    "subtitle": suggest.subtitle,
+                ] as [String: Any],
+            ] as [String: Any],
+            "knowledge": [
+                "review_pending": reviewN,
+                "line": reviewN > 0 ? "저장 전 요약 \(reviewN)건" : "확인할 요약 없음",
+            ] as [String: Any],
+            "timeline": timeline,
+            "next_actions": nextActions,
+            "version": 1,
+        ]
+    }
+
+    private func reviewPendingCount() -> Int {
+        let req = JSONRPCRequest(
+            id: .string("assistant-review"),
+            method: RPCMethod.meetingList.rawValue,
+            params: .object(["status": .string("review_needed")])
+        )
+        let res = pipeline.handle(request: req, peer: localPeer)
+        guard let result = res.result else { return 0 }
+        if case .array(let arr) = result { return arr.count }
+        if case .object(let obj) = result {
+            if let m = obj["meetings"], case .array(let arr) = m { return arr.count }
+            if let m = obj["items"], case .array(let arr) = m { return arr.count }
+        }
+        // Fallback via Any bridge
+        let any = jsonAny(result)
+        if let arr = any as? [Any] { return arr.count }
+        if let dict = any as? [String: Any] {
+            if let arr = dict["meetings"] as? [Any] { return arr.count }
+            if let arr = dict["items"] as? [Any] { return arr.count }
+        }
+        return 0
     }
 
     private func handleDietMethod(method: String, id: Any?, params: Any?) throws -> Data {

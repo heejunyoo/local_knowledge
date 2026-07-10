@@ -1,10 +1,14 @@
 import SwiftUI
+import KnowledgeCore
 
 /// Product home (Toss philosophy):
 /// 1) One calm greeting  2) One primary action  3) Short list  4) Quiet recent
 public struct HomeView: View {
     @ObservedObject public var model: AppModel
     @State private var path = NavigationPath()
+    @State private var bodyLine: String = ""
+    @State private var dietSuggestTitle: String = ""
+    @State private var dietSuggestSubtitle: String = ""
 
     public init(model: AppModel) {
         self.model = model
@@ -26,6 +30,8 @@ public struct HomeView: View {
                             Spacer().frame(height: TossSpace.x4)
                             errorBanner(err)
                         }
+                        Spacer().frame(height: TossSpace.x8)
+                        assistantBriefingBlock
                         Spacer().frame(height: TossSpace.x8)
                         primaryBlock
                         Spacer().frame(height: TossSpace.x8)
@@ -52,7 +58,17 @@ public struct HomeView: View {
             model.refreshSourceStats()
             model.refreshLLMStatus()
             model.refreshActionDue()
+            refreshAssistantBriefing()
         }
+    }
+
+    private func refreshAssistantBriefing() {
+        let store = DietStore(knowledgeRoot: model.knowledgeRoot)
+        let day = store.daySummary()
+        bodyLine = day["summary_text"] as? String ?? ""
+        let s = store.suggestedAction()
+        dietSuggestTitle = s.title
+        dietSuggestSubtitle = s.subtitle
     }
 
     /// First-run / setup tips — quiet, dismissible by progress (no meetings + vault ok).
@@ -175,7 +191,7 @@ public struct HomeView: View {
         if model.isProcessing { return "정리하고 있어요" }
         if model.reviewCount > 0 { return "확인할 게 있어요" }
         if model.isStartingBackend || !model.healthOK { return "잠깐만요" }
-        return "오늘도 남겨 둘까요"
+        return "오늘의 나"
     }
 
     private var greetingBody: String {
@@ -197,7 +213,58 @@ public struct HomeView: View {
         if !model.healthOK {
             return "준비만 끝내면 바로 시작할 수 있어요."
         }
-        return "중요한 대화는 녹음해 두고, 필요할 때 물어보세요."
+        return "몸·지식·다음 할 일을 한곳에서 이어가요."
+    }
+
+    // MARK: W0 Assistant Hub briefing
+
+    private var assistantBriefingBlock: some View {
+        VStack(alignment: .leading, spacing: TossSpace.x3) {
+            Text("오늘")
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(TossColor.grey500)
+            VStack(alignment: .leading, spacing: TossSpace.x4) {
+                briefingLine(
+                    label: "몸",
+                    text: bodyLine.isEmpty ? "아직 오늘 식단·운동 기록이 없어요" : bodyLine
+                )
+                Divider().overlay(TossColor.grey200)
+                briefingLine(
+                    label: "지식",
+                    text: model.reviewCount > 0
+                        ? "저장 전 요약 \(model.reviewCount)건"
+                        : "확인할 요약 없음"
+                )
+                Divider().overlay(TossColor.grey200)
+                briefingLine(
+                    label: "다음",
+                    text: dietSuggestTitle.isEmpty ? "녹음하거나 식단을 남겨 보세요" : dietSuggestTitle
+                )
+                if !dietSuggestSubtitle.isEmpty {
+                    Text(dietSuggestSubtitle)
+                        .font(.system(size: 13))
+                        .foregroundStyle(TossColor.grey500)
+                        .padding(.leading, 44)
+                }
+            }
+            .padding(TossSpace.x5)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(TossColor.white)
+            .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+        }
+    }
+
+    private func briefingLine(label: String, text: String) -> some View {
+        HStack(alignment: .top, spacing: TossSpace.x3) {
+            Text(label)
+                .font(.system(size: 13, weight: .bold))
+                .foregroundStyle(TossColor.blue500)
+                .frame(width: 36, alignment: .leading)
+            Text(text)
+                .font(.system(size: 16, weight: .medium))
+                .foregroundStyle(TossColor.grey900)
+                .fixedSize(horizontal: false, vertical: true)
+        }
     }
 
     // MARK: Primary — do the thing, don't open a menu

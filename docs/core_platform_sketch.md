@@ -166,6 +166,8 @@ iPhone                         Core (:8741)                    Mac UI / CLI
 | `diet.dashboard` | Diet | — | progress + analysis + goals |
 | `diet.goals` / `diet.goals.set` | Diet | targets | goals |
 | `diet.coach` | Diet | message? | analysis text |
+| `assistant.today` | Assistant | date? | body + knowledge + timeline + next_actions (W0) |
+| `timeline.list` | Assistant | — | today events (meal/workout/metric/review) |
 
 미등록 method → JSON-RPC `-32601 Method not found`.
 

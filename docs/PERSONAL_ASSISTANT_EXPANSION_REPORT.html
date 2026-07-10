@@ -1,0 +1,1064 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>개인비서 서비스 확장 계획 · MECE 보고서</title>
+<style>
+  :root {
+    --bg: #0b0d12;
+    --bg-elev: #12151c;
+    --bg-card: #171b24;
+    --border: #2a3140;
+    --text: #e8eaef;
+    --muted: #9aa3b5;
+    --dim: #6b7385;
+    --accent: #3182f6;
+    --accent-soft: rgba(49, 130, 246, 0.14);
+    --green: #03b26c;
+    --green-soft: rgba(3, 178, 108, 0.14);
+    --amber: #f5a524;
+    --amber-soft: rgba(245, 165, 36, 0.14);
+    --red: #f04452;
+    --red-soft: rgba(240, 68, 82, 0.12);
+    --purple: #a78bfa;
+    --radius: 12px;
+    --font: "Pretendard", "Apple SD Gothic Neo", "Noto Sans KR", -apple-system, BlinkMacSystemFont, sans-serif;
+    --mono: "SF Mono", "Menlo", "Consolas", monospace;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0;
+    font-family: var(--font);
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.55;
+    font-size: 15px;
+    -webkit-font-smoothing: antialiased;
+  }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+
+  /* Cover */
+  .cover {
+    min-height: 72vh;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    padding: 48px 56px 56px;
+    background:
+      radial-gradient(ellipse 80% 60% at 10% 0%, rgba(49,130,246,.22), transparent 55%),
+      radial-gradient(ellipse 50% 40% at 90% 20%, rgba(3,178,108,.12), transparent 50%),
+      linear-gradient(180deg, #0e1118 0%, var(--bg) 100%);
+    border-bottom: 1px solid var(--border);
+  }
+  .cover-kicker {
+    font-size: 12px;
+    letter-spacing: .12em;
+    text-transform: uppercase;
+    color: var(--accent);
+    font-weight: 600;
+    margin-bottom: 16px;
+  }
+  .cover h1 {
+    font-size: clamp(28px, 4vw, 42px);
+    font-weight: 700;
+    letter-spacing: -0.03em;
+    margin: 0 0 12px;
+    line-height: 1.2;
+  }
+  .cover .lead {
+    font-size: 17px;
+    color: var(--muted);
+    max-width: 720px;
+    margin: 0 0 28px;
+  }
+  .meta-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 500;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    color: var(--muted);
+  }
+  .chip strong { color: var(--text); font-weight: 600; }
+
+  /* Layout */
+  .shell {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 40px 24px 80px;
+  }
+  @media (min-width: 900px) {
+    .shell { padding: 48px 40px 100px; }
+  }
+
+  /* Nav */
+  nav.toc {
+    position: sticky;
+    top: 0;
+    z-index: 20;
+    background: rgba(11,13,18,.88);
+    backdrop-filter: blur(12px);
+    border-bottom: 1px solid var(--border);
+    padding: 10px 0;
+  }
+  nav.toc .inner {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 0 24px;
+    display: flex;
+    gap: 6px;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  nav.toc a {
+    flex: 0 0 auto;
+    padding: 8px 12px;
+    border-radius: 8px;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--muted);
+    text-decoration: none;
+  }
+  nav.toc a:hover { background: var(--bg-elev); color: var(--text); text-decoration: none; }
+
+  /* Sections */
+  section {
+    margin: 48px 0;
+    scroll-margin-top: 64px;
+  }
+  .sec-label {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: .14em;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin-bottom: 8px;
+  }
+  h2 {
+    font-size: 24px;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    margin: 0 0 8px;
+  }
+  h3 {
+    font-size: 16px;
+    font-weight: 700;
+    margin: 28px 0 10px;
+    letter-spacing: -0.01em;
+  }
+  .sec-desc {
+    color: var(--muted);
+    margin: 0 0 20px;
+    max-width: 780px;
+  }
+
+  /* Cards / grid */
+  .grid-2 {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 14px;
+  }
+  @media (min-width: 720px) {
+    .grid-2 { grid-template-columns: 1fr 1fr; }
+  }
+  .grid-3 {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+  @media (min-width: 720px) {
+    .grid-3 { grid-template-columns: repeat(3, 1fr); }
+  }
+  .grid-4 {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+  }
+  @media (min-width: 900px) {
+    .grid-4 { grid-template-columns: repeat(4, 1fr); }
+  }
+  .card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 18px 18px 16px;
+  }
+  .card h4 {
+    margin: 0 0 6px;
+    font-size: 14px;
+    font-weight: 700;
+  }
+  .card p, .card li { color: var(--muted); font-size: 13.5px; margin: 0; }
+  .card .big {
+    font-size: 28px;
+    font-weight: 700;
+    letter-spacing: -0.03em;
+    color: var(--text);
+    margin: 4px 0 2px;
+  }
+  .card .unit { font-size: 12px; color: var(--dim); }
+
+  /* MECE tree */
+  .mece-tree {
+    background: var(--bg-elev);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 20px 22px;
+    font-family: var(--mono);
+    font-size: 12.5px;
+    line-height: 1.7;
+    color: var(--muted);
+    overflow-x: auto;
+  }
+  .mece-tree .root { color: var(--text); font-weight: 700; }
+  .mece-tree .hl { color: var(--accent); }
+
+  /* Capability diagram */
+  .cap-stack {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .cap-c5 {
+    background: linear-gradient(90deg, rgba(167,139,250,.18), rgba(49,130,246,.12));
+    border: 1px solid rgba(167,139,250,.35);
+    border-radius: var(--radius);
+    padding: 14px 16px;
+    text-align: center;
+    font-weight: 700;
+    font-size: 13px;
+  }
+  .cap-c5 span { display: block; font-weight: 500; color: var(--muted); font-size: 12px; margin-top: 4px; }
+  .cap-row {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 8px;
+  }
+  @media (max-width: 800px) {
+    .cap-row { grid-template-columns: 1fr 1fr; }
+  }
+  .cap-box {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 12px 10px;
+    text-align: center;
+    font-size: 12px;
+    font-weight: 700;
+  }
+  .cap-box span { display: block; font-weight: 500; color: var(--dim); font-size: 11px; margin-top: 4px; }
+  .cap-c7 {
+    background: var(--accent-soft);
+    border: 1px solid rgba(49,130,246,.35);
+    border-radius: var(--radius);
+    padding: 12px;
+    text-align: center;
+    font-size: 12.5px;
+    font-weight: 700;
+    color: var(--accent);
+  }
+
+  /* Tables */
+  .table-wrap {
+    overflow-x: auto;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--bg-card);
+  }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+  }
+  th, td {
+    padding: 10px 12px;
+    text-align: left;
+    border-bottom: 1px solid var(--border);
+    vertical-align: top;
+  }
+  th {
+    background: var(--bg-elev);
+    color: var(--muted);
+    font-weight: 600;
+    font-size: 11px;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+    white-space: nowrap;
+  }
+  tr:last-child td { border-bottom: none; }
+  td.num { font-variant-numeric: tabular-nums; font-family: var(--mono); font-size: 12px; }
+  td.id { font-family: var(--mono); font-size: 12px; color: var(--accent); white-space: nowrap; }
+
+  /* Badges */
+  .badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: .02em;
+  }
+  .b-now { background: var(--green-soft); color: var(--green); }
+  .b-next { background: var(--accent-soft); color: #7eb0ff; }
+  .b-later { background: var(--amber-soft); color: var(--amber); }
+  .b-park { background: var(--red-soft); color: #ff8a94; }
+  .b-in { background: var(--green-soft); color: var(--green); }
+  .b-edge { background: var(--amber-soft); color: var(--amber); }
+  .b-out { background: var(--red-soft); color: #ff8a94; }
+
+  /* Score bar */
+  .bar {
+    height: 6px;
+    background: #252b38;
+    border-radius: 3px;
+    overflow: hidden;
+    min-width: 64px;
+  }
+  .bar > i {
+    display: block;
+    height: 100%;
+    background: linear-gradient(90deg, var(--accent), #5aa2ff);
+    border-radius: 3px;
+  }
+
+  /* Callout */
+  .callout {
+    border-left: 3px solid var(--accent);
+    background: var(--accent-soft);
+    padding: 14px 16px;
+    border-radius: 0 var(--radius) var(--radius) 0;
+    margin: 16px 0;
+    color: var(--text);
+    font-size: 14px;
+  }
+  .callout strong { color: #fff; }
+
+  /* Wave timeline */
+  .waves {
+    display: grid;
+    gap: 10px;
+  }
+  .wave {
+    display: grid;
+    grid-template-columns: 88px 1fr;
+    gap: 14px;
+    align-items: start;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 14px 16px;
+  }
+  @media (max-width: 600px) {
+    .wave { grid-template-columns: 1fr; }
+  }
+  .wave-tag {
+    font-weight: 800;
+    font-size: 13px;
+    color: var(--accent);
+  }
+  .wave-tag small {
+    display: block;
+    font-weight: 500;
+    color: var(--dim);
+    font-size: 11px;
+    margin-top: 2px;
+  }
+  .wave h4 { margin: 0 0 4px; font-size: 14px; }
+  .wave p { margin: 0; color: var(--muted); font-size: 13px; }
+  .wave .ids {
+    margin-top: 8px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+  }
+  .wave .ids span {
+    font-family: var(--mono);
+    font-size: 10.5px;
+    padding: 2px 6px;
+    background: var(--bg-elev);
+    border-radius: 4px;
+    color: var(--muted);
+  }
+
+  /* Scope boxes */
+  .scope-in { border-top: 3px solid var(--green); }
+  .scope-edge { border-top: 3px solid var(--amber); }
+  .scope-out { border-top: 3px solid var(--red); }
+
+  /* Footer */
+  footer {
+    margin-top: 64px;
+    padding-top: 24px;
+    border-top: 1px solid var(--border);
+    color: var(--dim);
+    font-size: 12px;
+  }
+
+  /* Print */
+  @media print {
+    body { background: #fff; color: #111; font-size: 11pt; }
+    .cover { min-height: auto; background: #f5f7fb; color: #111; border-color: #ddd; }
+    .cover .lead, .chip, nav.toc, .sec-desc, .card p, .card li, td, th { color: #333; }
+    .card, .table-wrap, .wave, .mece-tree, .cap-box { background: #fff; border-color: #ddd; }
+    nav.toc { display: none; }
+    a { color: #06c; }
+    .badge { border: 1px solid #ccc; }
+    section { break-inside: avoid; }
+  }
+</style>
+</head>
+<body>
+
+<header class="cover">
+  <div class="cover-kicker">Strategy Report · MECE · Implementable Best · 2026-07-10</div>
+  <h1>개인비서 서비스 확장 계획</h1>
+  <p class="lead">
+    지식저장소·다이어트 식단을 넘어, 로컬 퍼스트 <strong style="color:#fff">Personal Assistant OS</strong>로 확장.
+    <strong style="color:#fff">현재 상황에서 구현 가능한 최선</strong>을 상시 목표로 하며, 전략 kill 매트릭스·P0 3개 압축·W0 실행을 포함합니다.
+  </p>
+  <div class="meta-row">
+    <span class="chip"><strong>Version</strong> 2.1</span>
+    <span class="chip"><strong>Principle</strong> Implementable Best</span>
+    <span class="chip"><strong>P0</strong> Hub · Timeline · RAG gate</span>
+    <span class="chip"><strong>Stack</strong> Mac Core · Tailscale · iOS thin</span>
+  </div>
+</header>
+
+<nav class="toc" aria-label="목차">
+  <div class="inner">
+    <a href="#s0">§0 최선·Kill·P0</a>
+    <a href="#mece">MECE 지도</a>
+    <a href="#s1">§1 정의</a>
+    <a href="#s2">§2 현황</a>
+    <a href="#s3">§3 Jobs</a>
+    <a href="#s4">§4 능력</a>
+    <a href="#s5">§5 포트폴리오</a>
+    <a href="#s6">§6 로드맵</a>
+    <a href="#s7">§7 거버넌스</a>
+  </div>
+</nav>
+
+<main class="shell">
+
+  <!-- §0 Implementable Best -->
+  <section id="s0">
+    <div class="sec-label">Section 0 · Operating principle</div>
+    <h2>구현 가능한 최선 · 전략 대결 · 압축 P0</h2>
+    <p class="sec-desc">
+      “표가 예뻐서 최선”이 아니다. <strong>지금 코드·1인·로컬 스택에서 구현 가능한 최선</strong>만 P0다.
+      절대 최적 설계는 주장하지 않는다.
+    </p>
+
+    <div class="callout">
+      <strong>채택 합성.</strong> 주전략 = <strong>A 통합 Hub+Timeline</strong>.
+      RAG 최소 신뢰(C)는 W0 <em>동시 게이트</em>. HealthKit(B)은 W1. Capture(D)는 W2. 에이전트/메일(E)은 OUT.
+    </div>
+
+    <h3>IB 원칙</h3>
+    <div class="grid-3">
+      <div class="card"><h4>IB1 지금 구현 가능만 P0</h4><p>유료 계정·외부 SaaS 필수 기능 제외</p></div>
+      <div class="card"><h4>IB3 동시 ≤3개</h4><p>Σ≥38 목록 ≠ 전부 병렬</p></div>
+      <div class="card"><h4>IB6 신뢰=허브 동급</h4><p>홈만 예쁘고 답이 틀리면 실패</p></div>
+    </div>
+
+    <h3>전략 Kill 매트릭스 (4주 dogfood · 합 25)</h3>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr><th>전략</th><th>Fit</th><th>Speed</th><th>Diff</th><th>Risk↓</th><th>Loop</th><th>Σ</th><th>판정</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>A. Hub + Timeline</strong></td>
+            <td class="num">5</td><td class="num">5</td><td class="num">4</td><td class="num">5</td><td class="num">5</td>
+            <td class="num"><strong>24</strong></td>
+            <td><span class="badge b-now">WIN</span></td>
+          </tr>
+          <tr>
+            <td>B. Diet/Health 깊이</td>
+            <td class="num">4</td><td class="num">3</td><td class="num">3</td><td class="num">3</td><td class="num">4</td>
+            <td class="num">17</td>
+            <td><span class="badge b-later">W1 흡수</span></td>
+          </tr>
+          <tr>
+            <td>C. RAG 신뢰 올인</td>
+            <td class="num">5</td><td class="num">4</td><td class="num">3</td><td class="num">4</td><td class="num">2</td>
+            <td class="num">18</td>
+            <td><span class="badge b-next">W0 게이트</span></td>
+          </tr>
+          <tr>
+            <td>D. Capture-first</td>
+            <td class="num">3</td><td class="num">3</td><td class="num">4</td><td class="num">3</td><td class="num">3</td>
+            <td class="num">16</td>
+            <td><span class="badge b-later">W2</span></td>
+          </tr>
+          <tr>
+            <td>E. 에이전트/메일</td>
+            <td class="num">1</td><td class="num">1</td><td class="num">2</td><td class="num">1</td><td class="num">2</td>
+            <td class="num">7</td>
+            <td><span class="badge b-park">OUT</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>진짜 P0 (동시 구현 ≤3)</h3>
+    <div class="grid-3">
+      <div class="card scope-in">
+        <span class="badge b-in">P0-1</span>
+        <h4 style="margin-top:10px">assistant.today + timeline</h4>
+        <p>기존 diet·review 조립. 신규 SoT 없음.</p>
+      </div>
+      <div class="card scope-in">
+        <span class="badge b-in">P0-2</span>
+        <h4 style="margin-top:10px">홈 = 비서 Hub</h4>
+        <p>몸 / 지식 / 다음 3블록. Mac·iOS.</p>
+      </div>
+      <div class="card scope-in">
+        <span class="badge b-in">P0-3</span>
+        <h4 style="margin-top:10px">RAG 신뢰 게이트</h4>
+        <p>근거 푸터 · 무검색 시 환각 금지.</p>
+      </div>
+    </div>
+
+    <h3>W0 완료 게이트</h3>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Gate</th><th>조건</th></tr></thead>
+        <tbody>
+          <tr><td class="id">G-Hub</td><td>홈에 몸 한 줄 + 확인함 수 + CTA 1개 한 화면</td></tr>
+          <tr><td class="id">G-API</td><td><code>assistant.today</code> 200 + timeline 배열 (빈 날 스키마 유지)</td></tr>
+          <tr><td class="id">G-Trust</td><td>지식 없으면 솔직 폴백; 있으면 근거/출처 한 줄</td></tr>
+          <tr><td class="id">G-Dogfood</td><td>3일 연속 홈 1회 이상</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- MECE MAP -->
+  <section id="mece">
+    <div class="sec-label">Document structure</div>
+    <h2>MECE 문서 지도</h2>
+    <p class="sec-desc">
+      상위 주제 「개인비서 확장」을 <strong>7개 상호배타·전체포괄 블록</strong>으로만 구성한다.
+      기능·일정·리스크는 서로 다른 블록에 두어 중복을 제거한다.
+    </p>
+    <div class="mece-tree">
+      <div class="root">L0  개인비서 서비스 확장</div>
+      ├── <span class="hl">§1  정의·경계</span>     What / What-not<br>
+      ├── <span class="hl">§2  현황·문제</span>     Why now<br>
+      ├── <span class="hl">§3  사용자 Job</span>    For whom<br>
+      ├── <span class="hl">§4  능력 체계</span>     What capability  ← 핵심<br>
+      ├── <span class="hl">§5  기능 포트폴리오</span> What to build + score<br>
+      ├── <span class="hl">§6  실행 로드맵</span>   When<br>
+      └── <span class="hl">§7  거버넌스</span>       Risk · KPI · Decision
+    </div>
+    <div class="table-wrap" style="margin-top:16px">
+      <table>
+        <thead>
+          <tr><th>블록</th><th>질문</th><th>포함</th><th>제외 (다른 블록)</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>§1</td><td>무엇을 비서라 하는가?</td><td>정의, In/Out, 원칙</td><td>기능 목록, 일정</td></tr>
+          <tr><td>§2</td><td>왜 확장이 필요한가?</td><td>AS-IS, 갭</td><td>해결책 상세</td></tr>
+          <tr><td>§3</td><td>누구의 어떤 일인가?</td><td>JTBD</td><td>UI·API</td></tr>
+          <tr><td>§4</td><td>어떤 능력 조각인가?</td><td>C1–C7 정의</td><td>개별 스코어</td></tr>
+          <tr><td>§5</td><td>무엇을 우선 만드는가?</td><td>기능 ID·Σ</td><td>주차별 태스크</td></tr>
+          <tr><td>§6</td><td>언제 납품하는가?</td><td>Wave 산출물</td><td>스코어링 방법</td></tr>
+          <tr><td>§7</td><td>어떻게 통제하는가?</td><td>리스크, KPI, 결정</td><td>아이디어 나열</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- §1 -->
+  <section id="s1">
+    <div class="sec-label">Section 1 · Scope</div>
+    <h2>정의·경계</h2>
+    <p class="sec-desc">범위는 IN / EDGE / OUT 세 칸으로만 나눈다. 겹치지 않는다.</p>
+
+    <div class="callout">
+      <strong>제품 정의.</strong> Mac Core가 데이터 주권·추론·오케스트레이션을 맡고,
+      iPhone(+Watch→HealthKit 브리지)은 얇은 터치포인트로,
+      「지식 · 몸 · 하루」를 하나의 로컬 개인비서 표면에서 연결한다.
+    </div>
+
+    <div class="grid-3">
+      <div class="card scope-in">
+        <span class="badge b-in">IN</span>
+        <h4 style="margin-top:10px">Core Assistant</h4>
+        <p>로컬 SoT 지식·신체·하루 통합, Tailscale Core, thin mobile. 2026-H2 포함.</p>
+      </div>
+      <div class="card scope-edge">
+        <span class="badge b-edge">EDGE</span>
+        <h4 style="margin-top:10px">Optional later</h4>
+        <p>영양 DB, 위젯, EventKit 읽기, 음성 인박스, HTTPS. W3+ 조건부.</p>
+      </div>
+      <div class="card scope-out">
+        <span class="badge b-out">OUT</span>
+        <h4 style="margin-top:10px">Explicit non-scope</h4>
+        <p>범용 에이전트, 메일, 소셜, Mac 직접 HK, 의료 진단, 멀티유저.</p>
+      </div>
+    </div>
+
+    <h3>설계 원칙 (P1–P6, 상호배타)</h3>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>ID</th><th>원칙</th><th>의미</th><th>위반 예</th></tr></thead>
+        <tbody>
+          <tr><td class="id">P1</td><td>Domain SoT</td><td>도메인별 저장소 1개</td><td>Core에 vault 덤프</td></tr>
+          <tr><td class="id">P2</td><td>Core = router</td><td>인증·라우팅·브리핑 인덱스</td><td>Core가 영양 SoT</td></tr>
+          <tr><td class="id">P3</td><td>Thin client</td><td>폰 = UI·센서 브리지</td><td>폰에 7B</td></tr>
+          <tr><td class="id">P4</td><td>Local-first</td><td>Tailscale + 기기 주권</td><td>공인 포트 오픈</td></tr>
+          <tr><td class="id">P5</td><td>Aggregates first</td><td>숫자·이벤트 후 문장</td><td>LLM만 칼로리 추정</td></tr>
+          <tr><td class="id">P6</td><td>Progressive trust</td><td>자동 기록 source·삭제</td><td>조용한 덮어쓰기</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- §2 -->
+  <section id="s2">
+    <div class="sec-label">Section 2 · Diagnosis</div>
+    <h2>현황·문제</h2>
+    <p class="sec-desc">진단은 자산 / 성숙도 / 갭 세 층만 사용한다. 해결책은 §5–§6.</p>
+
+    <div class="grid-4">
+      <div class="card">
+        <div class="unit">Knowledge</div>
+        <div class="big">7.3</div>
+        <p>필드 사용 가능</p>
+      </div>
+      <div class="card">
+        <div class="unit">Diet UX</div>
+        <div class="big">8.0</div>
+        <p>습관 루프 성립</p>
+      </div>
+      <div class="card">
+        <div class="unit">Platform</div>
+        <div class="big">8.0</div>
+        <p>HTTPS 미도입</p>
+      </div>
+      <div class="card" style="border-color: rgba(240,68,82,.4)">
+        <div class="unit">Assistant 통합</div>
+        <div class="big" style="color: var(--red)">2.0</div>
+        <p>도메인 병치, “오늘” 부재</p>
+      </div>
+    </div>
+
+    <h3>갭 네 구멍 (G1–G4 MECE)</h3>
+    <div class="grid-2">
+      <div class="card"><h4>G1 통합 표면</h4><p>홈이 도메인 입구 모음. “오늘 나” 없음.</p></div>
+      <div class="card"><h4>G2 센서 자동화</h4><p>Watch / Health → Core 경로 없음.</p></div>
+      <div class="card"><h4>G3 교차 인지</h4><p>지식 × 몸 혼합 질문·코치 약함.</p></div>
+      <div class="card"><h4>G4 재방문 루프</h4><p>주간 리뷰·알림·캡처 인박스 약함.</p></div>
+    </div>
+  </section>
+
+  <!-- §3 -->
+  <section id="s3">
+    <div class="sec-label">Section 3 · Jobs-to-be-done</div>
+    <h2>사용자 Job</h2>
+    <p class="sec-desc">대상: 1인 로컬 파워유저. Job은 상황 기준 상호배타 — 한 순간 하나의 primary job.</p>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr><th>Job</th><th>When</th><th>Want</th><th>So that</th><th>Primary 갭</th></tr>
+        </thead>
+        <tbody>
+          <tr><td class="id">J1 Orient</td><td>하루 시작·중간</td><td>몸·지식·빈칸 한 화면</td><td>앱 전환 없음</td><td>G1</td></tr>
+          <tr><td class="id">J2 Log body</td><td>식사·운동 직후</td><td>최소 마찰 (가능하면 자동)</td><td>데이터 축적</td><td>G2</td></tr>
+          <tr><td class="id">J3 Capture</td><td>회의·아이디어 직후</td><td>10초 유입</td><td>이후 검색</td><td>G4</td></tr>
+          <tr><td class="id">J4 Ask</td><td>궁금할 때</td><td>단일·교차 질문</td><td>맥락 재조립 제거</td><td>G3</td></tr>
+          <tr><td class="id">J5 Close day</td><td>잠들기 전</td><td>빠진 로그만</td><td>수면 전 마찰↓</td><td>G4</td></tr>
+          <tr><td class="id">J6 Review</td><td>주말</td><td>이번 주 나 요약</td><td>다음 주 조정</td><td>G4</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- §4 -->
+  <section id="s4">
+    <div class="sec-label">Section 4 · Capability architecture</div>
+    <h2>능력 체계 C1–C7</h2>
+    <p class="sec-desc">
+      모든 기능은 정확히 하나의 L1에 속한다. C1–C3 도메인 데이터 · C4 유입 · C5 인지(SoT 없음) · C6 표면 · C7 플랫폼.
+    </p>
+
+    <div class="cap-stack">
+      <div class="cap-c5">
+        C5 Cognition — intent · coach · cross-ask
+        <span>owns no durable SoT</span>
+      </div>
+      <div class="cap-row">
+        <div class="cap-box">C1 Memory<span>vault · RAG</span></div>
+        <div class="cap-box">C2 Body<span>diet · HealthKit</span></div>
+        <div class="cap-box">C3 Time<span>timeline</span></div>
+        <div class="cap-box">C4 Ingest<span>channels</span></div>
+        <div class="cap-box">C6 Surface<span>UI · notify</span></div>
+      </div>
+      <div class="cap-c7">C7 Platform — Core · Tailscale · Auth · RPC</div>
+    </div>
+
+    <h3>L1 배타 경계</h3>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>L1</th><th>포함 (이 능력만)</th><th>제외 → 이동</th><th>AS-IS</th><th>12주</th></tr></thead>
+        <tbody>
+          <tr>
+            <td class="id">C1 Memory</td>
+            <td>vault, RAG, 리뷰, 큐레이션</td>
+            <td>식사→C2 · 정렬→C3 · 라우팅→C5</td>
+            <td class="num">7.5</td><td class="num">8.5</td>
+          </tr>
+          <tr>
+            <td class="id">C2 Body</td>
+            <td>식사·운동·목표·HK 매핑·추세 숫자</td>
+            <td>브리핑 UI→C6 · 내러티브→C5</td>
+            <td class="num">7.0</td><td class="num">8.5</td>
+          </tr>
+          <tr>
+            <td class="id">C3 Time</td>
+            <td>통합 이벤트 인덱스, day/week 버킷</td>
+            <td>원본 SoT→C1/C2 · 알림→C6</td>
+            <td class="num">1.0</td><td class="num">7.0</td>
+          </tr>
+          <tr>
+            <td class="id">C4 Ingest</td>
+            <td>인박스·단축키·Share 채널</td>
+            <td>vault 커밋→C1 · HK 저장→C2</td>
+            <td class="num">4.0</td><td class="num">6.5</td>
+          </tr>
+          <tr>
+            <td class="id">C5 Cognition</td>
+            <td>intent, suggest, cross-ask, sources 조립</td>
+            <td>집계 SoT→C2/C3 · 답 UI→C6</td>
+            <td class="num">3.0</td><td class="num">7.0</td>
+          </tr>
+          <tr>
+            <td class="id">C6 Surface</td>
+            <td>Hub, 탭, 메뉴바, 위젯, 알림</td>
+            <td>API→C7 · 데이터 조립→C5+C3</td>
+            <td class="num">5.0</td><td class="num">8.0</td>
+          </tr>
+          <tr>
+            <td class="id">C7 Platform</td>
+            <td>pair, RPC, ingest 전송, Tailscale</td>
+            <td>도메인 의미→C1–C3</td>
+            <td class="num">8.0</td><td class="num">8.5</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="callout">
+      <strong>HealthKit 경로 (C2 + C7).</strong>
+      Watch/iPhone sensors → Apple Health → iOS app → Core <code>health.ingest</code> → DietStore/Timeline.
+      Mac 직접 HealthKit은 OUT.
+    </div>
+  </section>
+
+  <!-- §5 -->
+  <section id="s5">
+    <div class="sec-label">Section 5 · Portfolio scoring</div>
+    <h2>기능 포트폴리오</h2>
+    <p class="sec-desc">
+      Σ = V + F + D + R + E (각 0–10, max 50).
+      ≥38 Now · 30–37 Next · 22–29 Later · &lt;22 Park.
+      기능 ID는 단일 L1에만 소속.
+    </p>
+
+    <div class="grid-4" style="margin-bottom:20px">
+      <div class="card"><h4>V User value</h4><p>주간 빈도 × 고통 제거</p></div>
+      <div class="card"><h4>F Differentiation</h4><p>로컬·Core 차별</p></div>
+      <div class="card"><h4>D Feasibility</h4><p>2026-07 스택 가능</p></div>
+      <div class="card"><h4>R / E</h4><p>저의존 · 얇은 슬라이스</p></div>
+    </div>
+
+    <h3>Now 포트폴리오 (우선 실행)</h3>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>#</th><th>ID</th><th>기능</th><th>L1</th>
+            <th>V</th><th>F</th><th>D</th><th>R</th><th>E</th><th>Σ</th><th>판정</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="num">1</td><td class="id">C6-F1</td><td>홈 = Assistant Hub IA</td><td>C6</td>
+            <td class="num">9</td><td class="num">8</td><td class="num">9</td><td class="num">9</td><td class="num">8</td>
+            <td class="num"><strong>43</strong></td><td><span class="badge b-now">Now</span></td>
+          </tr>
+          <tr>
+            <td class="num">2</td><td class="id">C6-F2</td><td>오늘 브리핑 카드 UI</td><td>C6</td>
+            <td class="num">9</td><td class="num">8</td><td class="num">8</td><td class="num">9</td><td class="num">7</td>
+            <td class="num"><strong>41</strong></td><td><span class="badge b-now">Now</span></td>
+          </tr>
+          <tr>
+            <td class="num">3</td><td class="id">C2-F1</td><td>HealthKit pull-on-open</td><td>C2</td>
+            <td class="num">9</td><td class="num">8</td><td class="num">8</td><td class="num">8</td><td class="num">7</td>
+            <td class="num"><strong>40</strong></td><td><span class="badge b-now">Now</span></td>
+          </tr>
+          <tr>
+            <td class="num">4</td><td class="id">C3-F1</td><td>통합 타임라인 인덱스</td><td>C3</td>
+            <td class="num">9</td><td class="num">9</td><td class="num">7</td><td class="num">9</td><td class="num">6</td>
+            <td class="num"><strong>40</strong></td><td><span class="badge b-now">Now</span></td>
+          </tr>
+          <tr>
+            <td class="num">5</td><td class="id">C7-F1</td><td>assistant.today / timeline.*</td><td>C7</td>
+            <td class="num">9</td><td class="num">8</td><td class="num">8</td><td class="num">9</td><td class="num">6</td>
+            <td class="num"><strong>40</strong></td><td><span class="badge b-now">Now</span></td>
+          </tr>
+          <tr>
+            <td class="num">6</td><td class="id">C5-F2</td><td>빠진 로그 체크리스트</td><td>C5</td>
+            <td class="num">8</td><td class="num">7</td><td class="num">8</td><td class="num">9</td><td class="num">7</td>
+            <td class="num"><strong>39</strong></td><td><span class="badge b-now">Now</span></td>
+          </tr>
+          <tr>
+            <td class="num">7</td><td class="id">C5-F3</td><td>diet.suggest 확장</td><td>C5</td>
+            <td class="num">8</td><td class="num">7</td><td class="num">8</td><td class="num">9</td><td class="num">7</td>
+            <td class="num"><strong>39</strong></td><td><span class="badge b-now">Now</span></td>
+          </tr>
+          <tr>
+            <td class="num">8</td><td class="id">C1-F1</td><td>RAG 품질 (citation·폴백)</td><td>C1</td>
+            <td class="num">8</td><td class="num">7</td><td class="num">8</td><td class="num">9</td><td class="num">7</td>
+            <td class="num"><strong>39</strong></td><td><span class="badge b-now">Now</span></td>
+          </tr>
+          <tr>
+            <td class="num">9</td><td class="id">C2-F2</td><td>HK→workout/metric 매핑</td><td>C2</td>
+            <td class="num">9</td><td class="num">8</td><td class="num">7</td><td class="num">8</td><td class="num">6</td>
+            <td class="num"><strong>38</strong></td><td><span class="badge b-now">Now</span></td>
+          </tr>
+          <tr>
+            <td class="num">10</td><td class="id">C3-F2</td><td>주간 버킷 집계 API</td><td>C3</td>
+            <td class="num">8</td><td class="num">8</td><td class="num">7</td><td class="num">9</td><td class="num">6</td>
+            <td class="num"><strong>38</strong></td><td><span class="badge b-now">Now</span></td>
+          </tr>
+          <tr>
+            <td class="num">11</td><td class="id">C5-F1</td><td>Intent 라우터 고도화</td><td>C5</td>
+            <td class="num">9</td><td class="num">9</td><td class="num">7</td><td class="num">8</td><td class="num">5</td>
+            <td class="num"><strong>38</strong></td><td><span class="badge b-now">Now</span></td>
+          </tr>
+          <tr>
+            <td class="num">12</td><td class="id">C4-F1</td><td>iOS 텍스트 인박스</td><td>C4</td>
+            <td class="num">8</td><td class="num">8</td><td class="num">7</td><td class="num">9</td><td class="num">6</td>
+            <td class="num"><strong>38</strong></td><td><span class="badge b-now">Now</span></td>
+          </tr>
+          <tr>
+            <td class="num">13</td><td class="id">C4-F2</td><td>Mac 전역 캡처 단축키</td><td>C4</td>
+            <td class="num">7</td><td class="num">7</td><td class="num">8</td><td class="num">9</td><td class="num">7</td>
+            <td class="num"><strong>38</strong></td><td><span class="badge b-now">Now</span></td>
+          </tr>
+          <tr>
+            <td class="num">—</td><td class="id">C7-F2</td><td>health.ingest (의존 강제)</td><td>C7</td>
+            <td class="num">8</td><td class="num">7</td><td class="num">8</td><td class="num">8</td><td class="num">6</td>
+            <td class="num">37</td><td><span class="badge b-now">W1 강제</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>능력별 대표 기능 (전체 스펙트럼)</h3>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>L1</th><th>Now</th><th>Next</th><th>Later / Park</th></tr></thead>
+        <tbody>
+          <tr>
+            <td class="id">C1</td>
+            <td>RAG 품질 39</td>
+            <td>액션아이템 35 · 큐레이션 35 · 스코프 32</td>
+            <td>OCR 28 · 외부 임포트 21 Park</td>
+          </tr>
+          <tr>
+            <td class="id">C2</td>
+            <td>HK pull 40 · 매핑 38</td>
+            <td>수면 37 · 추세 35 · 물 35</td>
+            <td>영양 DB 27 · 바코드 22 · watchOS 27</td>
+          </tr>
+          <tr>
+            <td class="id">C3</td>
+            <td>타임라인 40 · 주간버킷 38</td>
+            <td>EventKit 읽기 30</td>
+            <td>EventKit 쓰기 21 Park · 타임존 29</td>
+          </tr>
+          <tr>
+            <td class="id">C4</td>
+            <td>iOS 인박스 38 · Mac 단축키 38</td>
+            <td>음성 32 · Share 31</td>
+            <td>클립보드 23 · 메일 18 Park</td>
+          </tr>
+          <tr>
+            <td class="id">C5</td>
+            <td>빠진로그 39 · suggest 39 · intent 38</td>
+            <td>크로스 37 · 투명성 37 · 주간내러티브 35</td>
+            <td>에이전트 15 Park · 7B상시 29</td>
+          </tr>
+          <tr>
+            <td class="id">C6</td>
+            <td>Hub 43 · 브리핑 41</td>
+            <td>메뉴바 37 · 알림 32 · 위젯 31 · Intents 30</td>
+            <td>APNs 19 Park · Siri 26</td>
+          </tr>
+          <tr>
+            <td class="id">C7</td>
+            <td>assistant RPC 40 · ingest 37†</td>
+            <td>온보딩 35 · 감사로그 33</td>
+            <td>HTTPS 26 · 사이드카 28 · 멀티유저 14</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- §6 -->
+  <section id="s6">
+    <div class="sec-label">Section 6 · Delivery</div>
+    <h2>실행 로드맵</h2>
+    <p class="sec-desc">Wave 시간 구간은 겹치지 않는다. 각 기능은 단일 Wave primary에만 배치.</p>
+
+    <div class="waves">
+      <div class="wave">
+        <div class="wave-tag">W0<small>0–2주 · P0 only</small></div>
+        <div>
+          <h4>Implementable Best slice — 게이트 전부 통과?</h4>
+          <p>P0-1·2·3만. HK·인박스·intent 고도화 제외. 코드 착수됨 (assistant.today · Hub · citation footer).</p>
+          <div class="ids">
+            <span>P0-1 API</span><span>P0-2 Hub</span><span>P0-3 RAG</span>
+          </div>
+        </div>
+      </div>
+      <div class="wave">
+        <div class="wave-tag">W1<small>2–6주</small></div>
+        <div>
+          <h4>Body bridge + cognition — “HK가 쌓이는가?”</h4>
+          <p>HealthKit pull-on-open, ingest, intent, 빠진 로그. 운동·수면 자동 비율 목표 착수.</p>
+          <div class="ids">
+            <span>C2-F1</span><span>C2-F2</span><span>C7-F2</span><span>C5-F1</span><span>C5-F2</span><span>C3-F2</span><span>C4-F2</span>
+          </div>
+        </div>
+      </div>
+      <div class="wave">
+        <div class="wave-tag">W2<small>6–12주</small></div>
+        <div>
+          <h4>Retention loop — “매주 돌아오는가?”</h4>
+          <p>크로스 질의, 주간 리뷰, iOS 인박스, 로컬 알림, 수면 힌트, 온보딩.</p>
+          <div class="ids">
+            <span>C5-F4</span><span>C5-F5</span><span>C5-F6</span><span>C4-F1</span><span>C6-F3</span><span>C6-F4</span><span>C2-F3</span><span>C1-F2</span>
+          </div>
+        </div>
+      </div>
+      <div class="wave">
+        <div class="wave-tag">W3<small>12–18주</small></div>
+        <div>
+          <h4>Reach — “밖에서 들어오는가?”</h4>
+          <p>음성 인박스, Share, EventKit 읽기, 위젯, App Intents. W1 안정 + dogfood 게이트 후.</p>
+          <div class="ids">
+            <span>C4-F3</span><span>C4-F4</span><span>C3-F3</span><span>C6-F5</span><span>C6-F6</span>
+          </div>
+        </div>
+      </div>
+      <div class="wave">
+        <div class="wave-tag">W4+<small>18주~</small></div>
+        <div>
+          <h4>EDGE / Park</h4>
+          <p>영양 DB, watchOS, APNs, 메일, 범용 에이전트 — go/no-go 후. OUT은 유지.</p>
+        </div>
+      </div>
+    </div>
+
+    <h3>아키텍처 흐름</h3>
+    <div class="mece-tree">
+User → C6 Surface → C7 RPC → C5 Route<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;├→ C1 Memory<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;├→ C2 Body  ← (W1) iOS HealthKit<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;└→ C3 Time  (파생 인덱스, 본문 비복제)
+    </div>
+  </section>
+
+  <!-- §7 -->
+  <section id="s7">
+    <div class="sec-label">Section 7 · Governance</div>
+    <h2>거버넌스</h2>
+    <p class="sec-desc">리스크 유형 · KPI 유형 · 의사결정은 각각 MECE로 분류한다.</p>
+
+    <h3>KPI (행동 / 자동화 / 신뢰 / 운영)</h3>
+    <div class="grid-2">
+      <div class="card">
+        <h4>행동</h4>
+        <p>홈 루프 ≥ 주 5일 · mixed 질문 ≥ 1회/주</p>
+      </div>
+      <div class="card">
+        <h4>자동화</h4>
+        <p>운동·수면 중 HK 출처 ≥ 50%</p>
+      </div>
+      <div class="card">
+        <h4>신뢰</h4>
+        <p>자동 로그 삭제율 &lt; 10%</p>
+      </div>
+      <div class="card">
+        <h4>운영</h4>
+        <p>게이트웨이 수동 개입 ≤ 1회/월</p>
+      </div>
+    </div>
+
+    <h3>주요 리스크</h3>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>유형</th><th>리스크</th><th>완화</th></tr></thead>
+        <tbody>
+          <tr><td>제품</td><td>기능 폭주 · 다이어트 앱 고착</td><td>Wave 게이트 · W0 Hub 카피</td></tr>
+          <tr><td>데이터</td><td>HK 중복 · 크로스 환각</td><td>source 태그 · aggregates first</td></tr>
+          <tr><td>운영</td><td>Personal Team 7일 · Mac off</td><td>문서화 · 읽기 캐시 검토</td></tr>
+          <tr><td>정책</td><td>프라이버시 경계 붕괴</td><td>OUT 목록 계약</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>Decision log</h3>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>#</th><th>결정</th><th>날짜</th></tr></thead>
+        <tbody>
+          <tr><td class="id">D1</td><td>PKM → Personal Assistant 피벗</td><td>2026-07-10</td></tr>
+          <tr><td class="id">D2</td><td>능력 모델 C1–C7 MECE 고정</td><td>2026-07-10</td></tr>
+          <tr><td class="id">D3</td><td>W0 = 센서 없이 Hub + Timeline</td><td>2026-07-10</td></tr>
+          <tr><td class="id">D4</td><td>Health = iPhone→Core only, pull-on-open</td><td>2026-07-10</td></tr>
+          <tr><td class="id">D5</td><td>Timeline = 파생 인덱스 (Core not dump)</td><td>2026-07-10</td></tr>
+          <tr><td class="id">D6</td><td>Σ≥38 = Now; C7-F2 W1 의존 강제</td><td>2026-07-10</td></tr>
+          <tr><td class="id">D7</td><td>메일 · 범용 에이전트 · Mac HK = OUT</td><td>2026-07-10</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="callout" style="margin-top:28px">
+      <strong>한 페이지 결론.</strong>
+      가장 큰 구멍은 C3 Time · C5 Cognition · C2 Sensor · C6 Hub.
+      2주 안에 W0 Hub+Timeline, 6주 안에 W1 HealthKit.
+      성공 신호는 매일 홈 · 자동 몸 기록 · 교차 질문이다.
+    </div>
+  </section>
+
+  <footer>
+    <p>
+      KnowledgeApp · Personal Assistant Expansion Report v2.1 · Implementable Best · 2026-07-10<br>
+      상세 마크다운: <code>docs/PERSONAL_ASSISTANT_EXPANSION_PLAN.md</code><br>
+      Σ scores are backlog ranking tools — P0 execution set is fixed at 3 items + gates.
+    </p>
+  </footer>
+</main>
+
+</body>
+</html>

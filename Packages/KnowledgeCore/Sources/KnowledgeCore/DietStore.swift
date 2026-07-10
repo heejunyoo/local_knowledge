@@ -343,6 +343,43 @@ public final class DietStore: @unchecked Sendable {
         ]
     }
 
+    /// Timeline events for assistant hub (body domain only). Sorted ascending by ts.
+    public func timelineEvents(day: Date = Date()) -> [[String: Any]] {
+        let s = daySnapshot(day: day)
+        var events: [[String: Any]] = []
+        for m in s.meals {
+            events.append([
+                "ts": m.ts,
+                "type": "meal",
+                "title": m.items.joined(separator: " · "),
+                "source": "user",
+                "id": m.id,
+            ])
+        }
+        for w in s.workouts {
+            events.append([
+                "ts": w.ts,
+                "type": "workout",
+                "title": "\(w.kind) · \(w.minutes)분",
+                "source": "user",
+                "id": w.id,
+            ])
+        }
+        for m in s.metrics {
+            var parts: [String] = []
+            if let kg = m.weightKg { parts.append(String(format: "%.1fkg", kg)) }
+            if let h = m.sleepH { parts.append(String(format: "수면 %.1fh", h)) }
+            events.append([
+                "ts": m.ts,
+                "type": "metric",
+                "title": parts.isEmpty ? "지표" : parts.joined(separator: " · "),
+                "source": "user",
+                "id": m.id,
+            ])
+        }
+        return events.sorted { ($0["ts"] as? String ?? "") < ($1["ts"] as? String ?? "") }
+    }
+
     public func weekReview(reference: Date = Date()) -> [String: Any] {
         let dash = dashboard(reference: reference)
         return [

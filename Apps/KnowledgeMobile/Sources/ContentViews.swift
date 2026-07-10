@@ -160,25 +160,56 @@ struct HomeMobileView: View {
 
                         connectionChip
 
+                        // W0 Assistant Hub — body / knowledge / next (one screen)
+                        KCard {
+                            VStack(alignment: .leading, spacing: 12) {
+                                briefingRow(
+                                    label: "몸",
+                                    text: core.bodyLine.isEmpty ? (core.dietLine.isEmpty ? "아직 오늘 기록이 없어요" : core.dietLine) : core.bodyLine
+                                )
+                                Divider()
+                                briefingRow(
+                                    label: "지식",
+                                    text: core.knowledgeLine.isEmpty
+                                        ? (core.reviewCount > 0 ? "저장 전 요약 \(core.reviewCount)건" : "확인할 요약 없음")
+                                        : core.knowledgeLine
+                                )
+                                Divider()
+                                briefingRow(
+                                    label: "다음",
+                                    text: core.nextActionLabel.isEmpty
+                                        ? (core.dietSuggestTitle.isEmpty ? "기록하거나 물어보세요" : core.dietSuggestTitle)
+                                        : core.nextActionLabel
+                                )
+                            }
+                        }
+
                         KPrimaryButton(title: primaryTitle, enabled: true) {
                             primaryAction()
                         }
 
-                        if !core.dietSuggestTitle.isEmpty || !core.dietLine.isEmpty {
-                            Button { goDiet = true } label: {
-                                KCard {
-                                    VStack(alignment: .leading, spacing: 6) {
-                                        Text(core.dietSuggestTitle.isEmpty ? "오늘 식단" : core.dietSuggestTitle)
-                                            .font(.system(size: 15, weight: .semibold))
-                                            .foregroundStyle(KColor.grey900)
-                                        Text(core.dietSuggestSubtitle.isEmpty ? core.dietLine : core.dietSuggestSubtitle)
-                                            .font(.system(size: 13))
-                                            .foregroundStyle(KColor.grey500)
-                                            .lineLimit(2)
+                        if !core.timelinePreview.isEmpty {
+                            KCard {
+                                VStack(alignment: .leading, spacing: 8) {
+                                    Text("오늘")
+                                        .font(.system(size: 13, weight: .semibold))
+                                        .foregroundStyle(KColor.grey500)
+                                    ForEach(Array(core.timelinePreview.enumerated()), id: \.offset) { _, ev in
+                                        let title = ev["title"] as? String ?? ""
+                                        let type = ev["type"] as? String ?? ""
+                                        HStack(spacing: 8) {
+                                            Text(timelineGlyph(type))
+                                                .font(.system(size: 12))
+                                                .foregroundStyle(KColor.grey500)
+                                                .frame(width: 36, alignment: .leading)
+                                            Text(title)
+                                                .font(.system(size: 14))
+                                                .foregroundStyle(KColor.grey900)
+                                                .lineLimit(1)
+                                        }
                                     }
                                 }
                             }
-                            .buttonStyle(.plain)
                         }
 
                         KCard(padded: false) {
@@ -189,6 +220,12 @@ struct HomeMobileView: View {
                                     systemImage: "checkmark.circle.fill",
                                     trailing: core.reviewCount > 0 ? "\(core.reviewCount)" : nil
                                 ) { goReview = true }
+                                Divider().padding(.leading, 56)
+                                KListRow(
+                                    title: "식단",
+                                    subtitle: core.dietSuggestSubtitle.isEmpty ? "식사·운동 기록" : core.dietSuggestSubtitle,
+                                    systemImage: "fork.knife"
+                                ) { goDiet = true }
                                 Divider().padding(.leading, 56)
                                 KListRow(
                                     title: "물어보기",
@@ -209,6 +246,29 @@ struct HomeMobileView: View {
             .navigationDestination(isPresented: $goReview) { ReviewMobileView() }
             .navigationDestination(isPresented: $goDiet) { DietMobileView() }
             .navigationDestination(isPresented: $goAsk) { AskMobileView() }
+        }
+    }
+
+    private func briefingRow(label: String, text: String) -> some View {
+        HStack(alignment: .top, spacing: 12) {
+            Text(label)
+                .font(.system(size: 13, weight: .bold))
+                .foregroundStyle(KColor.blue500)
+                .frame(width: 36, alignment: .leading)
+            Text(text)
+                .font(.system(size: 15, weight: .medium))
+                .foregroundStyle(KColor.grey900)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    private func timelineGlyph(_ type: String) -> String {
+        switch type {
+        case "meal": return "식사"
+        case "workout": return "운동"
+        case "metric": return "지표"
+        case "review": return "확인"
+        default: return "·"
         }
     }
 
@@ -236,8 +296,8 @@ struct HomeMobileView: View {
     private var greetingTitle: String {
         if core.reviewCount > 0 { return "확인할 게 있어요" }
         if !core.connected { return "연결을 확인해요" }
-        if core.dietLine.isEmpty { return "오늘도 남겨 볼까요" }
-        return "준비됐어요"
+        if core.bodyLine.isEmpty && core.dietLine.isEmpty { return "오늘을 열어 볼까요" }
+        return "오늘의 나"
     }
 
     private var greetingBody: String {
@@ -247,7 +307,7 @@ struct HomeMobileView: View {
         if !core.connected {
             return "Mac과 Tailscale이 켜져 있는지 확인해 주세요."
         }
-        return "녹음은 Mac에서, 질문·식단은 여기서 이어가요."
+        return "몸·지식·다음 할 일을 한곳에서 이어가요."
     }
 
     private var primaryTitle: String {

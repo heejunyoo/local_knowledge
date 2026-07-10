@@ -83,14 +83,29 @@ public enum KnowledgeRAG {
             preferLocal7B: useLlama,
             localTimeout: 40
         ), isPlausibleAnswer(gen.text) {
+            var text = gen.text.trimmingCharacters(in: .whitespacesAndNewlines)
+            // P0-3 trust gate: always surface source titles when we had retrieval hits.
+            text = appendCitationFooterIfNeeded(answer: text, citations: citations)
             return Answer(
                 question: question,
-                answer: gen.text.trimmingCharacters(in: .whitespacesAndNewlines),
+                answer: text,
                 citations: citations,
                 engine: "\(gen.engine)+retrieve-v2"
             )
         }
         return nil
+    }
+
+    /// Ensure refined answers still show human-readable grounds (W0 G-Trust).
+    private static func appendCitationFooterIfNeeded(answer: String, citations: [Citation]) -> String {
+        let titles = citations.prefix(3).map(\.title).filter { !$0.isEmpty }
+        guard !titles.isEmpty else { return answer }
+        let lower = answer.lowercased()
+        if answer.contains("근거") || answer.contains("출처") || lower.contains("source") {
+            return answer
+        }
+        let line = "근거: " + titles.map { "「\($0)」" }.joined(separator: ", ")
+        return answer + "\n\n" + line
     }
 
     public static func ask(

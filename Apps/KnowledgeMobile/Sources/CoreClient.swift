@@ -19,6 +19,11 @@ public final class CoreClient: ObservableObject {
     @Published public var dietLine: String = ""
     @Published public var dietSuggestTitle: String = ""
     @Published public var dietSuggestSubtitle: String = ""
+    /// W0 assistant hub fields from `assistant.today`.
+    @Published public var bodyLine: String = ""
+    @Published public var knowledgeLine: String = ""
+    @Published public var timelinePreview: [[String: Any]] = []
+    @Published public var nextActionLabel: String = ""
 
     public init() {
         self.baseURL = UserDefaults.standard.string(forKey: "core.baseURL") ?? "http://100.x.y.z:8741"
@@ -70,6 +75,48 @@ public final class CoreClient: ObservableObject {
         }
         await refreshReviewCount()
         await refreshDietLine()
+        await refreshAssistantToday()
+    }
+
+    /// Composed briefing (body + knowledge + timeline). Falls back silently if RPC missing.
+    public func refreshAssistantToday() async {
+        guard isPaired else {
+            bodyLine = ""
+            knowledgeLine = ""
+            timelinePreview = []
+            nextActionLabel = ""
+            return
+        }
+        do {
+            let result = try await dietRPC("assistant.today", params: [:])
+            if let body = result["body"] as? [String: Any] {
+                bodyLine = body["line"] as? String ?? ""
+                if let suggest = body["suggest"] as? [String: Any] {
+                    dietSuggestTitle = suggest["title"] as? String ?? dietSuggestTitle
+                    dietSuggestSubtitle = suggest["subtitle"] as? String ?? dietSuggestSubtitle
+                }
+            }
+            if let knowledge = result["knowledge"] as? [String: Any] {
+                knowledgeLine = knowledge["line"] as? String ?? ""
+                if let n = knowledge["review_pending"] as? Int {
+                    reviewCount = n
+                } else if let n = knowledge["review_pending"] as? Double {
+                    reviewCount = Int(n)
+                }
+            }
+            if let events = result["timeline"] as? [[String: Any]] {
+                timelinePreview = Array(events.suffix(5))
+            }
+            if let actions = result["next_actions"] as? [[String: Any]],
+               let first = actions.first {
+                nextActionLabel = first["label"] as? String ?? ""
+            }
+            if bodyLine.isEmpty == false {
+                dietLine = bodyLine
+            }
+        } catch {
+            // Older gateway without assistant.* — keep diet/review paths.
+        }
     }
 
     public func revokeRemote() async {
