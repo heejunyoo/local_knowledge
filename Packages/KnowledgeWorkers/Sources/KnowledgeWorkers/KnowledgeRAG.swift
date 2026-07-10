@@ -78,7 +78,7 @@ public enum KnowledgeRAG {
         if let gen = LLMRouter.complete(
             prompt: prompt,
             knowledgeRoot: knowledgeRoot,
-            maxTokens: 280,
+            maxTokens: 420,
             preferCloud: true,
             preferLocal7B: useLlama,
             localTimeout: 40
@@ -220,6 +220,7 @@ public enum KnowledgeRAG {
         guard t.count >= 12, t.count <= 1600 else { return false }
         if t.contains("### 근거") || t.contains("### 질문") { return false }
         if t.lowercased().contains("as an ai") { return false }
+        if t.contains("<think>") || t.contains("</think>") { return false }
         return true
     }
 

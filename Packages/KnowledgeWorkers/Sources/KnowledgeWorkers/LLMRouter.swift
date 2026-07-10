@@ -67,10 +67,12 @@ public enum LLMRouter {
         let catalog = LLMProviderCatalog.load(knowledgeRoot: knowledgeRoot)
         let cfg = AppConfig.load(knowledgeRoot: knowledgeRoot)
         var cloudIds: [String] = []
+        var modelHints: [String] = []
         for id in catalog.order {
             guard let p = catalog.providers[id] else { continue }
             if LLMSecrets.resolve(secretKey: p.apiKeySecret, envFallback: p.envFallback, knowledgeRoot: knowledgeRoot) != nil {
                 cloudIds.append(id)
+                modelHints.append("\(id):\(p.model)")
             }
         }
         let local = LocalLLM.isAvailable(knowledgeRoot: knowledgeRoot)
@@ -85,7 +87,10 @@ public enum LLMRouter {
         }
         var parts: [String] = []
         if cloudReady {
-            parts.append("지금: 클라우드 (\(cloudIds.joined(separator: "→")))")
+            parts.append("지금: 클라우드 free (\(cloudIds.joined(separator: "→")))")
+            if !modelHints.isEmpty {
+                parts.append("모델 \(modelHints.joined(separator: ", "))")
+            }
         } else if local {
             parts.append("지금: 로컬 7B (기본)")
             if cfg.cloudEnabled {
@@ -104,7 +109,16 @@ public enum LLMRouter {
         catalog: LLMProviderCatalog,
         maxTokens: Int
     ) -> Answer? {
-        for id in catalog.order {
+        // Only providers with keys, preserve catalog order among those that have keys.
+        let keyed = catalog.order.filter { id in
+            guard let def = catalog.providers[id] else { return false }
+            return LLMSecrets.resolve(
+                secretKey: def.apiKeySecret,
+                envFallback: def.envFallback,
+                knowledgeRoot: knowledgeRoot
+            ) != nil
+        }
+        for id in keyed {
             guard let def = catalog.providers[id] else { continue }
             guard let key = LLMSecrets.resolve(
                 secretKey: def.apiKeySecret,
@@ -121,7 +135,7 @@ public enum LLMRouter {
                 )
                 return Answer(text: r.text, engine: r.engine)
             } catch {
-                // try next free tier
+                // try next free tier / model fallbacks inside client
                 continue
             }
         }

@@ -1,10 +1,10 @@
 {
-  "version": 1,
+  "version": 2,
   "as_of": "2026-07",
-  "notes": "Free-tier catalog. Edit model/base_url/order here (or ~/Knowledge/config/llm_providers.json) to swap providers without rebuilding the app. Rate limits change often — prefer Flash/fast free models.",
+  "notes": "Free-tier catalog (Jul 2026). Groq live-verified: llama-3.3-70b-versatile (primary quality), llama-3.1-8b-instant (fast fallback), meta-llama/llama-4-scout-17b-16e-instruct (preview fallback). Order prefers Groq when keyed.",
   "order": [
-    "gemini",
     "groq",
+    "gemini",
     "openrouter"
   ],
   "providers": {
@@ -14,7 +14,6 @@
       "base_url": "https://generativelanguage.googleapis.com/v1beta",
       "model": "gemini-2.5-flash",
       "fallback_models": [
-        "gemini-3.5-flash",
         "gemini-2.0-flash"
       ],
       "api_key_secret": "gemini_api_key",
@@ -29,7 +28,7 @@
       "model": "llama-3.3-70b-versatile",
       "fallback_models": [
         "llama-3.1-8b-instant",
-        "qwen/qwen3-32b"
+        "meta-llama/llama-4-scout-17b-16e-instruct"
       ],
       "api_key_secret": "groq_api_key",
       "env_fallback": "GROQ_API_KEY",

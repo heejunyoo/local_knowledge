@@ -143,9 +143,18 @@ public enum CloudLLMClient {
         let base = baseURL.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
         guard let url = URL(string: "\(base)/chat/completions") else { throw ClientError.badURL }
 
+        // System message improves Korean grounded answers (RAG / coach) on free models.
         let body: [String: Any] = [
             "model": model,
             "messages": [
+                [
+                    "role": "system",
+                    "content": """
+                    당신은 로컬 개인 비서입니다. 사용자가 준 근거·질문만으로 한국어로 명확히 답하세요.
+                    근거에 없으면 모른다고 말하세요. 추측·장황한 서론 금지. 2~6문장 또는 짧은 불릿.
+                    내부 사고 과정·태그(<think> 등)는 출력하지 마세요.
+                    """,
+                ],
                 ["role": "user", "content": prompt],
             ],
             "temperature": 0.2,
@@ -203,6 +212,17 @@ public enum CloudLLMClient {
 
     private static func clean(_ raw: String) -> String {
         var s = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        // Strip Qwen-style chain-of-thought leakage if a model still emits it.
+        if let start = s.range(of: "<think>"), let end = s.range(of: "</think>") {
+            s.removeSubrange(start.lowerBound...end.upperBound)
+            s = s.trimmingCharacters(in: .whitespacesAndNewlines)
+        } else if let start = s.range(of: "<think>") {
+            // unclosed think block — drop everything before last plausible answer line
+            s = String(s[start.upperBound...])
+            if let end = s.range(of: "</think>") {
+                s = String(s[end.upperBound...]).trimmingCharacters(in: .whitespacesAndNewlines)
+            }
+        }
         if let r = s.range(of: "### 답변") {
             s = String(s[r.upperBound...]).trimmingCharacters(in: .whitespacesAndNewlines)
         }

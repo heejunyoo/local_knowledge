@@ -54,14 +54,15 @@ public struct LLMProviderCatalog: Equatable, Sendable {
         version: 1,
         asOf: "2026-07",
         notes: "Built-in free-tier defaults (Jul 2026). Override via config/llm_providers.json.",
-        order: ["gemini", "groq", "openrouter"],
+        // Prefer Groq when present (fast LPU free tier). Gemini/OpenRouter still work if keyed.
+        order: ["groq", "gemini", "openrouter"],
         providers: [
             "gemini": ProviderDef(
                 kind: "gemini",
                 label: "Google Gemini free",
                 baseURL: "https://generativelanguage.googleapis.com/v1beta",
                 model: "gemini-2.5-flash",
-                fallbackModels: ["gemini-3.5-flash", "gemini-2.0-flash"],
+                fallbackModels: ["gemini-2.0-flash"],
                 apiKeySecret: "gemini_api_key",
                 envFallback: "GEMINI_API_KEY",
                 docsURL: "https://aistudio.google.com/apikey"
@@ -70,8 +71,12 @@ public struct LLMProviderCatalog: Equatable, Sendable {
                 kind: "openai_compatible",
                 label: "Groq free",
                 baseURL: "https://api.groq.com/openai/v1",
+                // Jul 2026 free-tier: quality first (70B), then fast 8B, then Llama 4 Scout preview.
                 model: "llama-3.3-70b-versatile",
-                fallbackModels: ["llama-3.1-8b-instant"],
+                fallbackModels: [
+                    "llama-3.1-8b-instant",
+                    "meta-llama/llama-4-scout-17b-16e-instruct",
+                ],
                 apiKeySecret: "groq_api_key",
                 envFallback: "GROQ_API_KEY",
                 docsURL: "https://console.groq.com/keys"
