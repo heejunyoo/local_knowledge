@@ -355,16 +355,35 @@ public final class DietStore: @unchecked Sendable {
         return nil
     }
 
-    public func deleteMeal(id: String) throws {
+    /// Returns true if a row was removed (false = unknown id / already gone).
+    @discardableResult
+    public func deleteMeal(id: String) throws -> Bool {
         lock.lock(); defer { lock.unlock() }
+        let before = model.meals.count
         model.meals.removeAll { $0.id == id }
-        try persist()
+        let removed = model.meals.count < before
+        if removed { try persist() }
+        return removed
     }
 
-    public func deleteWorkout(id: String) throws {
+    @discardableResult
+    public func deleteWorkout(id: String) throws -> Bool {
         lock.lock(); defer { lock.unlock() }
+        let before = model.workouts.count
         model.workouts.removeAll { $0.id == id }
-        try persist()
+        let removed = model.workouts.count < before
+        if removed { try persist() }
+        return removed
+    }
+
+    @discardableResult
+    public func deleteMetric(id: String) throws -> Bool {
+        lock.lock(); defer { lock.unlock() }
+        let before = model.metrics.count
+        model.metrics.removeAll { $0.id == id }
+        let removed = model.metrics.count < before
+        if removed { try persist() }
+        return removed
     }
 
     /// Morning / lunch / dinner / snack for UX chips.

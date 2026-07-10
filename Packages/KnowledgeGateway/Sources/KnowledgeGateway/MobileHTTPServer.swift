@@ -1,4 +1,5 @@
 import Foundation
+import CoreFoundation
 import KnowledgeCore
 import KnowledgeIndex
 import KnowledgeRPC
@@ -498,7 +499,9 @@ public final class MobileHTTPServer: @unchecked Sendable {
     }
 
     private func handleDietMethod(method: String, id: Any?, params: Any?) throws -> Data {
-        let p = params as? [String: Any] ?? [:]
+        // Always re-read disk — Mac app and mobile share the same SoT file.
+        diet.reload()
+        let p = coerceStringKeyedDict(params)
         switch method {
         case "diet.ping":
             return jsonRPCResponse(id: id, result: .object([
@@ -547,17 +550,35 @@ public final class MobileHTTPServer: @unchecked Sendable {
             if let s = m.sleepH { out["sleep_h"] = s }
             return jsonRPCResponse(id: id, result: JSONValue.fromJSONObject(out), error: nil)
         case "diet.delete_meal":
-            guard let id = p["id"] as? String, !id.isEmpty else {
+            let mealId = stringParam(p["id"])
+            guard !mealId.isEmpty else {
                 return jsonRPCResponse(id: id, result: nil, error: .invalidParams)
             }
-            try diet.deleteMeal(id: id)
-            return jsonRPCResponse(id: id, result: .object(["deleted": .bool(true)]), error: nil)
+            let removed = try diet.deleteMeal(id: mealId)
+            return jsonRPCResponse(id: id, result: .object([
+                "deleted": .bool(removed),
+                "id": .string(mealId),
+            ]), error: nil)
         case "diet.delete_workout":
-            guard let id = p["id"] as? String, !id.isEmpty else {
+            let workoutId = stringParam(p["id"])
+            guard !workoutId.isEmpty else {
                 return jsonRPCResponse(id: id, result: nil, error: .invalidParams)
             }
-            try diet.deleteWorkout(id: id)
-            return jsonRPCResponse(id: id, result: .object(["deleted": .bool(true)]), error: nil)
+            let removed = try diet.deleteWorkout(id: workoutId)
+            return jsonRPCResponse(id: id, result: .object([
+                "deleted": .bool(removed),
+                "id": .string(workoutId),
+            ]), error: nil)
+        case "diet.delete_metric":
+            let metricId = stringParam(p["id"])
+            guard !metricId.isEmpty else {
+                return jsonRPCResponse(id: id, result: nil, error: .invalidParams)
+            }
+            let removed = try diet.deleteMetric(id: metricId)
+            return jsonRPCResponse(id: id, result: .object([
+                "deleted": .bool(removed),
+                "id": .string(metricId),
+            ]), error: nil)
         case "diet.suggest":
             let s = diet.suggestedAction()
             var obj: [String: Any] = ["title": s.title, "subtitle": s.subtitle]
@@ -624,6 +645,7 @@ public final class MobileHTTPServer: @unchecked Sendable {
     private func doubleParam(_ any: Any?) -> Double? {
         if let d = any as? Double { return d }
         if let i = any as? Int { return Double(i) }
+        if let n = any as? NSNumber { return n.doubleValue }
         if let s = any as? String { return Double(s) }
         return nil
     }
@@ -631,8 +653,28 @@ public final class MobileHTTPServer: @unchecked Sendable {
     private func intParam(_ any: Any?) -> Int? {
         if let i = any as? Int { return i }
         if let d = any as? Double { return Int(d) }
+        if let n = any as? NSNumber { return n.intValue }
         if let s = any as? String { return Int(s) }
         return nil
+    }
+
+    private func stringParam(_ any: Any?) -> String {
+        if let s = any as? String { return s.trimmingCharacters(in: .whitespacesAndNewlines) }
+        if let n = any as? NSNumber { return n.stringValue }
+        return ""
+    }
+
+    /// JSONSerialization often yields NSDictionary; bridge to [String: Any].
+    private func coerceStringKeyedDict(_ any: Any?) -> [String: Any] {
+        if let d = any as? [String: Any] { return d }
+        if let d = any as? NSDictionary {
+            var out: [String: Any] = [:]
+            for (k, v) in d {
+                if let ks = k as? String { out[ks] = v }
+            }
+            return out
+        }
+        return [:]
     }
 
     private func handleKnowledgeAsk(method: String, id: Any?, params: Any?) throws -> Data {
@@ -895,15 +937,33 @@ public final class MobileHTTPServer: @unchecked Sendable {
 
 extension JSONValue {
     static func fromJSONObject(_ any: Any) -> JSONValue {
+        if any is NSNull { return .null }
+        // Bool is NSNumber on Darwin — check before NSNumber.
+        if type(of: any) == Bool.self || any is Bool {
+            if let b = any as? Bool { return .bool(b) }
+        }
         switch any {
         case let b as Bool: return .bool(b)
         case let i as Int: return .number(Double(i))
         case let d as Double: return .number(d)
+        case let n as NSNumber:
+            // Distinguish bool-as-NSNumber
+            if CFGetTypeID(n) == CFBooleanGetTypeID() {
+                return .bool(n.boolValue)
+            }
+            return .number(n.doubleValue)
         case let s as String: return .string(s)
         case let a as [Any]: return .array(a.map { fromJSONObject($0) })
+        case let a as NSArray: return .array((0..<a.count).map { fromJSONObject(a[$0] as Any) })
         case let o as [String: Any]:
             var m: [String: JSONValue] = [:]
             for (k, v) in o { m[k] = fromJSONObject(v) }
+            return .object(m)
+        case let o as NSDictionary:
+            var m: [String: JSONValue] = [:]
+            for (k, v) in o {
+                if let ks = k as? String { m[ks] = fromJSONObject(v) }
+            }
             return .object(m)
         default: return .null
         }

@@ -492,16 +492,24 @@ public struct DietView: View {
                                 sub: [m.kcal.map { "\(Int($0)) kcal" }, m.proteinG.map { "P\(Int($0))g" }]
                                     .compactMap { $0 }.joined(separator: " · ")
                             ) {
-                                try? store.deleteMeal(id: m.id)
-                                flash = "식사 삭제"
-                                refresh()
+                                do {
+                                    let ok = try store.deleteMeal(id: m.id)
+                                    flash = ok ? "식사 삭제됨" : "이미 없는 기록"
+                                    refresh()
+                                } catch {
+                                    flash = "삭제 실패"
+                                }
                             }
                         }
                         ForEach(dash.day.workouts) { w in
                             row(icon: "figure.walk", title: w.kind, sub: "\(w.minutes)분") {
-                                try? store.deleteWorkout(id: w.id)
-                                flash = "운동 삭제"
-                                refresh()
+                                do {
+                                    let ok = try store.deleteWorkout(id: w.id)
+                                    flash = ok ? "운동 삭제됨" : "이미 없는 기록"
+                                    refresh()
+                                } catch {
+                                    flash = "삭제 실패"
+                                }
                             }
                         }
                     }

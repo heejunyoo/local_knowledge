@@ -42,6 +42,15 @@ struct DietMobileView: View {
     @State private var goalsBusy = false
     @State private var goalsMessage: String?
     @State private var goalsError: String?
+    @State private var pendingDelete: PendingDelete?
+    @State private var deleteBusyId: String?
+
+    private struct PendingDelete: Identifiable {
+        var id: String
+        var kind: Kind
+        var title: String
+        enum Kind { case meal, workout }
+    }
 
     private let slots = ["아침", "점심", "저녁", "간식"]
     /// name, grams, unit, kcal, protein — default serving (approx)
@@ -126,6 +135,23 @@ struct DietMobileView: View {
             .sheet(isPresented: $showProfile) {
                 profileSheet
                     .onAppear { loadProfileFields() }
+            }
+            .confirmationDialog(
+                pendingDelete.map { "「\($0.title)」을(를) 삭제할까요?" } ?? "삭제",
+                isPresented: Binding(
+                    get: { pendingDelete != nil },
+                    set: { if !$0 { pendingDelete = nil } }
+                ),
+                titleVisibility: .visible
+            ) {
+                Button("삭제", role: .destructive) {
+                    if let p = pendingDelete {
+                        Task { await performDelete(p) }
+                    }
+                }
+                Button("취소", role: .cancel) { pendingDelete = nil }
+            } message: {
+                Text("삭제하면 오늘 합계에서 바로 빠져요.")
             }
             .toolbar {
                 ToolbarItemGroup(placement: .keyboard) {
@@ -380,10 +406,14 @@ struct DietMobileView: View {
                     ForEach(workoutPresets, id: \.0) { item in
                         Button("\(item.0) \(item.1)분") {
                             Task {
-                                try? await core.dietLogWorkout(kind: item.0, minutes: item.1, intensity: nil)
-                                kHapticSuccess()
-                                flash = "\(item.0) \(item.1)분 저장"
-                                await reload()
+                                do {
+                                    try await core.dietLogWorkout(kind: item.0, minutes: item.1, intensity: nil)
+                                    kHapticSuccess()
+                                    showFlash("\(item.0) \(item.1)분 저장됐어요")
+                                    await reload()
+                                } catch {
+                                    showFlash("저장 실패: \(error.localizedDescription)")
+                                }
                             }
                         }
                         .font(.system(size: 13, weight: .medium))
@@ -430,10 +460,18 @@ struct DietMobileView: View {
         let meals = day["meals"] as? [[String: Any]] ?? []
         let workouts = day["workouts"] as? [[String: Any]] ?? []
         return VStack(alignment: .leading, spacing: KSpace.x3) {
-            Text("오늘 기록")
-                .font(.system(size: 15, weight: .semibold))
-                .foregroundStyle(KColor.grey500)
-            KCard {
+            HStack {
+                Text("오늘 기록")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(KColor.grey500)
+                Spacer()
+                if !meals.isEmpty || !workouts.isEmpty {
+                    Text("왼쪽으로 밀면 삭제")
+                        .font(.system(size: 11))
+                        .foregroundStyle(KColor.grey500)
+                }
+            }
+            KCard(padded: false) {
                 if meals.isEmpty && workouts.isEmpty {
                     KEmptyState(
                         systemImage: "fork.knife",
@@ -441,56 +479,162 @@ struct DietMobileView: View {
                         message: "끼니 칩이나 한 줄로 시작해 보세요.",
                         actionTitle: "기록하기"
                     ) { showLog = true }
+                    .padding(KSpace.x4)
                 } else {
-                    VStack(alignment: .leading, spacing: 12) {
-                        ForEach(Array(meals.enumerated()), id: \.offset) { _, m in
-                            let id = m["id"] as? String ?? ""
+                    VStack(spacing: 0) {
+                        ForEach(Array(meals.enumerated()), id: \.offset) { idx, m in
+                            let id = stringVal(m["id"])
                             let items = (m["items"] as? [String])?.joined(separator: ", ") ?? "식사"
-                            HStack {
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text(items).font(.system(size: 15, weight: .medium)).foregroundStyle(KColor.grey900)
-                                    if let k = m["kcal"] as? Double {
-                                        Text("\(Int(k)) kcal").font(.caption).foregroundStyle(KColor.grey500)
-                                    }
+                            let kcal = intVal(m["kcal"])
+                            let protein = intVal(m["protein_g"])
+                            let sub: String = {
+                                var p: [String] = []
+                                if kcal > 0 { p.append("\(kcal) kcal") }
+                                if protein > 0 { p.append("P\(protein)g") }
+                                return p.joined(separator: " · ")
+                            }()
+                            dietRow(
+                                icon: "fork.knife",
+                                title: items,
+                                subtitle: sub,
+                                rowId: id,
+                                isLast: idx == meals.count - 1 && workouts.isEmpty
+                            ) {
+                                guard !id.isEmpty else {
+                                    showFlash("이 기록에 id가 없어 삭제할 수 없어요. 앱을 다시 받아 주세요.")
+                                    return
                                 }
-                                Spacer()
-                                if !id.isEmpty {
-                                    Button {
-                                        Task {
-                                            try? await core.dietDeleteMeal(id: id)
-                                            flash = "삭제"
-                                            await reload()
-                                        }
-                                    } label: {
-                                        Image(systemName: "trash").font(.caption).foregroundStyle(KColor.grey500)
-                                    }
-                                }
+                                pendingDelete = PendingDelete(id: id, kind: .meal, title: items)
                             }
                         }
-                        ForEach(Array(workouts.enumerated()), id: \.offset) { _, w in
-                            let id = w["id"] as? String ?? ""
-                            HStack {
-                                Text("\((w["kind"] as? String) ?? "운동") · \(w["minutes"] as? Int ?? 0)분")
-                                    .font(.system(size: 15, weight: .medium))
-                                    .foregroundStyle(KColor.grey900)
-                                Spacer()
-                                if !id.isEmpty {
-                                    Button {
-                                        Task {
-                                            try? await core.dietDeleteWorkout(id: id)
-                                            flash = "삭제"
-                                            await reload()
-                                        }
-                                    } label: {
-                                        Image(systemName: "trash").font(.caption).foregroundStyle(KColor.grey500)
-                                    }
+                        ForEach(Array(workouts.enumerated()), id: \.offset) { idx, w in
+                            let id = stringVal(w["id"])
+                            let kind = (w["kind"] as? String) ?? "운동"
+                            let minutes = intVal(w["minutes"])
+                            let title = "\(kind) · \(minutes)분"
+                            dietRow(
+                                icon: "figure.walk",
+                                title: title,
+                                subtitle: "",
+                                rowId: id,
+                                isLast: idx == workouts.count - 1
+                            ) {
+                                guard !id.isEmpty else {
+                                    showFlash("이 기록에 id가 없어 삭제할 수 없어요.")
+                                    return
                                 }
+                                pendingDelete = PendingDelete(id: id, kind: .workout, title: title)
                             }
                         }
                     }
                 }
             }
         }
+    }
+
+    private func dietRow(
+        icon: String,
+        title: String,
+        subtitle: String,
+        rowId: String,
+        isLast: Bool,
+        onDelete: @escaping () -> Void
+    ) -> some View {
+        VStack(spacing: 0) {
+            HStack(spacing: 12) {
+                Image(systemName: icon)
+                    .foregroundStyle(KColor.blue500)
+                    .frame(width: 22)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title)
+                        .font(.system(size: 15, weight: .medium))
+                        .foregroundStyle(KColor.grey900)
+                        .multilineTextAlignment(.leading)
+                    if !subtitle.isEmpty {
+                        Text(subtitle)
+                            .font(.caption)
+                            .foregroundStyle(KColor.grey500)
+                    }
+                }
+                Spacer(minLength: 8)
+                if deleteBusyId == rowId {
+                    ProgressView().scaleEffect(0.85)
+                } else {
+                    Button(role: .destructive, action: onDelete) {
+                        Text("삭제")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundStyle(KColor.red500)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 8)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.borderless)
+                    .accessibilityLabel("\(title) 삭제")
+                }
+            }
+            .padding(.horizontal, KSpace.x4)
+            .padding(.vertical, 12)
+            .background(KColor.white)
+            .contentShape(Rectangle())
+            .contextMenu {
+                Button(role: .destructive, action: onDelete) {
+                    Label("삭제", systemImage: "trash")
+                }
+            }
+            if !isLast {
+                Divider().padding(.leading, 50)
+            }
+        }
+    }
+
+    private func performDelete(_ p: PendingDelete) async {
+        deleteBusyId = p.id
+        pendingDelete = nil
+        defer { deleteBusyId = nil }
+        do {
+            let removed: Bool
+            switch p.kind {
+            case .meal:
+                removed = try await core.dietDeleteMeal(id: p.id)
+            case .workout:
+                removed = try await core.dietDeleteWorkout(id: p.id)
+            }
+            if removed {
+                // Optimistic local remove so UI updates even if reload is slow
+                optimisticallyRemove(id: p.id, kind: p.kind)
+                kHapticSuccess()
+                showFlash("삭제됐어요")
+                await reload()
+            } else {
+                showFlash("이미 없거나 찾을 수 없는 기록이에요")
+                await reload()
+            }
+        } catch {
+            err = error.localizedDescription
+            showFlash("삭제 실패: \(error.localizedDescription)")
+            kHapticLight()
+        }
+    }
+
+    private func optimisticallyRemove(id: String, kind: PendingDelete.Kind) {
+        guard var day = dashboard["day"] as? [String: Any] else { return }
+        switch kind {
+        case .meal:
+            var meals = day["meals"] as? [[String: Any]] ?? []
+            meals.removeAll { stringVal($0["id"]) == id }
+            day["meals"] = meals
+        case .workout:
+            var workouts = day["workouts"] as? [[String: Any]] ?? []
+            workouts.removeAll { stringVal($0["id"]) == id }
+            day["workouts"] = workouts
+        }
+        dashboard["day"] = day
+    }
+
+    private func stringVal(_ any: Any?) -> String {
+        if let s = any as? String { return s }
+        if let n = any as? NSNumber { return n.stringValue }
+        return ""
     }
 
     private var logSheet: some View {

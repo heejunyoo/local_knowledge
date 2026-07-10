@@ -332,12 +332,21 @@ public final class CoreClient: ObservableObject {
         ])
     }
 
-    public func dietDeleteMeal(id: String) async throws {
-        _ = try await dietRPC("diet.delete_meal", params: ["id": id])
+    /// Returns whether the server removed a row.
+    @discardableResult
+    public func dietDeleteMeal(id: String) async throws -> Bool {
+        let r = try await dietRPC("diet.delete_meal", params: ["id": id])
+        if let b = r["deleted"] as? Bool { return b }
+        if let n = r["deleted"] as? NSNumber { return n.boolValue }
+        return true
     }
 
-    public func dietDeleteWorkout(id: String) async throws {
-        _ = try await dietRPC("diet.delete_workout", params: ["id": id])
+    @discardableResult
+    public func dietDeleteWorkout(id: String) async throws -> Bool {
+        let r = try await dietRPC("diet.delete_workout", params: ["id": id])
+        if let b = r["deleted"] as? Bool { return b }
+        if let n = r["deleted"] as? NSNumber { return n.boolValue }
+        return true
     }
 
     public func dietSuggest() async throws -> (title: String, subtitle: String, slot: String?) {
