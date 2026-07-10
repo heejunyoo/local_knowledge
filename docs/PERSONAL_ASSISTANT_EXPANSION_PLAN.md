@@ -5,7 +5,7 @@
 | Date | **2026-07-10** |
 | Version | **2.1 — Implementable best + strategy kill + P0 compress** |
 | Horizon | 2026-07 ~ 2027-Q1 |
-| Status | Strategy + **W0 execution** |
+| Status | Strategy + **W0 landed** · **W1 HealthKit started** |
 | Principle | **현재 상황에서 구현 가능한 최선 (Implementable Best)** — 항상 이 기준 |
 | HTML | `docs/PERSONAL_ASSISTANT_EXPANSION_REPORT.html` |
 | Related | `FEATURE_SCORECARD_AND_IMPROVEMENT_PLAN.md` · `core_platform_sketch.md` |
@@ -525,15 +525,15 @@ Wave는 **시간 구간이 겹치지 않음**. 각 기능은 **단일 Wave prima
 
 ### W1 — Body bridge + cognition
 
-| ID | 산출물 |
-|----|--------|
-| C2-F1 · C2-F2 | HK pull + 매핑 |
-| C7-F2 | `health.ingest` idempotent |
-| C5-F1 · C5-F2 | intent · 빠진 로그 |
-| C3-F2 | 주간 버킷 (숫자) |
-| C4-F2 | Mac 단축키 (여력 시 C4-F1 착수) |
+| ID | 산출물 | 상태 |
+|----|--------|------|
+| C2-F1 · C2-F2 | HK pull-on-open + 매핑 | **코드 착수** (iOS HealthKitBridge) |
+| C7-F2 | `health.ingest` idempotent | **구현** |
+| C5-F1 · C5-F2 | intent · 빠진 로그 | 대기 |
+| C3-F2 | 주간 버킷 (숫자) | 대기 |
+| C4-F2 | Mac 단축키 | 대기 |
 
-**완료 정의:** 운동/수면 HK 출처 ≥50% 시도; 자동 로그 삭제율 관찰 시작.
+**완료 정의:** 설정에서 건강 연결 1회 → 이후 앱 오픈 시 pull; 운동/수면 source=healthkit 타임라인 배지; dogfood 삭제율 관찰.
 
 ### W2 — Retention loop
 

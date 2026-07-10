@@ -168,6 +168,8 @@ iPhone                         Core (:8741)                    Mac UI / CLI
 | `diet.coach` | Diet | message? | analysis text |
 | `assistant.today` | Assistant | date? | body + knowledge + timeline + next_actions (W0) |
 | `timeline.list` | Assistant | — | today events (meal/workout/metric/review) |
+| `health.ingest` | Body | samples[] (client_id, type, ts, …) | accepted / deduped (W1) |
+| `health.sync_status` | Body | — | pull_mode, mirror hints |
 
 미등록 method → JSON-RPC `-32601 Method not found`.
 

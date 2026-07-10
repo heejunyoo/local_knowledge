@@ -24,6 +24,7 @@ public final class CoreClient: ObservableObject {
     @Published public var knowledgeLine: String = ""
     @Published public var timelinePreview: [[String: Any]] = []
     @Published public var nextActionLabel: String = ""
+    @Published public var healthSyncLine: String = ""
 
     public init() {
         self.baseURL = UserDefaults.standard.string(forKey: "core.baseURL") ?? "http://100.x.y.z:8741"
@@ -75,7 +76,43 @@ public final class CoreClient: ObservableObject {
         }
         await refreshReviewCount()
         await refreshDietLine()
+        await syncHealthKitIfPossible()
         await refreshAssistantToday()
+    }
+
+    /// W1 pull-on-open: Health → Core health.ingest (idempotent).
+    public func syncHealthKitIfPossible(forceAuth: Bool = false) async {
+        guard isPaired else { return }
+        let hk = HealthKitBridge.shared
+        guard hk.isAvailable else { return }
+        if forceAuth || hk.authorizationRequested {
+            if forceAuth {
+                let ok = await hk.requestAuthorization()
+                if !ok {
+                    healthSyncLine = hk.lastError ?? "건강 권한 필요"
+                    return
+                }
+            }
+            do {
+                let samples = try await hk.collectSamples(days: 7)
+                guard !samples.isEmpty else {
+                    healthSyncLine = "건강 데이터 없음 (최근 7일)"
+                    return
+                }
+                let result = try await healthIngest(samples: samples)
+                let accepted = result["accepted"] as? Int ?? Int(result["accepted"] as? Double ?? 0)
+                let deduped = result["deduped"] as? Int ?? Int(result["deduped"] as? Double ?? 0)
+                healthSyncLine = "건강 동기 \(accepted)건 반영 · 중복 \(deduped)"
+                hk.lastSyncSummary = healthSyncLine
+            } catch {
+                healthSyncLine = error.localizedDescription
+                hk.lastError = error.localizedDescription
+            }
+        }
+    }
+
+    public func healthIngest(samples: [[String: Any]]) async throws -> [String: Any] {
+        try await dietRPC("health.ingest", params: ["samples": samples])
     }
 
     /// Composed briefing (body + knowledge + timeline). Falls back silently if RPC missing.

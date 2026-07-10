@@ -234,11 +234,16 @@ public final class DietStore: @unchecked Sendable {
         kind: String,
         minutes: Int,
         intensity: String?,
-        ts: Date = Date()
+        ts: Date = Date(),
+        preferredId: String? = nil
     ) throws -> Workout {
         lock.lock(); defer { lock.unlock() }
+        let id = preferredId?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty ?? UUID().uuidString
+        if model.workouts.contains(where: { $0.id == id }) {
+            return model.workouts.first { $0.id == id }!
+        }
         let w = Workout(
-            id: UUID().uuidString,
+            id: id,
             ts: iso(ts),
             kind: kind.isEmpty ? "workout" : kind,
             minutes: max(0, minutes),
@@ -249,12 +254,105 @@ public final class DietStore: @unchecked Sendable {
         return w
     }
 
-    public func logMetric(weightKg: Double?, sleepH: Double?, ts: Date = Date()) throws -> Metric {
+    public func logMetric(
+        weightKg: Double?,
+        sleepH: Double?,
+        ts: Date = Date(),
+        preferredId: String? = nil
+    ) throws -> Metric {
         lock.lock(); defer { lock.unlock() }
-        let m = Metric(id: UUID().uuidString, ts: iso(ts), weightKg: weightKg, sleepH: sleepH)
+        let id = preferredId?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty ?? UUID().uuidString
+        if model.metrics.contains(where: { $0.id == id }) {
+            return model.metrics.first { $0.id == id }!
+        }
+        let m = Metric(id: id, ts: iso(ts), weightKg: weightKg, sleepH: sleepH)
         model.metrics.append(m)
         try persist()
         return m
+    }
+
+    /// HealthKit / external sensor batch. Idempotent on `client_id`.
+    /// Sample dict keys: client_id, type (workout|metric), ts (ISO8601),
+    /// kind?, minutes?, weight_kg?, sleep_h?, source? (default healthkit).
+    public func ingestHealthSamples(_ samples: [[String: Any]]) throws -> [String: Any] {
+        var accepted = 0
+        var deduped = 0
+        var errors: [String] = []
+        let isoParse = ISO8601DateFormatter()
+        isoParse.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        let isoParse2 = ISO8601DateFormatter()
+
+        for (idx, s) in samples.enumerated() {
+            let clientId = (s["client_id"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            guard !clientId.isEmpty else {
+                errors.append("[\(idx)] missing client_id")
+                continue
+            }
+            let type = (s["type"] as? String ?? "").lowercased()
+            let tsStr = s["ts"] as? String
+            let ts = tsStr.flatMap { isoParse.date(from: $0) ?? isoParse2.date(from: $0) } ?? Date()
+            let source = (s["source"] as? String)?.lowercased() ?? "healthkit"
+            let intensity = source == "healthkit" ? "healthkit" : source
+
+            do {
+                switch type {
+                case "workout":
+                    lock.lock()
+                    let exists = model.workouts.contains { $0.id == clientId }
+                    lock.unlock()
+                    if exists {
+                        deduped += 1
+                        continue
+                    }
+                    let kind = s["kind"] as? String ?? "workout"
+                    let minutes = (s["minutes"] as? Int)
+                        ?? (s["minutes"] as? Double).map { Int($0) }
+                        ?? Int(s["minutes"] as? String ?? "") ?? 0
+                    _ = try logWorkout(
+                        kind: kind,
+                        minutes: minutes,
+                        intensity: intensity,
+                        ts: ts,
+                        preferredId: clientId
+                    )
+                    accepted += 1
+                case "metric":
+                    lock.lock()
+                    let exists = model.metrics.contains { $0.id == clientId }
+                    lock.unlock()
+                    if exists {
+                        deduped += 1
+                        continue
+                    }
+                    let w = doubleAny(s["weight_kg"] ?? s["weightKg"])
+                    let sleep = doubleAny(s["sleep_h"] ?? s["sleepH"])
+                    guard w != nil || sleep != nil else {
+                        errors.append("[\(idx)] metric needs weight_kg or sleep_h")
+                        continue
+                    }
+                    _ = try logMetric(weightKg: w, sleepH: sleep, ts: ts, preferredId: clientId)
+                    accepted += 1
+                default:
+                    errors.append("[\(idx)] unknown type \(type)")
+                }
+            } catch {
+                errors.append("[\(idx)] \(error.localizedDescription)")
+            }
+        }
+        var out: [String: Any] = [
+            "accepted": accepted,
+            "deduped": deduped,
+            "received": samples.count,
+        ]
+        if !errors.isEmpty { out["errors"] = errors }
+        return out
+    }
+
+    private func doubleAny(_ any: Any?) -> Double? {
+        if let d = any as? Double { return d }
+        if let i = any as? Int { return Double(i) }
+        if let s = any as? String { return Double(s) }
+        return nil
     }
 
     public func deleteMeal(id: String) throws {
@@ -352,7 +450,7 @@ public final class DietStore: @unchecked Sendable {
                 "ts": m.ts,
                 "type": "meal",
                 "title": m.items.joined(separator: " · "),
-                "source": "user",
+                "source": eventSource(id: m.id, intensity: nil),
                 "id": m.id,
             ])
         }
@@ -361,7 +459,7 @@ public final class DietStore: @unchecked Sendable {
                 "ts": w.ts,
                 "type": "workout",
                 "title": "\(w.kind) · \(w.minutes)분",
-                "source": "user",
+                "source": eventSource(id: w.id, intensity: w.intensity),
                 "id": w.id,
             ])
         }
@@ -373,7 +471,7 @@ public final class DietStore: @unchecked Sendable {
                 "ts": m.ts,
                 "type": "metric",
                 "title": parts.isEmpty ? "지표" : parts.joined(separator: " · "),
-                "source": "user",
+                "source": eventSource(id: m.id, intensity: nil),
                 "id": m.id,
             ])
         }
@@ -602,6 +700,12 @@ public final class DietStore: @unchecked Sendable {
 
     // MARK: - private
 
+    private func eventSource(id: String, intensity: String?) -> String {
+        if id.hasPrefix("hk-") { return "healthkit" }
+        if intensity == "healthkit" { return "healthkit" }
+        return "user"
+    }
+
     private func daySnapshotLocked(day: Date) -> DaySnapshot {
         let key = dayKey(day)
         let meals = model.meals.filter { $0.ts.hasPrefix(key) }
@@ -734,5 +838,12 @@ public final class DietStore: @unchecked Sendable {
         f.timeZone = .current
         f.dateFormat = "yyyy-MM-dd"
         return f.string(from: d)
+    }
+}
+
+private extension String {
+    var nilIfEmpty: String? {
+        let t = trimmingCharacters(in: .whitespacesAndNewlines)
+        return t.isEmpty ? nil : t
     }
 }

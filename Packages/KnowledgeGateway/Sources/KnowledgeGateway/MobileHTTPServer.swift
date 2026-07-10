@@ -224,6 +224,9 @@ public final class MobileHTTPServer: @unchecked Sendable {
         if method.hasPrefix("assistant.") || method.hasPrefix("timeline.") {
             return try handleAssistantMethod(method: method, id: id, params: params)
         }
+        if method.hasPrefix("health.") {
+            return try handleHealthMethod(method: method, id: id, params: params)
+        }
         if method.hasPrefix("diet.") {
             return try handleDietMethod(method: method, id: id, params: params)
         }
@@ -389,6 +392,26 @@ public final class MobileHTTPServer: @unchecked Sendable {
             if let arr = dict["items"] as? [Any] { return arr.count }
         }
         return 0
+    }
+
+    private func handleHealthMethod(method: String, id: Any?, params: Any?) throws -> Data {
+        let p = params as? [String: Any] ?? [:]
+        switch method {
+        case "health.ingest":
+            let samples = p["samples"] as? [[String: Any]] ?? []
+            let result = try diet.ingestHealthSamples(samples)
+            return jsonRPCResponse(id: id, result: JSONValue.fromJSONObject(result), error: nil)
+        case "health.sync_status":
+            // Sensor SoT is Apple Health on device; Core only mirrors via ingest.
+            return jsonRPCResponse(id: id, result: .object([
+                "ok": .bool(true),
+                "mirror": .string("diet"),
+                "pull_mode": .string("app_open"),
+                "mac_healthkit": .bool(false),
+            ]), error: nil)
+        default:
+            return jsonRPCResponse(id: id, result: nil, error: .methodNotFound)
+        }
     }
 
     private func handleDietMethod(method: String, id: Any?, params: Any?) throws -> Data {

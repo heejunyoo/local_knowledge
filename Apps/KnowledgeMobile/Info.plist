@@ -17,9 +17,9 @@
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
-	<string>0.3.2</string>
+	<string>0.3.3</string>
 	<key>CFBundleVersion</key>
-	<string>12</string>
+	<string>13</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>UILaunchScreen</key>
@@ -39,5 +39,9 @@
 	<string>Mac Core 게이트웨이(Knowledge)에 연결해 지식·식단을 불러옵니다.</string>
 	<key>NSCameraUsageDescription</key>
 	<string>Mac 페어링 QR 코드를 스캔해 Knowledge에 연결합니다.</string>
+	<key>NSHealthShareUsageDescription</key>
+	<string>워치·아이폰에 쌓인 운동·수면·체중을 Mac 개인 비서(식단·타임라인)에 반영합니다. 데이터는 페어링된 Mac Core에만 보냅니다.</string>
+	<key>NSHealthUpdateUsageDescription</key>
+	<string>건강 앱에 쓰기는 하지 않습니다. 읽기만 사용합니다.</string>
 </dict>
 </plist>

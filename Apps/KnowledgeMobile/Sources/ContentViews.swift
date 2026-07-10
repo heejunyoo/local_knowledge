@@ -197,6 +197,7 @@ struct HomeMobileView: View {
                                     ForEach(Array(core.timelinePreview.enumerated()), id: \.offset) { _, ev in
                                         let title = ev["title"] as? String ?? ""
                                         let type = ev["type"] as? String ?? ""
+                                        let source = ev["source"] as? String
                                         HStack(spacing: 8) {
                                             Text(timelineGlyph(type))
                                                 .font(.system(size: 12))
@@ -206,6 +207,11 @@ struct HomeMobileView: View {
                                                 .font(.system(size: 14))
                                                 .foregroundStyle(KColor.grey900)
                                                 .lineLimit(1)
+                                            if !timelineSourceBadge(source).isEmpty {
+                                                Text(timelineSourceBadge(source))
+                                                    .font(.system(size: 11, weight: .semibold))
+                                                    .foregroundStyle(KColor.blue500)
+                                            }
                                         }
                                     }
                                 }
@@ -270,6 +276,10 @@ struct HomeMobileView: View {
         case "review": return "확인"
         default: return "·"
         }
+    }
+
+    private func timelineSourceBadge(_ source: String?) -> String {
+        source == "healthkit" ? "건강" : ""
     }
 
     private var connectionChip: some View {
@@ -619,6 +629,8 @@ struct ReviewMobileView: View {
 struct SettingsMobileView: View {
     @EnvironmentObject var core: CoreClient
     @State private var revoking = false
+    @State private var healthBusy = false
+    @ObservedObject private var hk = HealthKitBridge.shared
 
     var body: some View {
         Form {
@@ -629,6 +641,39 @@ struct SettingsMobileView: View {
                     .keyboardType(.URL)
                 LabeledContent("기기", value: core.deviceId.isEmpty ? "—" : String(core.deviceId.prefix(8)) + "…")
                 LabeledContent("상태", value: core.connected ? "연결됨" : "끊김")
+            }
+            Section("Apple 건강 (W1)") {
+                if !hk.isAvailable {
+                    Text("이 기기에서 건강 데이터를 쓸 수 없어요.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                } else {
+                    Text("워치·아이폰 운동·수면·체중을 앱을 열 때 Mac으로 가져와요. 쓰기는 하지 않아요.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Button {
+                        Task {
+                            healthBusy = true
+                            await core.syncHealthKitIfPossible(forceAuth: true)
+                            healthBusy = false
+                        }
+                    } label: {
+                        if healthBusy {
+                            ProgressView()
+                        } else {
+                            Text(hk.authorizationRequested ? "건강 다시 동기화" : "건강 연결 · 동기화")
+                        }
+                    }
+                    .disabled(!core.isPaired || healthBusy)
+                    if !core.healthSyncLine.isEmpty {
+                        Text(core.healthSyncLine)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    if let e = hk.lastError, !e.isEmpty {
+                        Text(e).font(.caption).foregroundStyle(KColor.red500)
+                    }
+                }
             }
             Section {
                 Button("연결 새로고침") { Task { await core.refreshStatus() } }
