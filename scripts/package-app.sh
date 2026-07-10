@@ -88,6 +88,22 @@ echo "Main DR:   $(codesign -d -r- "$INSTALL" 2>&1 | tail -1)"
 echo "Run: open \"$INSTALL\""
 codesign -dv "$INSTALL" 2>&1 | head -12
 
+# Force Dock/Finder icon (CFBundleIconFile alone is often cached stale)
+if [[ -f "$REPO/Resources/AppIcon-1024.png" ]]; then
+  /usr/bin/swift -e "
+import AppKit
+let app = \"$INSTALL\"
+let icon = \"$REPO/Resources/AppIcon-1024.png\"
+if let img = NSImage(contentsOfFile: icon) {
+  let ok = NSWorkspace.shared.setIcon(img, forFile: app, options: [])
+  fputs(ok ? \"Dock icon applied via NSWorkspace\\n\" : \"Dock icon apply failed\\n\", stderr)
+}
+" 2>/dev/null || true
+  /System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -f "$INSTALL" 2>/dev/null || true
+  # Soft Dock refresh without killing user session hard if Dock already relaunching
+  killall Dock 2>/dev/null || true
+fi
+
 # Mobile Core (daemon starts with --http-port 8741 by default)
 HTTP_PORT="${KNOWLEDGE_HTTP_PORT:-8741}"
 echo ""
