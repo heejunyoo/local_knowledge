@@ -1,0 +1,10 @@
+{
+  "id": 1,
+  "jsonrpc": "2.0",
+  "result": {
+    "target_kcal": 2185,
+    "target_protein_g": 138,
+    "target_workout_minutes_per_day": 40,
+    "weekly_workouts": 4
+  }
+}

@@ -1,0 +1,16 @@
+{
+  "id": 1,
+  "jsonrpc": "2.0",
+  "result": {
+    "activity": "moderate",
+    "age": 39,
+    "bmr": 1733,
+    "height_cm": 170,
+    "recommended_kcal": 2185,
+    "recommended_protein_g": 138,
+    "sex": "male",
+    "target_weight_kg": 75,
+    "tdee": 2685,
+    "weight_kg": 86
+  }
+}

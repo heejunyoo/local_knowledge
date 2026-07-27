@@ -1,0 +1,88 @@
+{
+  "id": 1,
+  "jsonrpc": "2.0",
+  "result": {
+    "days": [
+      {
+        "date": "<TS>",
+        "kcal": 0,
+        "meals": 0,
+        "protein_g": 0,
+        "workout_minutes": 0,
+        "workouts": 0
+      },
+      {
+        "date": "<TS>",
+        "kcal": 0,
+        "meals": 0,
+        "protein_g": 0,
+        "workout_minutes": 0,
+        "workouts": 0
+      },
+      {
+        "date": "<TS>",
+        "kcal": 0,
+        "meals": 0,
+        "protein_g": 0,
+        "workout_minutes": 0,
+        "workouts": 0
+      },
+      {
+        "date": "<TS>",
+        "kcal": 0,
+        "meals": 0,
+        "protein_g": 0,
+        "workout_minutes": 0,
+        "workouts": 0
+      },
+      {
+        "date": "<TS>",
+        "kcal": 0,
+        "meals": 0,
+        "protein_g": 0,
+        "workout_minutes": 0,
+        "workouts": 0
+      },
+      {
+        "date": "<TS>",
+        "kcal": 0,
+        "meals": 0,
+        "protein_g": 0,
+        "workout_minutes": 0,
+        "workouts": 0
+      },
+      {
+        "date": "<TS>",
+        "kcal": 0,
+        "meals": 0,
+        "protein_g": 0,
+        "workout_minutes": 0,
+        "workouts": 0
+      }
+    ],
+    "from": "2026-07-21",
+    "goals": {
+      "target_kcal": 2185,
+      "target_protein_g": 138,
+      "target_workout_minutes_per_day": 40,
+      "weekly_workouts": 4
+    },
+    "inbox_open": 0,
+    "narrative": "최근 7일: 식사 0회 · 운동 0회 · 0분\n칼로리 합 0 kcal\n연속 기록 0일",
+    "narrative_lines": [
+      "최근 7일: 식사 0회 · 운동 0회 · 0분\n칼로리 합 0 kcal",
+      "연속 기록 0일"
+    ],
+    "review_pending": 0,
+    "streak_days": 0,
+    "summary_text": "최근 <N>일: 식사 <N>회 · 운동 <N>회 · <N>분\n칼로리 합 <N> kcal",
+    "to": "2026-07-27",
+    "totals": {
+      "kcal": 0,
+      "meal_count": 0,
+      "protein_g": 0,
+      "workout_count": 0,
+      "workout_minutes": 0
+    }
+  }
+}

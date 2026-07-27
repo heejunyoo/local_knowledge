@@ -1,0 +1,43 @@
+{
+  "id": 1,
+  "jsonrpc": "2.0",
+  "result": {
+    "core": "Heejun의 Mac mini",
+    "diet": {
+      "date": "<TS>",
+      "meals": [],
+      "metrics": [],
+      "summary_text": "<N>-<N>-<N>: 식사·운동 기록이 없어요.",
+      "totals": {
+        "kcal": false,
+        "meal_count": false,
+        "protein_g": false,
+        "workout_count": false,
+        "workout_minutes": false
+      },
+      "workouts": []
+    },
+    "gateway": "m4",
+    "knowledge": {
+      "asr_engine": "apple-speech",
+      "db_path": "/Users/heejunyoo/Knowledge/index/knowledge.db",
+      "llama_ready": true,
+      "llm_engine": "local-7b",
+      "ok": true,
+      "recording_count": false,
+      "review_needed_count": false,
+      "vault_ok": true,
+      "vault_path": "/Users/heejunyoo/Library/Mobile Documents/com~apple~CloudDocs/heejun_pkm/heejun_PKM",
+      "version": "0.7.0-core-diet",
+      "whisper_ready": false
+    },
+    "ok": true,
+    "services": {
+      "assistant": true,
+      "diet": true,
+      "health": true,
+      "inbox": true,
+      "knowledge": true
+    }
+  }
+}

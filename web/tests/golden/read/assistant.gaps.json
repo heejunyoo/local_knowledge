@@ -1,0 +1,26 @@
+{
+  "id": 1,
+  "jsonrpc": "2.0",
+  "result": {
+    "gaps": [
+      {
+        "kind": "meal",
+        "label": "아침 기록이 없어요",
+        "priority": 1,
+        "slot": "아침"
+      },
+      {
+        "kind": "meal",
+        "label": "점심 기록이 없어요",
+        "priority": 2,
+        "slot": "점심"
+      },
+      {
+        "kind": "workout",
+        "label": "오늘 운동 기록이 없어요",
+        "priority": 4
+      }
+    ],
+    "sleep_hint": null
+  }
+}

@@ -1,0 +1,10 @@
+{
+  "id": 1,
+  "jsonrpc": "2.0",
+  "result": {
+    "mac_healthkit": false,
+    "mirror": "diet",
+    "ok": true,
+    "pull_mode": "app_open"
+  }
+}

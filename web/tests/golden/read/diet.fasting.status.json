@@ -1,0 +1,53 @@
+{
+  "id": 1,
+  "jsonrpc": "2.0",
+  "result": {
+    "active": false,
+    "completed_count": 0,
+    "detail_line": "오늘 오후 <N>:<N> 시작 → 내일 오전 <N>:<N> 목표 완료",
+    "ends_at": "<TS>",
+    "ends_at_label": "내일 오전 <N>:<N>",
+    "ends_day_word": "내일",
+    "engine": "diet-rules/v1",
+    "health_reference": {
+      "available": true,
+      "bmr": 1733,
+      "disclaimer": "건강(워치) 데이터는 있을 때만 참고합니다. 없어도 단식·목표 도달 예상은 직접 기록만으로 동작해요.",
+      "hours_since_last_meal": "<N>",
+      "line_count": 4,
+      "lines": [
+        "직접 체중 <N>kg",
+        "최근 수면 참고 <N>시간",
+        "유지 칼로리 약 <N>kcal (프로필)",
+        "마지막 식사 후 <N>시간"
+      ],
+      "plan_weight_is_reference_only": false,
+      "plan_weight_kg": 85.2,
+      "plan_weight_source": "user",
+      "recent_sleep_h": 7.1,
+      "role": "reference_only",
+      "sleep_source": "healthkit_ref",
+      "summary": "참고 <N>항목 (필수 아님)",
+      "tdee": 2685,
+      "user_weight_context": null,
+      "user_weight_kg": 85.2
+    },
+    "hint": "시간을 고른 뒤 「단식 시작」. 첫 식사 기록 시 자동 종료.",
+    "hour_presets": [
+      12,
+      14,
+      16,
+      18,
+      20
+    ],
+    "label": "간헐적 단식 대기",
+    "plan_note": "목표 도달 예상은 Mifflin–St Jeor + 적자(약 7700kcal≈1kg) 규칙 계산입니다. AI API를 쓰지 않아요.",
+    "plan_uses_ai": false,
+    "prefer_morning_weight": true,
+    "preview_line": "<N>시간 하면 내일 오전 <N>:<N>에 끝나요",
+    "starts_at": "<TS>",
+    "starts_at_label": "오늘 오후 <N>:<N>",
+    "target_hours": 14,
+    "weight_prompt": "매일 아침 공복 체중(직접 입력)이 목표 도달 예상의 기준이에요. 건강 데이터는 참고만 해요."
+  }
+}

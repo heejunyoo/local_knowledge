@@ -1,0 +1,17 @@
+{
+  "id": 1,
+  "jsonrpc": "2.0",
+  "result": {
+    "asr_engine": "apple-speech",
+    "db_path": "/Users/heejunyoo/Knowledge/index/knowledge.db",
+    "llama_ready": true,
+    "llm_engine": "local-7b",
+    "ok": true,
+    "recording_count": 0,
+    "review_needed_count": 0,
+    "vault_ok": true,
+    "vault_path": "/Users/heejunyoo/Library/Mobile Documents/com~apple~CloudDocs/heejun_pkm/heejun_PKM",
+    "version": "0.7.0-core-diet",
+    "whisper_ready": false
+  }
+}

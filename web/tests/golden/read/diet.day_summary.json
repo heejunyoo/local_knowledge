@@ -1,0 +1,18 @@
+{
+  "id": 1,
+  "jsonrpc": "2.0",
+  "result": {
+    "date": "<TS>",
+    "meals": [],
+    "metrics": [],
+    "summary_text": "<N>-<N>-<N>: 식사·운동 기록이 없어요.",
+    "totals": {
+      "kcal": 0,
+      "meal_count": 0,
+      "protein_g": 0,
+      "workout_count": 0,
+      "workout_minutes": 0
+    },
+    "workouts": []
+  }
+}

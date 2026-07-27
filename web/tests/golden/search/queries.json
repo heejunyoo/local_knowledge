@@ -1,0 +1,37 @@
+[
+  { "id": "q01", "category": "noun", "q": "결제" },
+  { "id": "q02", "category": "noun", "q": "임베딩" },
+  { "id": "q03", "category": "noun", "q": "모델" },
+  { "id": "q04", "category": "noun", "q": "데이터" },
+  { "id": "q05", "category": "noun", "q": "리서치" },
+
+  { "id": "q06", "category": "particle", "q": "결제를" },
+  { "id": "q07", "category": "particle", "q": "모델이" },
+  { "id": "q08", "category": "particle", "q": "데이터는" },
+  { "id": "q09", "category": "particle", "q": "임베딩을" },
+  { "id": "q10", "category": "particle", "q": "리서치를" },
+
+  { "id": "q11", "category": "english_tech", "q": "RAG" },
+  { "id": "q12", "category": "english_tech", "q": "Docker" },
+  { "id": "q13", "category": "english_tech", "q": "LLM" },
+  { "id": "q14", "category": "english_tech", "q": "API" },
+  { "id": "q15", "category": "english_tech", "q": "GenAI" },
+
+  { "id": "q16", "category": "mixed_ko_en", "q": "Reverse Proxy" },
+  { "id": "q17", "category": "mixed_ko_en", "q": "RAG 시스템" },
+  { "id": "q18", "category": "mixed_ko_en", "q": "Docker 구성" },
+  { "id": "q19", "category": "mixed_ko_en", "q": "GenAI 로드맵" },
+  { "id": "q20", "category": "mixed_ko_en", "q": "API 연동" },
+
+  { "id": "q21", "category": "multi_word", "q": "리서치 구조화" },
+  { "id": "q22", "category": "multi_word", "q": "가맹점 기능 요구사항" },
+  { "id": "q23", "category": "multi_word", "q": "기술 문의 채널" },
+  { "id": "q24", "category": "multi_word", "q": "actionable 로드맵" },
+  { "id": "q25", "category": "multi_word", "q": "문제와 해결책" },
+
+  { "id": "q26", "category": "zero_hit", "q": "asdkjhqwe123xyz" },
+  { "id": "q27", "category": "zero_hit", "q": "존재하지않는쿼리zzz" },
+  { "id": "q28", "category": "zero_hit", "q": "퀀텀컴퓨팅블록체인메타버스" },
+  { "id": "q29", "category": "zero_hit", "q": "foobarnonexistentterm999" },
+  { "id": "q30", "category": "zero_hit", "q": "qqqqzzzzxxxxyyyy" }
+]

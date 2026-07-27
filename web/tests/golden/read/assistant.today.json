@@ -1,0 +1,59 @@
+{
+  "id": 1,
+  "jsonrpc": "2.0",
+  "result": {
+    "body": {
+      "kcal": 0,
+      "line": "2026-07-27: 식사·운동 기록이 없어요.",
+      "meal_count": 0,
+      "protein_g": 0,
+      "streak_days": 0,
+      "suggest": {
+        "subtitle": "걷기 20분만 남겨도 좋아요",
+        "title": "오늘 운동은요?"
+      },
+      "target_kcal": 2185,
+      "target_protein_g": 138,
+      "workout_minutes": 0
+    },
+    "date": "<TS>",
+    "gaps": [
+      {
+        "kind": "meal",
+        "label": "아침 기록이 없어요",
+        "priority": 1,
+        "slot": "아침"
+      },
+      {
+        "kind": "meal",
+        "label": "점심 기록이 없어요",
+        "priority": 2,
+        "slot": "점심"
+      },
+      {
+        "kind": "workout",
+        "label": "오늘 운동 기록이 없어요",
+        "priority": 4
+      }
+    ],
+    "knowledge": {
+      "inbox_open": 0,
+      "line": "확인할 요약 없음",
+      "review_pending": 0
+    },
+    "next_actions": [
+      {
+        "kind": "gap",
+        "label": "아침 기록이 없어요",
+        "slot": "아침"
+      },
+      {
+        "kind": "diet_suggest",
+        "label": "오늘 운동은요?",
+        "subtitle": "걷기 20분만 남겨도 좋아요"
+      }
+    ],
+    "timeline": [],
+    "version": 2
+  }
+}

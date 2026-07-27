@@ -1,0 +1,9 @@
+{
+  "id": 1,
+  "jsonrpc": "2.0",
+  "result": {
+    "enabled": true,
+    "engine": "diet-inproc/v1",
+    "ok": true
+  }
+}
