@@ -17,3 +17,8 @@ config/secrets.json
 # iOS local build
 Apps/KnowledgeMobile/build/
 Apps/KnowledgeMobile/**/xcuserdata/
+
+# web/ (Next.js on Vercel) — REFACTOR_ACTION_PLAN_WEB_2026-07.md P0-1
+web/node_modules/
+web/.next/
+web/.env*.local
