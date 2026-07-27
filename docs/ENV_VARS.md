@@ -20,7 +20,7 @@
 | `NEXT_PUBLIC_SUPABASE_URL` | Supabase 프로젝트 URL | 브라우저+서버 | 채움 (`web/.env.local`) |
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | RLS 적용 하 공개 가능 | 브라우저+서버 | 채움 |
 | `SUPABASE_SERVICE_ROLE_KEY` | RLS 우회 | **마이그레이션 스크립트 전용**, `web/app`·`web/lib` import 금지 (P3) | 미사용(아래 참고) |
-| `SUPABASE_DB_URL` | 직접 Postgres 접속 문자열 | 로컬 스크립트 | 채움. **단 이 실행 환경에서는 IPv6 전용이라 접속 불가** — 아래 실측 발견 참고 |
+| `SUPABASE_DB_URL` | Postgres 접속 문자열 | 로컬 스크립트 · GitHub Actions 백업 | 채움. **direct(`db.<ref>...:5432`)는 IPv6 전용이라 대부분의 CI/로컬에서 불가 → Session Pooler를 쓸 것.** 아래 §Postgres 직결 참고 |
 
 ### owner_id placeholder (P1 실측 발견)
 P3 인증 도입 전이라 실제 Supabase Auth 사용자가 없다. `web/scripts/migrate-from-sqlite.ts`로 이관한 모든 행의 `owner_id`는 고정 placeholder UUID `00000000-0000-0000-0000-000000000001`이다. **P3에서 실제 사용자가 가입하면, 그 사용자의 `auth.uid()`로 아래 1건의 UPDATE만 실행하면 된다** (테이블마다 반복):
@@ -28,8 +28,42 @@ P3 인증 도입 전이라 실제 Supabase Auth 사용자가 없다. `web/script
 update <table> set owner_id = '<실제 auth uid>' where owner_id = '00000000-0000-0000-0000-000000000001';
 ```
 
-### 실측 발견 — Supabase 직접 Postgres 연결(5432)이 이 환경에서 불가능
-`db.<ref>.supabase.co`는 AAAA 레코드만 존재(IPv6 전용, 무료 티어 기본)하고 이 실행 환경은 IPv6 아웃바운드 라우트가 없어 `EHOSTUNREACH`가 발생했다. `migrate-from-sqlite.ts`/`compare-search.ts`는 대신 PostgREST(HTTPS, IPv4 가능)로 anon 키를 통해 동작하도록 작성했다(RLS가 아직 꺼져 있어 가능 — P3에서 RLS 활성화 후에는 이 방식이 막히므로 두 스크립트는 일회성 마이그레이션 전용이다). Vercel 배포 환경(P4a)에서도 동일 문제가 재현될 가능성이 있으므로, 서버 사이드 DB 접근은 raw `pg` 대신 `@supabase/supabase-js`(PostgREST 경유) 사용을 권장한다.
+### ★ Postgres 직결 — 반드시 Session Pooler를 쓸 것 (P1 발견 → P2에서 해결·실측 확정)
+
+**문제**: `db.<ref>.supabase.co`는 AAAA 레코드만 존재한다(IPv6 전용, 무료 티어 기본).
+IPv6 아웃바운드가 없는 환경에서는 접속이 불가능하다. 실제로 두 번 막혔다.
+- P1(로컬 스크립트): `EHOSTUNREACH`
+- P2(GitHub Actions 백업): `connection to server at "db.<ref>.supabase.co"
+  (2406:da1a:...), port 5432 failed: Network is unreachable` — Actions 러너는 IPv4 전용이다.
+
+**해결**: **Session Pooler(포트 5432)** 를 쓴다. Supavisor는 모든 티어에서 IPv4를 제공한다.
+
+```
+postgresql://postgres.gppklwzcmfuuhsefdeik:<password>@aws-1-ap-south-1.pooler.supabase.com:5432/postgres
+```
+
+이 프로젝트의 실측 확정값 (2026-07-27, 추측 아님):
+
+| 항목 | 값 | 확인 방법 |
+|---|---|---|
+| 리전 | **`ap-south-1`** | `db.<ref>` AAAA(`2406:da1a:...`)를 AWS `ip-ranges.json`과 대조 |
+| pooler 호스트 | **`aws-1-ap-south-1.pooler.supabase.com`** | `aws-0`은 `ENOTFOUND tenant/user not found`로 거부됨 |
+| 사용자명 | **`postgres.<project-ref>`** | pooler는 `postgres`만 주면 `ENOIDENTIFIER` |
+| 포트 | **5432 = session** / 6543 = transaction | 덤프·마이그레이션은 session (transaction은 prepared statement 미지원) |
+| 서버 버전 | **17.6** | `select current_setting('server_version')` |
+
+> 액션플랜 P1-1은 리전을 "서울/도쿄 중 지연 낮은 쪽"이라 했으나 **실제 프로비저닝은 `ap-south-1`(뭄바이)** 이다.
+> 정확한 문자열은 항상 대시보드 **Connect → Session pooler** 에서 확인할 수 있다.
+> **리전이나 `aws-N` 번호를 기억·추측으로 조립하지 말 것** — P2에서 이걸로 시간을 크게 낭비했다.
+
+**검증된 사용처**: `pg_dump`(session pooler로 49테이블·1.5MB 덤프 성공),
+`knowledge-backup` 레포의 GitHub Actions 백업 워크플로.
+
+**PostgREST 우회는 별개 사안**: `migrate-from-sqlite.ts`/`compare-search.ts`는 P1 당시
+이 문제를 우회하려고 PostgREST(HTTPS, anon 키)로 작성했다. RLS가 꺼져 있어 가능했던 것이며
+P3에서 RLS를 켜면 막히므로 **일회성 마이그레이션 전용**이다. 앱 런타임(P4a~)의 서버 사이드
+DB 접근은 `@supabase/supabase-js`를 쓰고, 스키마 조작·덤프처럼 Postgres 직결이 필요한
+도구는 위 session pooler를 쓴다.
 
 ## 기타 로컬 config (값 없이 이름만 확인됨)
 | 파일 | 성격 |

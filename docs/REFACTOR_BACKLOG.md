@@ -14,5 +14,8 @@
 ## P2에서 발견
 
 - **P0-5 시크릿 스캔 사각지대**: P0-5의 grep 패턴(`BEGIN .*PRIVATE|api[_-]?key|secret|password|token`)이 `95 🗑️ 아카이브/2022/토페업무/카드 일반 결제.md`의 `transactionKey`/`paymentKey` 값(Toss Payments 2022년 테스트 결제 응답, 거래별 식별자)을 놓쳤다 — 필드명이 패턴에 안 걸림. P2-1 첫 커밋 전 재스캔에서 발견해 오너 확인 후 4쌍 모두 `[REDACTED]`로 추가 리댁션했다(실제 커밋에는 포함 안 됨). 향후 유사 스캔 시 필드명이 아니라 "결제/거래 응답 JSON 전체"를 대상으로 봐야 한다는 교훈.
-- **G2-4 미완**: `knowledge-backup` 워크플로(`db-backup.yml`)는 작성·push 완료했지만, `SUPABASE_DB_URL` 레포 Secret 등록은 오너가 GitHub 웹 UI에서 직접 해야 하는 항목(비밀정보이므로 세션에서 다루지 않음). 등록 후 `gh workflow run db-backup.yml --repo heejunyoo/knowledge-backup`으로 수동 실행하고, RESTORE.md 절차로 실제 복원 1회를 수행해야 G2-4가 완결된다.
+- **G2-4 해결 완료** (2026-07-27): 백업 워크플로 실행 → 1.45MB 덤프 생성 → 로컬 Postgres 17로 실제 복원 → 행수 P1 결과와 일치 확인. 해결 과정에서 드러난 문제 3건은 아래 참조.
+- **[해결] direct connection이 CI에서 불가**: `db.<ref>.supabase.co:5432`는 무료 티어 IPv6 전용이고 GitHub Actions 러너는 IPv4 전용이라 `Network is unreachable`로 실패했다. Session Pooler(`aws-1-ap-south-1.pooler.supabase.com:5432`)로 전환해 해결. **실측 확정값과 "추측 조립 금지" 경고를 `docs/ENV_VARS.md` §Postgres 직결에 기록**했다. P1 시점에 ENV_VARS.md가 "IPv6라 접속 불가"까지만 적고 해결책을 안 남긴 탓에 P2에서 같은 벽에 다시 부딪혔다 — 실패는 원인만이 아니라 **해결책까지** 문서에 남길 것.
+- **[해결] 빈 백업이 success로 커밋됨**: `pg_dump | gzip` 파이프에 `pipefail`이 없어 pg_dump 실패에도 gzip이 exit 0을 반환, 0바이트 백업이 "성공"으로 커밋됐다. `set -o pipefail` + 압축 해제 크기 검증(1000바이트 미만이면 실패)을 추가.
+- **[해결] RESTORE.md 절차가 틀렸음**: "docker postgres:16에 psql로 부어라"라고 썼으나, `supabase db dump` 산출물은 `auth` 스키마·`anon`/`service_role` role·`vector` 타입을 전제해 순정 Postgres에서는 **테이블이 0개 생성된다**(실측 725 에러). 복원 대상별 분기 + 순정 Postgres용 prelude SQL + "에러 수백 건은 정상, 판정은 행수 대조"를 실측 기반으로 재작성했다.
 - **Obsidian Git 플러그인 미설치**: vault에 커뮤니티 플러그인 `obsidian-git`이 설치되어 있지 않음(GUI 전용 설치라 자동화 불가). G2-1/G2-2는 git 레벨 왕복(별도 clone과의 push/pull)으로 대체 검증했으나, 실제 Obsidian 앱에서의 자동 커밋/pull 동작은 오너가 플러그인 설치 후 재확인 필요(`COMMIT_PROTOCOL.md` 설정값 안내 참조).
