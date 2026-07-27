@@ -132,9 +132,19 @@ inbox.json  items 2 (전부 status=promoted)
 ## 8. 쓰기 동결 (P0-8) — 되돌리기 정보
 
 ```
-동결 커밋 SHA: (P0-8 실행 후 이 절에 기록)
-동결 시점 DB 해시: (P0-8 실행 시 shasum -a 256 ~/Knowledge/index/knowledge.db 기록)
+동결 커밋 SHA: f2061ee7f81e1dd3f304fda10f3376608899e5e1
+브랜치: refactor/web-p0
 ```
+
+동결 시점(2026-07-27) 해시:
+```
+1ce6f78be895005b150f52dbfb50ea258d5162905bada2d385389d2b105ce41a  ~/Knowledge/index/knowledge.db
+87e444e7e6485f19b8d8b444e67a5696dd902a0c3a8a5b834b07de15082cbf28  ~/Knowledge/services/diet/diet.json
+473bf5840f243a5a4e31ceeef741ead4f76e1b4f443b03381cec1ce06a0fc8ca  ~/Knowledge/services/inbox/inbox.json
+```
+→ P1 착수 시점에 재계산해 동일한지 확인 (G1-6).
+
+**실측 추가 발견**: 문서 P0-8 초안은 `MobileHTTPServer.swift`의 `handleRPC`(JSON-RPC 디스패치) 진입부만 동결 대상으로 명시했으나, 실측 결과 `/v1/chat`(자연어 채팅) 경로의 `handleDietChat`이 `diet.logWorkout`/`diet.logMeal`을 **`handleRPC`를 거치지 않고 직접 호출**하고 있어 최초 가드만으로는 우회 가능했다. 같은 커밋에서 `handleDietChat`의 두 쓰기 분기에도 동일 가드를 추가해 막았다 (G0-4에서 `/v1/chat` 경로까지 실제 curl로 검증 완료).
 
 ---
 *이 문서는 P0 시점에 동결된다. 이후 수치가 바뀌면(재채취 등) 이 문서가 아니라 신규 날짜의 문서를 만든다.*
