@@ -1,5 +1,7 @@
 # Personal Core Platform — 완전 스케치 (Normative)
 
+> **2026-07 폐기 — `docs/REFACTOR_DIRECTION_WEB_2026-07.md` §7-1.** 이 문서의 미팅(`knowledge.meetings`, `knowledge.review.*`) 관련 서술은 미팅 파이프라인 전면 폐기 결정 이전 상태다. 현재 실행 중인 재작성 계획은 `docs/REFACTOR_ACTION_PLAN_WEB_2026-07.md` 참조.
+
 | Field | Value |
 |-------|--------|
 | Date | 2026-07-09 |

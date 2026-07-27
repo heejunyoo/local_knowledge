@@ -1,5 +1,7 @@
 # KnowledgeApp
 
+> **2026-07 폐기 — `docs/REFACTOR_DIRECTION_WEB_2026-07.md` §7-1.** 아래 문서의 미팅 녹음·전사·요약 파이프라인(ASR → LLM summary → review gate → vault commit) 서술은 전면 폐기 결정 이전 상태다. 현재 실행 중인 재작성 계획은 `docs/REFACTOR_ACTION_PLAN_WEB_2026-07.md` 참조.
+
 Personal, local-first knowledge repository for Apple Silicon Mac mini.
 
 **Design SoT:** [`~/Documents/PKM-native-app-design.md`](file:///Users/heejunyoo/Documents/PKM-native-app-design.md) (Rev 2 + owner open-question resolutions).
