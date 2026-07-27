@@ -14,12 +14,22 @@
 | gemini | `gemini_api_key` | `GEMINI_API_KEY` | Vercel env `GEMINI_API_KEY` (P6, 신규 발급 필요) |
 | openrouter | `openrouter_api_key` | `OPENROUTER_API_KEY` | Vercel env `OPENROUTER_API_KEY` (P6, 신규 발급 필요) |
 
-## Supabase (P1~ 신규, 아직 미발급)
-| 이름 | 용도 | 사용처 |
-|---|---|---|
-| `NEXT_PUBLIC_SUPABASE_URL` | Supabase 프로젝트 URL | 브라우저+서버 |
-| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | RLS 적용 하 공개 가능 | 브라우저+서버 |
-| `SUPABASE_SERVICE_ROLE_KEY` | RLS 우회 | **마이그레이션 스크립트 전용**, `web/app`·`web/lib` import 금지 (P3) |
+## Supabase (P1 완료 — 프로젝트 생성됨: `gppklwzcmfuuhsefdeik`)
+| 이름 | 용도 | 사용처 | 상태 |
+|---|---|---|---|
+| `NEXT_PUBLIC_SUPABASE_URL` | Supabase 프로젝트 URL | 브라우저+서버 | 채움 (`web/.env.local`) |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | RLS 적용 하 공개 가능 | 브라우저+서버 | 채움 |
+| `SUPABASE_SERVICE_ROLE_KEY` | RLS 우회 | **마이그레이션 스크립트 전용**, `web/app`·`web/lib` import 금지 (P3) | 미사용(아래 참고) |
+| `SUPABASE_DB_URL` | 직접 Postgres 접속 문자열 | 로컬 스크립트 | 채움. **단 이 실행 환경에서는 IPv6 전용이라 접속 불가** — 아래 실측 발견 참고 |
+
+### owner_id placeholder (P1 실측 발견)
+P3 인증 도입 전이라 실제 Supabase Auth 사용자가 없다. `web/scripts/migrate-from-sqlite.ts`로 이관한 모든 행의 `owner_id`는 고정 placeholder UUID `00000000-0000-0000-0000-000000000001`이다. **P3에서 실제 사용자가 가입하면, 그 사용자의 `auth.uid()`로 아래 1건의 UPDATE만 실행하면 된다** (테이블마다 반복):
+```sql
+update <table> set owner_id = '<실제 auth uid>' where owner_id = '00000000-0000-0000-0000-000000000001';
+```
+
+### 실측 발견 — Supabase 직접 Postgres 연결(5432)이 이 환경에서 불가능
+`db.<ref>.supabase.co`는 AAAA 레코드만 존재(IPv6 전용, 무료 티어 기본)하고 이 실행 환경은 IPv6 아웃바운드 라우트가 없어 `EHOSTUNREACH`가 발생했다. `migrate-from-sqlite.ts`/`compare-search.ts`는 대신 PostgREST(HTTPS, IPv4 가능)로 anon 키를 통해 동작하도록 작성했다(RLS가 아직 꺼져 있어 가능 — P3에서 RLS 활성화 후에는 이 방식이 막히므로 두 스크립트는 일회성 마이그레이션 전용이다). Vercel 배포 환경(P4a)에서도 동일 문제가 재현될 가능성이 있으므로, 서버 사이드 DB 접근은 raw `pg` 대신 `@supabase/supabase-js`(PostgREST 경유) 사용을 권장한다.
 
 ## 기타 로컬 config (값 없이 이름만 확인됨)
 | 파일 | 성격 |

@@ -23,3 +23,4 @@ web/node_modules/
 web/.next/
 web/.env*.local
 web/.secrets-local/
+web/.migration-output.sql

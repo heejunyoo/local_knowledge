@@ -1,0 +1,20 @@
+{
+  "name": "knowledge-web",
+  "private": true,
+  "version": "0.0.0",
+  "scripts": {
+    "migrate": "tsx scripts/migrate-from-sqlite.ts"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.5",
+    "pg": "^8.12.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.0",
+    "@types/pg": "^8.11.6",
+    "better-sqlite3": "^11.3.0",
+    "@types/better-sqlite3": "^7.6.11",
+    "tsx": "^4.16.0",
+    "typescript": "^5.5.0"
+  }
+}
