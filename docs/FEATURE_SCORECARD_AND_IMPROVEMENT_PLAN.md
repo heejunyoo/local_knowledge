@@ -2,10 +2,10 @@
 
 | Field | Value |
 |-------|--------|
-| Date | 2026-07-10 |
-| Scope | Mac app · iOS mobile · Core gateway · Diet |
+| Date | 2026-07-10 (갱신 11:27 KST) |
+| Scope | Mac app · iOS mobile · Core gateway · Diet · Review read · IF |
 | Method | 기능 영역별 0–10 (제품 완성도) → 갭 → 실행 계획 |
-| Status | **Plan executed in same sprint** (see §4) |
+| Status | P0 diet UX executed · **post-W2: g/ml auto-kcal, review read, IF** — see `ASSISTANT_DELIVERY_REPORT.md` |
 
 ---
 
@@ -15,22 +15,24 @@
 
 | ID | 영역 | 점수 | 한 줄 진단 |
 |----|------|------|------------|
-| F1 | Mac 녹음→ASR→요약→확인→vault | **8** | 코어 루프 성립; 실미팅 dogfood 지속 필요 |
-| F2 | Mac 홈 / IA (4탭) | **7** | Toss 패턴 근접; 더보기 발굴성 보통 |
-| F3 | Mac 물어보기 (RAG+cloud) | **6** | 경로 개선됨; 검색 품질·키 유무에 편차 |
-| F4 | Mac 식단 UX | **5→8** | 계획 실행 후: 슬롯·제안·삭제·NL |
-| F5 | Mac 설정 / 모바일 페어링 | **8** | Core URL·QR·게이트웨이 자동기동 |
-| F6 | iOS 페어링 / 연결 | **8** | QR·ATS 우회·실기기 E2E 확인됨 |
-| F7 | iOS 물어보기 | **6** | 키보드 수정·full ask; 품질은 서버 의존 |
-| F8 | iOS 식단 UX | **5→8** | 계획 실행 후 Mac과 정렬 |
-| F9 | iOS 홈 / 더보기 | **7** | Primary CTA; 탭 정리됨 |
-| F10 | Core gateway 안정성 | **8** | HTTP·pair loopback·retain 고정 |
-| F11 | Diet 데이터/분석 | **6→7** | suggest·delete API; 영양 DB 없음 |
-| F12 | 디자인 시스템 일관성 | **6→7** | 토큰·empty·dark; 단일 SPM 패키지 미통합 |
-| F13 | 보안 (Tailscale·토큰) | **7** | 개인 mesh; HTTPS 미도입 (의도적 M5) |
-| F14 | 온보딩 / 에러 회복 | **6** | 개선됐으나 첫 실행 가이드 여지 |
+| F1 | Mac 녹음→ASR→요약→확인→vault | **8** | 확인함 **전사·요약 전체 보기**; 요약은 extractive 상한; 실미팅 벤치 필요 |
+| F2 | Mac 홈 / IA (4탭) | **7** | Hub 브리핑·단식/건강 표면 |
+| F3 | Mac 물어보기 (RAG+cloud) | **7** | Groq 우선 + answer cache/throttle |
+| F4 | Mac 식단 UX | **8.5** | **g/ml→kcal·단백질 자동** · IF · 공복 체중 |
+| F5 | Mac 설정 / 모바일 페어링 | **8** | Core URL·QR·게이트웨이 |
+| F6 | iOS 페어링 / 연결 | **8** | 복구 가이드 보강 |
+| F7 | iOS 물어보기 | **6.5** | full ask; 품질 서버 의존 |
+| F8 | iOS 식단 UX | **8.5** | Mac과 동일 g/ml·IF·공복 |
+| F9 | iOS 홈 / 더보기 | **7.5** | HK 권한 CTA · 건강 참고 전용 |
+| F10 | Core gateway 안정성 | **8** | review.get · estimate_nutrition · fasting RPC |
+| F11 | Diet 데이터/분석 | **7.5** | 소형 카탈로그 자동계산; 전수 DB 없음 |
+| F12 | 디자인 시스템 일관성 | **7** | 토스트 일관; SPM 통합 미완 |
+| F13 | 보안 (Tailscale·토큰) | **7** | HTTPS 미도입 (M5) |
+| F14 | 온보딩 / 에러 회복 | **7** | 건강 권한·페어링 가이드 |
+| F15 | 확인함 열람 (신규) | **7** | RAG 분리 열람; evidence 점프·실녹음 E2E 미완 |
 
-**가중 평균 (대략): ~7.3 / 10** — “필드에서 쓸 수 있는 제품”, “폴리시 끝”은 아님.
+**가중 평균 (대략): ~7.4 / 10** — 개인 로컬 스택으로 쓸 수 있음. 폴리시·영양 DB·실필드 ASR 완성은 아님.  
+상세: **`docs/ASSISTANT_DELIVERY_REPORT.md`**.
 
 ---
 

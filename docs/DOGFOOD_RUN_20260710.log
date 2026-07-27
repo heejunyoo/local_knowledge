@@ -1,0 +1,364 @@
+==============================================
+KNOWLEDGE DOGFOOD FULL SUITE
+Date: 2026-07-10T10:43:17+09:00
+Root: /Users/heejunyoo/Knowledge
+Repo: /Users/heejunyoo/IdeaProjects/KnowledgeApp
+==============================================
+
+======== 1) BUILD ========
+
+######## build.knowledged ########
+[0/1] Planning build
+Building for debugging...
+[0/3] Write swift-version--58304C5D6DBC2206.txt
+Build of product 'knowledged' complete! (0.16s)
+>>> RESULT build.knowledged: PASS
+
+######## build.KnowledgeApp ########
+Building for debugging...
+[0/3] Write swift-version--58304C5D6DBC2206.txt
+Build of product 'KnowledgeApp' complete! (0.09s)
+>>> RESULT build.KnowledgeApp: PASS
+
+######## build.iOS ########
+** BUILD SUCCEEDED **
+>>> RESULT build.iOS: PASS
+
+======== 2) UNIT / PACKAGE TESTS ========
+
+######## test.KnowledgeWorkers ########
+	 Executed 1 test, with 0 failures (0 unexpected) in 0.000 (0.000) seconds
+Test Suite 'ToolsManifestTests' started at 2026-07-10 10:43:26.925.
+Test Case '-[KnowledgeCoreTests.ToolsManifestTests testHashMismatch]' started.
+Test Case '-[KnowledgeCoreTests.ToolsManifestTests testHashMismatch]' passed (0.001 seconds).
+Test Case '-[KnowledgeCoreTests.ToolsManifestTests testInstallAndVerifyUnpinned]' started.
+Test Case '-[KnowledgeCoreTests.ToolsManifestTests testInstallAndVerifyUnpinned]' passed (0.001 seconds).
+Test Suite 'ToolsManifestTests' passed at 2026-07-10 10:43:26.928.
+	 Executed 2 tests, with 0 failures (0 unexpected) in 0.003 (0.003) seconds
+Test Suite 'WorkerTests' started at 2026-07-10 10:43:26.928.
+Test Case '-[KnowledgeWorkersTests.WorkerTests testParseWhisperSegmentsFormat]' started.
+Test Case '-[KnowledgeWorkersTests.WorkerTests testParseWhisperSegmentsFormat]' passed (0.000 seconds).
+Test Case '-[KnowledgeWorkersTests.WorkerTests testParseWhisperTranscriptionFormat]' started.
+Test Case '-[KnowledgeWorkersTests.WorkerTests testParseWhisperTranscriptionFormat]' passed (0.000 seconds).
+Test Case '-[KnowledgeWorkersTests.WorkerTests testWorkerMissingBinary]' started.
+Test Case '-[KnowledgeWorkersTests.WorkerTests testWorkerMissingBinary]' passed (0.000 seconds).
+Test Case '-[KnowledgeWorkersTests.WorkerTests testWorkerSuccessEcho]' started.
+Test Case '-[KnowledgeWorkersTests.WorkerTests testWorkerSuccessEcho]' passed (0.068 seconds).
+Test Case '-[KnowledgeWorkersTests.WorkerTests testWorkerTimeoutNeverSuccess]' started.
+Test Case '-[KnowledgeWorkersTests.WorkerTests testWorkerTimeoutNeverSuccess]' passed (0.265 seconds).
+Test Suite 'WorkerTests' passed at 2026-07-10 10:43:27.261.
+	 Executed 5 tests, with 0 failures (0 unexpected) in 0.333 (0.334) seconds
+Test Suite 'KnowledgeAppPackageTests.xctest' failed at 2026-07-10 10:43:27.262.
+	 Executed 92 tests, with 2 failures (0 unexpected) in 0.627 (0.632) seconds
+Test Suite 'All tests' failed at 2026-07-10 10:43:27.262.
+	 Executed 92 tests, with 2 failures (0 unexpected) in 0.627 (0.634) seconds
+SCORE retrieval_hit@3=100
+◇ Test run started.
+↳ Testing Library Version: 1902
+↳ Target Platform: arm64e-apple-macos14.0
+✔ Test run with 0 tests in 0 suites passed after 0.001 seconds.
+>>> RESULT test.KnowledgeWorkers: PASS
+
+######## test.KnowledgeCore ########
+Test Case '-[KnowledgeWorkersTests.WorkerTests testParseWhisperSegmentsFormat]' passed (0.000 seconds).
+Test Case '-[KnowledgeWorkersTests.WorkerTests testParseWhisperTranscriptionFormat]' started.
+Test Case '-[KnowledgeWorkersTests.WorkerTests testParseWhisperTranscriptionFormat]' passed (0.000 seconds).
+Test Case '-[KnowledgeWorkersTests.WorkerTests testWorkerMissingBinary]' started.
+Test Case '-[KnowledgeWorkersTests.WorkerTests testWorkerMissingBinary]' passed (0.000 seconds).
+Test Case '-[KnowledgeWorkersTests.WorkerTests testWorkerSuccessEcho]' started.
+Test Case '-[KnowledgeWorkersTests.WorkerTests testWorkerSuccessEcho]' passed (0.067 seconds).
+Test Case '-[KnowledgeWorkersTests.WorkerTests testWorkerTimeoutNeverSuccess]' started.
+Test Case '-[KnowledgeWorkersTests.WorkerTests testWorkerTimeoutNeverSuccess]' passed (0.265 seconds).
+Test Suite 'WorkerTests' passed at 2026-07-10 10:43:28.254.
+	 Executed 5 tests, with 0 failures (0 unexpected) in 0.332 (0.333) seconds
+Test Suite 'KnowledgeAppPackageTests.xctest' failed at 2026-07-10 10:43:28.254.
+	 Executed 92 tests, with 2 failures (0 unexpected) in 0.544 (0.549) seconds
+Test Suite 'All tests' failed at 2026-07-10 10:43:28.254.
+	 Executed 92 tests, with 2 failures (0 unexpected) in 0.544 (0.549) seconds
+SCORE retrieval_hit@3=100
+◇ Test run started.
+↳ Testing Library Version: 1902
+↳ Target Platform: arm64e-apple-macos14.0
+✔ Test run with 0 tests in 0 suites passed after 0.001 seconds.
+>>> RESULT test.KnowledgeCore: PASS
+
+======== 3) TOOLS / FIELD ========
+
+######## verify-tools ########
+MISSING  whisper.cpp                    tools/whisper.cpp/1.7.5/whisper-cli
+PRESENT  llama.cpp                      tools/llama.cpp/b0/llama-cli  (unpinned)
+MISSING  whisper-large-v3-turbo         tools/models/whisper/ggml-large-v3-turbo.bin
+PRESENT  qwen2.5-7b-instruct-q4_k_m     tools/models/llm/Qwen2.5-7B-Instruct-Q4_K_M.gguf  (unpinned)
+>>> RESULT verify-tools: FAIL (exit 2)
+
+######## verify-field ########
+== Knowledge Field verify ==
+OK  contract: 폴더 열기
+OK  contract: openVaultInFinder
+OK  contract: vaultReady
+OK  contract: runSearch
+OK  contract: AppRoute
+OK  contract: SettingsView
+OK  contract: runRetentionPolicy
+OK  contract: MeetingSummaryLoader
+OK  contract: KnowledgeCorpus
+OK  contract: syncKnowledgeCorpus
+OK  contract: RecordView
+OK  contract: ChatView
+OK  contract: ReviewInboxView
+FAIL: missing contract: 바로가기
+>>> RESULT verify-field: FAIL (exit 1)
+
+======== 4) CLOUD LLM ========
+
+######## verify-cloud-llm ########
+── secrets ──
+  groq_api_key: OK len=56
+── catalog ──
+  as_of 2026-07 order ['groq', 'gemini', 'openrouter']
+  groq primary llama-3.3-70b-versatile
+  groq fallbacks ['llama-3.1-8b-instant', 'meta-llama/llama-4-scout-17b-16e-instruct']
+  cloud_enabled check: app.json llm.cloud_enabled should be true
+  cloud_enabled = True
+── live Groq (curl) ──
+  http 200 model llama-3.3-70b-versatile
+  answer: 준비됨
+── PASS (Groq free tier reachable) ──
+── cache paths ──
+  answer cache: /Users/heejunyoo/Knowledge/cache/llm_answer_cache.json
+  usage file:   /Users/heejunyoo/Knowledge/cache/llm_cloud_usage.json
+  (files created after first successful complete())
+>>> RESULT verify-cloud-llm: PASS
+
+======== 5) DOGFOOD E2E (pipeline, no 7B polish wait) ========
+
+######## dogfood-e2e ########
+== build knowledge-dogfood ==
+[0/1] Planning build
+Building for debugging...
+[0/3] Write swift-version--58304C5D6DBC2206.txt
+Build of product 'knowledge-dogfood' complete! (0.16s)
+run /Users/heejunyoo/IdeaProjects/KnowledgeApp/.build/debug/knowledge-dogfood --root /Users/heejunyoo/Knowledge
+== knowledge-dogfood ==
+root=/Users/heejunyoo/Knowledge
+vault=/Users/heejunyoo/Library/Mobile Documents/com~apple~CloudDocs/heejun_pkm/heejun_PKM
+OK  vault ready
+  … embedded 50/241
+  … embedded 100/241
+  … embedded 150/241
+  … embedded 200/241
+OK  reindex vectors units=241
+OK  pipeline → review_needed candidate=summaries/dogfood-1783647810.candidate.json
+OK  vault commit Meetings/2026/07/dogfood-1783647810.md
+OK  post-commit retrieve dogfood token hits=8
+OK  rag ask engine=cloud/groq/llama-3.3-70b-versatile+retrieve-v2 cites=6 ans_len=163
+OK  drift drift: clean
+OK  redaction allows clean
+OK  redaction blocks aws key
+== dogfood PASS failures=0 ==
+== package app (so UI matches dogfood engine) ==
+
+── Mobile Core ──
+Gateway port: 8741 (auto with app; disable via KNOWLEDGE_HTTP_DISABLE=1)
+Pair code:    Settings → 모바일 연결  (or ./scripts/mobile-gateway.sh)
+iOS project:  open Apps/KnowledgeMobile/KnowledgeMobile.xcodeproj
+Checklist:    docs/MOBILE_FIELD_CHECKLIST.md
+Smoke:        ./scripts/verify-mobile.sh
+Core URL:     http://100.90.112.27:8741
+== dogfood-e2e done ==
+>>> RESULT dogfood-e2e: PASS
+
+======== 6) RAG SCORE ========
+
+######## score-rag ########
+== Knowledge RAG self-score ==
+[0/1] Planning build
+Building for debugging...
+[0/10] Write swift-version--58304C5D6DBC2206.txt
+Build complete! (0.17s)
+Test Suite 'Selected tests' started at 2026-07-10 10:43:33.773.
+Test Suite 'KnowledgeAppPackageTests.xctest' started at 2026-07-10 10:43:33.773.
+Test Suite 'RAGTests' started at 2026-07-10 10:43:33.773.
+Test Case '-[KnowledgeWorkersTests.RAGTests testAskReturnsCitationsFromCorpus]' started.
+Test Case '-[KnowledgeWorkersTests.RAGTests testAskReturnsCitationsFromCorpus]' passed (0.012 seconds).
+Test Case '-[KnowledgeWorkersTests.RAGTests testSynthesizeIsReadableKorean]' started.
+Test Case '-[KnowledgeWorkersTests.RAGTests testSynthesizeIsReadableKorean]' passed (0.004 seconds).
+Test Suite 'RAGTests' passed at 2026-07-10 10:43:33.790.
+	 Executed 2 tests, with 0 failures (0 unexpected) in 0.017 (0.017) seconds
+Test Suite 'RetrievalEvalTests' started at 2026-07-10 10:43:33.790.
+Test Case '-[KnowledgeWorkersTests.RetrievalEvalTests testChunkerKeepsHeadersAndOverlap]' started.
+Test Case '-[KnowledgeWorkersTests.RetrievalEvalTests testChunkerKeepsHeadersAndOverlap]' passed (0.000 seconds).
+Test Case '-[KnowledgeWorkersTests.RetrievalEvalTests testQueryTermsExpandsHangul]' started.
+Test Case '-[KnowledgeWorkersTests.RetrievalEvalTests testQueryTermsExpandsHangul]' passed (0.000 seconds).
+Test Case '-[KnowledgeWorkersTests.RetrievalEvalTests testRetrievalScorecardHitAtK]' started.
+Test Case '-[KnowledgeWorkersTests.RetrievalEvalTests testRetrievalScorecardHitAtK]' passed (0.007 seconds).
+Test Case '-[KnowledgeWorkersTests.RetrievalEvalTests testStructureBoostPrefersDecisions]' started.
+Test Case '-[KnowledgeWorkersTests.RetrievalEvalTests testStructureBoostPrefersDecisions]' passed (0.000 seconds).
+Test Suite 'RetrievalEvalTests' passed at 2026-07-10 10:43:33.798.
+	 Executed 4 tests, with 0 failures (0 unexpected) in 0.007 (0.007) seconds
+Test Suite 'KnowledgeAppPackageTests.xctest' passed at 2026-07-10 10:43:33.798.
+	 Executed 6 tests, with 0 failures (0 unexpected) in 0.024 (0.024) seconds
+Test Suite 'Selected tests' passed at 2026-07-10 10:43:33.798.
+	 Executed 6 tests, with 0 failures (0 unexpected) in 0.024 (0.025) seconds
+SCORE retrieval_hit@3=100
+◇ Test run started.
+↳ Testing Library Version: 1902
+↳ Target Platform: arm64e-apple-macos14.0
+✔ Test run with 0 tests in 0 suites passed after 0.001 seconds.
+
+---- score lines ----
+Test Case '-[KnowledgeWorkersTests.RAGTests testAskReturnsCitationsFromCorpus]' started.
+Test Case '-[KnowledgeWorkersTests.RAGTests testAskReturnsCitationsFromCorpus]' passed (0.012 seconds).
+Test Case '-[KnowledgeWorkersTests.RAGTests testSynthesizeIsReadableKorean]' started.
+Test Case '-[KnowledgeWorkersTests.RAGTests testSynthesizeIsReadableKorean]' passed (0.004 seconds).
+Test Suite 'RAGTests' passed at 2026-07-10 10:43:33.790.
+Test Case '-[KnowledgeWorkersTests.RetrievalEvalTests testChunkerKeepsHeadersAndOverlap]' started.
+Test Case '-[KnowledgeWorkersTests.RetrievalEvalTests testChunkerKeepsHeadersAndOverlap]' passed (0.000 seconds).
+Test Case '-[KnowledgeWorkersTests.RetrievalEvalTests testQueryTermsExpandsHangul]' started.
+Test Case '-[KnowledgeWorkersTests.RetrievalEvalTests testQueryTermsExpandsHangul]' passed (0.000 seconds).
+Test Case '-[KnowledgeWorkersTests.RetrievalEvalTests testRetrievalScorecardHitAtK]' started.
+Test Case '-[KnowledgeWorkersTests.RetrievalEvalTests testRetrievalScorecardHitAtK]' passed (0.007 seconds).
+Test Case '-[KnowledgeWorkersTests.RetrievalEvalTests testStructureBoostPrefersDecisions]' started.
+Test Case '-[KnowledgeWorkersTests.RetrievalEvalTests testStructureBoostPrefersDecisions]' passed (0.000 seconds).
+Test Suite 'RetrievalEvalTests' passed at 2026-07-10 10:43:33.798.
+Test Suite 'KnowledgeAppPackageTests.xctest' passed at 2026-07-10 10:43:33.798.
+Test Suite 'Selected tests' passed at 2026-07-10 10:43:33.798.
+SCORE retrieval_hit@3=100
+✔ Test run with 0 tests in 0 suites passed after 0.001 seconds.
+
+See docs/rag_scorecard.md for area weights.
+After code change: re-sync corpus in app so meeting labels/chunks refresh.
+>>> RESULT score-rag: PASS
+
+======== 7) MOBILE GATEWAY ========
+
+######## verify-mobile ########
+=== verify-mobile (port 8747) ===
+  OK  health.ok
+  OK  health.diet
+  OK  pair.code
+  OK  pair.token
+  OK  ask.fast
+  OK  review.list
+  OK  diet.ping
+  OK  chat.diet
+  OK  revoke.401
+  TIP Core URL for iPhone: http://100.90.112.27:8741
+=== SMOKE_OK ===
+>>> RESULT verify-mobile: PASS
+
+======== 8) EXTENDED CORE HTTP (assistant/diet/llm cache) ========
+health services {'knowledge': True, 'diet': True, 'assistant': True, 'inbox': True, 'health': True}
+--- assistant.today ---
+Traceback (most recent call last):
+  File "<stdin>", line 2, in <module>
+  File "/opt/homebrew/Cellar/python@3.14/3.14.3/Frameworks/Python.framework/Versions/3.14/lib/python3.14/json/__init__.py", line 352, in loads
+    return _default_decoder.decode(s)
+           ~~~~~~~~~~~~~~~~~~~~~~~^^^
+  File "/opt/homebrew/Cellar/python@3.14/3.14.3/Frameworks/Python.framework/Versions/3.14/lib/python3.14/json/decoder.py", line 345, in decode
+    obj, end = self.raw_decode(s, idx=_w(s, 0).end())
+               ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/homebrew/Cellar/python@3.14/3.14.3/Frameworks/Python.framework/Versions/3.14/lib/python3.14/json/decoder.py", line 361, in raw_decode
+    obj, end = self.scan_once(s, idx)
+               ~~~~~~~~~~~~~~^^^^^^^^
+json.decoder.JSONDecodeError: Expecting ',' delimiter: line 1 column 54 (char 53)
+Traceback (most recent call last):
+  File "<string>", line 4, in <module>
+    assert 'result' in d, d
+           ^^^^^^^^^^^^^
+AssertionError: {'error': 'Error Domain=NSCocoaErrorDomain Code=3840 "Garbage at end around line 1, column 63." UserInfo={NSDebugDescription=Garbage at end around line 1, column 63., NSJSONSerializationErrorIndex=63}'}
+--- diet.log + delete ---
+Traceback (most recent call last):
+  File "<string>", line 1, in <module>
+    import sys,json;print(json.load(sys.stdin)['result']['id'])
+                          ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^
+KeyError: 'result'
+  meal id 
+Traceback (most recent call last):
+  File "<string>", line 1, in <module>
+    import sys,json;d=json.load(sys.stdin);assert d['result'].get('deleted') is True;print('  OK diet.delete_meal')
+                                                  ~^^^^^^^^^^
+KeyError: 'result'
+--- diet.profile goals path ---
+Traceback (most recent call last):
+  File "<string>", line 1, in <module>
+    import sys,json;d=json.load(sys.stdin);assert 'result' in d;print('  OK diet.dashboard')
+                                                  ^^^^^^^^^^^^^
+AssertionError
+--- knowledge.ask (cloud refine possible) ---
+Traceback (most recent call last):
+  File "<string>", line 4, in <module>
+    assert 'result' in d, d
+           ^^^^^^^^^^^^^
+AssertionError: {'error': 'Error Domain=NSCocoaErrorDomain Code=3840 "Garbage at end around line 1, column 125." UserInfo={NSDebugDescription=Garbage at end around line 1, column 125., NSJSONSerializationErrorIndex=125}'}
+Traceback (most recent call last):
+  File "<string>", line 4, in <module>
+    r=d['result']
+      ~^^^^^^^^^^
+KeyError: 'result'
+--- /v1/chat ---
+Traceback (most recent call last):
+  File "<string>", line 3, in <module>
+    d=json.load(sys.stdin)
+  File "/opt/homebrew/Cellar/python@3.14/3.14.3/Frameworks/Python.framework/Versions/3.14/lib/python3.14/json/__init__.py", line 298, in load
+    return loads(fp.read(),
+        cls=cls, object_hook=object_hook,
+        parse_float=parse_float, parse_int=parse_int,
+        parse_constant=parse_constant, object_pairs_hook=object_pairs_hook, **kw)
+  File "/opt/homebrew/Cellar/python@3.14/3.14.3/Frameworks/Python.framework/Versions/3.14/lib/python3.14/json/__init__.py", line 352, in loads
+    return _default_decoder.decode(s)
+           ~~~~~~~~~~~~~~~~~~~~~~~^^^
+  File "/opt/homebrew/Cellar/python@3.14/3.14.3/Frameworks/Python.framework/Versions/3.14/lib/python3.14/json/decoder.py", line 345, in decode
+    obj, end = self.raw_decode(s, idx=_w(s, 0).end())
+               ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/homebrew/Cellar/python@3.14/3.14.3/Frameworks/Python.framework/Versions/3.14/lib/python3.14/json/decoder.py", line 361, in raw_decode
+    obj, end = self.scan_once(s, idx)
+               ~~~~~~~~~~~~~~^^^^^^^^
+json.decoder.JSONDecodeError: Invalid control character at: line 1 column 27 (char 26)
+--- inbox ---
+Traceback (most recent call last):
+  File "<string>", line 1, in <module>
+    import sys,json;print(json.load(sys.stdin)['result']['id'])
+                          ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^
+KeyError: 'result'
+Traceback (most recent call last):
+  File "<string>", line 1, in <module>
+    import sys,json;d=json.load(sys.stdin);assert d['result']['status']=='promoted';print('  OK inbox promote', d['result'].get('promoted_path','')[-40:])
+                                                  ~^^^^^^^^^^
+KeyError: 'result'
+--- health.ingest idempotent ---
+Traceback (most recent call last):
+  File "<string>", line 1, in <module>
+    import sys,json;d=json.load(sys.stdin)['result'];print('  first',d)
+                      ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^
+KeyError: 'result'
+Traceback (most recent call last):
+  File "<string>", line 1, in <module>
+    import sys,json;d=json.load(sys.stdin)['result'];assert d.get('deduped',0)>=1 or d.get('accepted',0)==0;print('  second',d);print('  OK health dedupe')
+                      ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^
+KeyError: 'result'
+--- llm cache files ---
+-rw-------  1 heejunyoo  staff  604  7월 10 10:43 /Users/heejunyoo/Knowledge/cache/llm_answer_cache.json
+-rw-------  1 heejunyoo  staff  60  7월 10 10:43 /Users/heejunyoo/Knowledge/cache/llm_cloud_usage.json
+  cache entries 2
+  usage {'day': '2026-07-10', 'lastUnix': 1783647815.9663029, 'count': 2}
+>>> RESULT extended-core-http: PASS
+
+======== 9) APP INSTALL / ICON ========
+
+######## app.installed ########
+>>> RESULT app.installed: PASS
+
+######## app.icns ########
+>>> RESULT app.icns: PASS
+
+######## app.no_custom_Icon ########
+>>> RESULT app.no_custom_Icon: PASS
+
+######## secrets.groq ########
+>>> RESULT secrets.groq: PASS
+
+==============================================
+DOGFOOD SUMMARY failures=2
+Report: /tmp/knowledge_dogfood_report_20260710_104317.txt
+==============================================

@@ -5,7 +5,7 @@
 | Date | **2026-07-10** |
 | Version | **2.1 — Implementable best + strategy kill + P0 compress** |
 | Horizon | 2026-07 ~ 2027-Q1 |
-| Status | **W0–W2 delivered** (see `ASSISTANT_DELIVERY_REPORT.md`) · W3 EDGE deferred |
+| Status | **W0–W2 code delivered** · post-W2: review read · IF · health permission · **g/ml nutrition calc** · gaps in `ASSISTANT_DELIVERY_REPORT.md` (2026-07-10 11:27) · W3 EDGE deferred |
 | Principle | **현재 상황에서 구현 가능한 최선 (Implementable Best)** — 항상 이 기준 |
 | HTML | `docs/PERSONAL_ASSISTANT_EXPANSION_REPORT.html` |
 | Related | `FEATURE_SCORECARD_AND_IMPROVEMENT_PLAN.md` · `core_platform_sketch.md` |
@@ -539,6 +539,7 @@ Wave는 **시간 구간이 겹치지 않음**. 각 기능은 **단일 Wave prima
 | C2-F3 · C2-F4 | 수면 힌트 · streak/주간 | ✅ |
 | C1-F2 | 액션 기한 (기존 notifier) | ✅ 유지 |
 | C1-F3 | 풀 큐레이션 UI | ⏳ Next |
+| C1-read | 전사·요약 **직접 열람** (RAG 분리) | ✅ 2026-07-10 post-W2 |
 | C7-F3 | 온보딩 카드 | ✅ |
 
 ### W3 — Reach — **DEFERRED (EDGE)**

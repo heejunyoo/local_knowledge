@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>개인비서 서비스 확장 계획 · MECE 보고서</title>
+<title>개인비서 확장 · 전략·납품 보고서 v2.1 (2026-07-10)</title>
 <style>
   :root {
     --bg: #0b0d12;
@@ -317,6 +317,10 @@
   .b-in { background: var(--green-soft); color: var(--green); }
   .b-edge { background: var(--amber-soft); color: var(--amber); }
   .b-out { background: var(--red-soft); color: #ff8a94; }
+  .b-done { background: var(--green-soft); color: var(--green); }
+  .b-partial { background: var(--amber-soft); color: var(--amber); }
+  .b-fail { background: var(--red-soft); color: #ff8a94; }
+  .b-manual { background: rgba(154,163,181,.15); color: var(--muted); }
 
   /* Score bar */
   .bar {
@@ -422,23 +426,26 @@
 <body>
 
 <header class="cover">
-  <div class="cover-kicker">Strategy Report · MECE · Implementable Best · 2026-07-10</div>
-  <h1>개인비서 서비스 확장 계획</h1>
+  <div class="cover-kicker">Strategy + Delivery Report · MECE · Implementable Best · 2026-07-10 11:27 KST</div>
+  <h1>개인비서 서비스 확장 · 납품 현황</h1>
   <p class="lead">
     지식저장소·다이어트 식단을 넘어, 로컬 퍼스트 <strong style="color:#fff">Personal Assistant OS</strong>로 확장.
-    <strong style="color:#fff">현재 상황에서 구현 가능한 최선</strong>을 상시 목표로 하며, 전략 kill 매트릭스·P0 3개 압축·W0 실행을 포함합니다.
+    전략 kill·P0 압축·W0–W2 코드 납품·post-W2 품질(열람·단식·g/ml·권한)을 한 보고서로 묶습니다.
+    <strong style="color:#fff">“필드 완성 제품”은 주장하지 않습니다.</strong>
   </p>
   <div class="meta-row">
-    <span class="chip"><strong>Version</strong> 2.1</span>
-    <span class="chip"><strong>Principle</strong> Implementable Best</span>
-    <span class="chip"><strong>P0</strong> Hub · Timeline · RAG gate</span>
+    <span class="chip"><strong>Plan</strong> v2.1</span>
+    <span class="chip"><strong>Delivery</strong> W0–W2 code ✅</span>
+    <span class="chip"><strong>Post-W2</strong> Review · IF · g/ml · HK UX</span>
     <span class="chip"><strong>Stack</strong> Mac Core · Tailscale · iOS thin</span>
+    <span class="chip"><strong>MD</strong> ASSISTANT_DELIVERY_REPORT.md</span>
   </div>
 </header>
 
 <nav class="toc" aria-label="목차">
   <div class="inner">
     <a href="#s0">§0 최선·Kill·P0</a>
+    <a href="#s-delivery">§납품 현황</a>
     <a href="#mece">MECE 지도</a>
     <a href="#s1">§1 정의</a>
     <a href="#s2">§2 현황</a>
@@ -514,34 +521,157 @@
       </table>
     </div>
 
-    <h3>진짜 P0 (동시 구현 ≤3)</h3>
+    <h3>진짜 P0 (동시 구현 ≤3) — 코드 완료</h3>
     <div class="grid-3">
       <div class="card scope-in">
+        <span class="badge b-done">DONE</span>
         <span class="badge b-in">P0-1</span>
         <h4 style="margin-top:10px">assistant.today + timeline</h4>
-        <p>기존 diet·review 조립. 신규 SoT 없음.</p>
+        <p>기존 diet·review 조립. 신규 SoT 없음. HTTP dogfood PASS.</p>
       </div>
       <div class="card scope-in">
+        <span class="badge b-done">DONE</span>
         <span class="badge b-in">P0-2</span>
         <h4 style="margin-top:10px">홈 = 비서 Hub</h4>
         <p>몸 / 지식 / 다음 3블록. Mac·iOS.</p>
       </div>
       <div class="card scope-in">
+        <span class="badge b-done">DONE</span>
         <span class="badge b-in">P0-3</span>
         <h4 style="margin-top:10px">RAG 신뢰 게이트</h4>
-        <p>근거 푸터 · 무검색 시 환각 금지.</p>
+        <p>근거 푸터 · 무검색 시 환각 금지 · Groq + cache.</p>
       </div>
     </div>
 
     <h3>W0 완료 게이트</h3>
     <div class="table-wrap">
       <table>
-        <thead><tr><th>Gate</th><th>조건</th></tr></thead>
+        <thead><tr><th>Gate</th><th>조건</th><th>상태</th></tr></thead>
         <tbody>
-          <tr><td class="id">G-Hub</td><td>홈에 몸 한 줄 + 확인함 수 + CTA 1개 한 화면</td></tr>
-          <tr><td class="id">G-API</td><td><code>assistant.today</code> 200 + timeline 배열 (빈 날 스키마 유지)</td></tr>
-          <tr><td class="id">G-Trust</td><td>지식 없으면 솔직 폴백; 있으면 근거/출처 한 줄</td></tr>
-          <tr><td class="id">G-Dogfood</td><td>3일 연속 홈 1회 이상</td></tr>
+          <tr><td class="id">G-Hub</td><td>홈에 몸 한 줄 + 확인함 수 + CTA 1개 한 화면</td><td><span class="badge b-done">코드 ✅</span></td></tr>
+          <tr><td class="id">G-API</td><td><code>assistant.today</code> 200 + timeline 배열 (빈 날 스키마 유지)</td><td><span class="badge b-done">자동 ✅</span></td></tr>
+          <tr><td class="id">G-Trust</td><td>지식 없으면 솔직 폴백; 있으면 근거/출처 한 줄</td><td><span class="badge b-done">코드 ✅</span></td></tr>
+          <tr><td class="id">G-Dogfood</td><td>3일 연속 홈 1회 이상</td><td><span class="badge b-manual">수동 미통과</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- DELIVERY STATUS (2026-07-10) -->
+  <section id="s-delivery">
+    <div class="sec-label">Delivery status · 2026-07-10 11:27 KST</div>
+    <h2>납품 현황 · 정직 갭</h2>
+    <p class="sec-desc">
+      마크다운 정본: <code>docs/ASSISTANT_DELIVERY_REPORT.md</code> · dogfood:
+      <code>docs/DOGFOOD_RUN_LATEST.log</code>
+    </p>
+
+    <div class="callout">
+      <strong>한 줄.</strong> W0–W2 <em>코드 경로</em> 납품 완료. Post-W2(전사 열람·IF·건강 권한·g/ml 자동 계산) 반영.
+      필드 완성·요약 의미 품질 벤치·3일 DAU는 <em>미완</em>.
+    </div>
+
+    <h3>Wave 상태</h3>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Wave</th><th>테마</th><th>상태</th><th>메모</th></tr></thead>
+        <tbody>
+          <tr>
+            <td class="id">W0</td>
+            <td>Hub · timeline · RAG</td>
+            <td><span class="badge b-done">코드 완료</span></td>
+            <td>G-Dogfood 3일 홈 = 수동 미통과</td>
+          </tr>
+          <tr>
+            <td class="id">W1</td>
+            <td>HealthKit · ingest · gaps</td>
+            <td><span class="badge b-done">코드 완료</span></td>
+            <td>건강 데이터 = 참고 전용 · 실워치 필드 별도</td>
+          </tr>
+          <tr>
+            <td class="id">W2</td>
+            <td>mixed · inbox · week · 알림</td>
+            <td><span class="badge b-done">코드 완료</span></td>
+            <td>C1-F3 메모리 pin UI = Next</td>
+          </tr>
+          <tr>
+            <td class="id">W3</td>
+            <td>Share · EventKit · 위젯 · HTTPS</td>
+            <td><span class="badge b-edge">EDGE 미구현</span></td>
+            <td>의도적 DEFERRED</td>
+          </tr>
+          <tr>
+            <td class="id">Post</td>
+            <td>열람 · IF · g/ml · 권한 UX</td>
+            <td><span class="badge b-done">코드 반영</span></td>
+            <td>실녹음 E2E · 요약 품질 벤치 잔여</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>Post-W2 납품 상세</h3>
+    <div class="grid-2">
+      <div class="card">
+        <span class="badge b-done">DONE</span>
+        <h4 style="margin-top:10px">전사·요약 직접 열람</h4>
+        <p>MeetingArtifactReader · Mac 확인함 전체 보기 · iOS <code>knowledge.review.get</code> · RAG와 분리. 요약 엔진은 여전히 extractive 상한.</p>
+      </div>
+      <div class="card">
+        <span class="badge b-done">DONE</span>
+        <h4 style="margin-top:10px">간헐적 단식 + 공복 체중</h4>
+        <p>12–20h 칩 · 내일 오전 종료 시각 · 식사 시 자동 종료 · morning_fasted 우선 · ETA는 규칙(Mifflin), AI 아님.</p>
+      </div>
+      <div class="card">
+        <span class="badge b-done">DONE</span>
+        <h4 style="margin-top:10px">건강 권한 UX</h4>
+        <p>요청 상태 확인 · 설정/건강 딥링크 · 홈 CTA. 읽기 거부는 iOS 정책상 확정 불가 → 빈 샘플 시 안내.</p>
+      </div>
+      <div class="card">
+        <span class="badge b-done">DONE</span>
+        <h4 style="margin-top:10px">g/ml → kcal 자동</h4>
+        <p>DietNutritionCalc · 분량+단위 · 한 줄 파서 · <code>diet.estimate_nutrition</code>. 가정용 대략 카탈로그(전수 DB 아님).</p>
+      </div>
+      <div class="card">
+        <span class="badge b-done">DONE</span>
+        <h4 style="margin-top:10px">LLM free tier · 캐시</h4>
+        <p>Groq 70B 우선 · answer cache · soft throttle · verify-cloud-llm PASS.</p>
+      </div>
+      <div class="card">
+        <span class="badge b-done">DONE</span>
+        <h4 style="margin-top:10px">UX 피드백 · Dock 아이콘</h4>
+        <p>전역 토스트 · 식단 저장/삭제 정직 피드백 · full-bleed icns.</p>
+      </div>
+    </div>
+
+    <h3>자동 dogfood (요약)</h3>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>스위트</th><th>결과</th></tr></thead>
+        <tbody>
+          <tr><td>dogfood-e2e · score-rag · verify-mobile · verify-cloud-llm</td><td><span class="badge b-done">PASS</span></td></tr>
+          <tr><td>verify-field (데몬 live) · extended Core HTTP</td><td><span class="badge b-done">PASS</span></td></tr>
+          <tr><td>verify-tools (whisper binary/model)</td><td><span class="badge b-fail">FAIL · MISSING</span></td></tr>
+          <tr><td>실녹음 · iPhone 필드 · 실 HK · 3일 DAU</td><td><span class="badge b-manual">수동 only</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>품질 스냅샷 (0–10 감각)</h3>
+    <div class="grid-3">
+      <div class="card"><div class="big">7.4</div><div class="unit">가중 평균 (대략)</div><p>FEATURE_SCORECARD F1–F15</p></div>
+      <div class="card"><div class="big">5</div><div class="unit">요약 의미 품질</div><p>extractive · 벤치 미실행</p></div>
+      <div class="card"><div class="big">8.5</div><div class="unit">식단 UX (Mac/iOS)</div><p>g/ml 자동 · IF · 공복</p></div>
+    </div>
+
+    <h3>다음 스프린트 (≤3 · 병렬 금지)</h3>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>#</th><th>항목</th><th>이유</th></tr></thead>
+        <tbody>
+          <tr><td class="num">1</td><td>실녹음 1건 열람→저장→vault→물어보기</td><td>확인함·요약 필드 게이트</td></tr>
+          <tr><td class="num">2</td><td>whisper 설치 또는 Speech 경로 고정</td><td>verify-tools FAIL · ASR</td></tr>
+          <tr><td class="num">3</td><td>메모리 pin 최소 UI 또는 3일 홈 DAU</td><td>Next / W0 G-Dogfood</td></tr>
         </tbody>
       </table>
     </div>
@@ -931,40 +1061,50 @@
 
     <div class="waves">
       <div class="wave">
-        <div class="wave-tag">W0<small>0–2주 · P0 only</small></div>
+        <div class="wave-tag">W0<small>DONE 코드</small></div>
         <div>
-          <h4>Implementable Best slice — 게이트 전부 통과?</h4>
-          <p>P0-1·2·3만. HK·인박스·intent 고도화 제외. 코드 착수됨 (assistant.today · Hub · citation footer).</p>
+          <h4>Implementable Best slice — <span class="badge b-done">코드 완료</span></h4>
+          <p>P0-1·2·3. assistant.today · Hub · citation footer. G-Dogfood(3일)만 수동 미통과.</p>
           <div class="ids">
             <span>P0-1 API</span><span>P0-2 Hub</span><span>P0-3 RAG</span>
           </div>
         </div>
       </div>
       <div class="wave">
-        <div class="wave-tag">W1<small>2–6주</small></div>
+        <div class="wave-tag">W1<small>DONE 코드</small></div>
         <div>
-          <h4>Body bridge + cognition — “HK가 쌓이는가?”</h4>
-          <p>HealthKit pull-on-open, ingest, intent, 빠진 로그. 운동·수면 자동 비율 목표 착수.</p>
+          <h4>Body bridge + cognition — <span class="badge b-done">코드 완료</span></h4>
+          <p>HK pull-on-open · ingest · intent · 빠진 로그. 실워치 필드는 참고 전용·별도 dogfood.</p>
           <div class="ids">
             <span>C2-F1</span><span>C2-F2</span><span>C7-F2</span><span>C5-F1</span><span>C5-F2</span><span>C3-F2</span><span>C4-F2</span>
           </div>
         </div>
       </div>
       <div class="wave">
-        <div class="wave-tag">W2<small>6–12주</small></div>
+        <div class="wave-tag">W2<small>DONE 코드</small></div>
         <div>
-          <h4>Retention loop — “매주 돌아오는가?”</h4>
-          <p>크로스 질의, 주간 리뷰, iOS 인박스, 로컬 알림, 수면 힌트, 온보딩.</p>
+          <h4>Retention loop — <span class="badge b-done">코드 완료</span></h4>
+          <p>mixed chat · 주간 리뷰 · 인박스 · 로컬 알림 · 수면 힌트 · 온보딩. pin UI = Next.</p>
           <div class="ids">
             <span>C5-F4</span><span>C5-F5</span><span>C5-F6</span><span>C4-F1</span><span>C6-F3</span><span>C6-F4</span><span>C2-F3</span><span>C1-F2</span>
           </div>
         </div>
       </div>
       <div class="wave">
-        <div class="wave-tag">W3<small>12–18주</small></div>
+        <div class="wave-tag">Post<small>DONE 코드</small></div>
         <div>
-          <h4>Reach — “밖에서 들어오는가?”</h4>
-          <p>음성 인박스, Share, EventKit 읽기, 위젯, App Intents. W1 안정 + dogfood 게이트 후.</p>
+          <h4>제품 요청 후속 — <span class="badge b-done">코드 반영</span></h4>
+          <p>전사·요약 열람 · IF 단식 · 건강 권한 UX · g/ml→kcal · LLM 캐시 · 토스트/아이콘.</p>
+          <div class="ids">
+            <span>review.get</span><span>fasting</span><span>estimate_nutrition</span><span>HK UX</span>
+          </div>
+        </div>
+      </div>
+      <div class="wave">
+        <div class="wave-tag">W3<small>EDGE</small></div>
+        <div>
+          <h4>Reach — <span class="badge b-edge">미구현</span></h4>
+          <p>음성 인박스 ASR, Share, EventKit, 위젯, App Intents, HTTPS. 의도적 DEFERRED.</p>
           <div class="ids">
             <span>C4-F3</span><span>C4-F4</span><span>C3-F3</span><span>C6-F5</span><span>C6-F6</span>
           </div>
@@ -1039,23 +1179,30 @@ User → C6 Surface → C7 RPC → C5 Route<br>
           <tr><td class="id">D5</td><td>Timeline = 파생 인덱스 (Core not dump)</td><td>2026-07-10</td></tr>
           <tr><td class="id">D6</td><td>Σ≥38 = Now; C7-F2 W1 의존 강제</td><td>2026-07-10</td></tr>
           <tr><td class="id">D7</td><td>메일 · 범용 에이전트 · Mac HK = OUT</td><td>2026-07-10</td></tr>
+          <tr><td class="id">D8</td><td>W0–W2 코드 납품 · G-Dogfood는 수동 게이트</td><td>2026-07-10</td></tr>
+          <tr><td class="id">D9</td><td>건강 데이터 = 참고 전용 · ETA/단식은 규칙 엔진(AI 아님)</td><td>2026-07-10</td></tr>
+          <tr><td class="id">D10</td><td>전사·요약 직접 열람 필수 (RAG와 분리)</td><td>2026-07-10</td></tr>
+          <tr><td class="id">D11</td><td>g/ml 분량 입력 → kcal 자동(가정용 카탈로그)</td><td>2026-07-10</td></tr>
         </tbody>
       </table>
     </div>
 
     <div class="callout" style="margin-top:28px">
-      <strong>한 페이지 결론.</strong>
-      가장 큰 구멍은 C3 Time · C5 Cognition · C2 Sensor · C6 Hub.
-      2주 안에 W0 Hub+Timeline, 6주 안에 W1 HealthKit.
-      성공 신호는 매일 홈 · 자동 몸 기록 · 교차 질문이다.
+      <strong>한 페이지 결론 (갱신).</strong>
+      W0 Hub+Timeline · W1 HealthKit 경로 · W2 루프는 <em>코드 납품</em>됨.
+      Post-W2로 열람·단식·g/ml·권한 가이드까지 반영.
+      남은 구멍: <strong>실필드 dogfood</strong>(실녹음·실 HK·3일 홈) · whisper 툴 · 요약 의미 품질 · W3 EDGE.
+      성공 신호는 여전히 매일 홈 · 자동/참고 몸 기록 · 교차 질문 · <em>본인이 전사·요약을 읽어 확인</em>하는 것이다.
     </div>
   </section>
 
   <footer>
     <p>
-      KnowledgeApp · Personal Assistant Expansion Report v2.1 · Implementable Best · 2026-07-10<br>
-      상세 마크다운: <code>docs/PERSONAL_ASSISTANT_EXPANSION_PLAN.md</code><br>
-      Σ scores are backlog ranking tools — P0 execution set is fixed at 3 items + gates.
+      KnowledgeApp · Personal Assistant Expansion Report v2.1 + Delivery · Implementable Best · 2026-07-10 11:27 KST<br>
+      계획: <code>docs/PERSONAL_ASSISTANT_EXPANSION_PLAN.md</code> ·
+      납품: <code>docs/ASSISTANT_DELIVERY_REPORT.md</code> ·
+      Dogfood: <code>docs/DOGFOOD_RUN_LATEST.log</code><br>
+      Σ scores rank backlog only — P0 was ≤3 + gates. Field completeness is not claimed.
     </p>
   </footer>
 </main>

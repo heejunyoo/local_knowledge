@@ -24,6 +24,12 @@ swift run knowledge-dogfood --root ~/Knowledge --reindex --pipeline --commit
 - pipeline → review_needed → committed  
 - retrieve + rag cites=6  
 
+**2026-07-10 최신 자동 스위트:** `docs/DOGFOOD_RUN_LATEST.log` · 종합 `docs/ASSISTANT_DELIVERY_REPORT.md`  
+- PASS: e2e · score-rag · verify-mobile · cloud-llm · field(데몬 live) · extended HTTP  
+- FAIL: **verify-tools** (whisper binary/model MISSING)  
+- 수동: TCC · 실녹음 열람 · iPhone 페어링 · 실 HK · 3일 홈 DAU  
+
+
 ## 모바일 자동 (Mac loopback)
 
 ```bash

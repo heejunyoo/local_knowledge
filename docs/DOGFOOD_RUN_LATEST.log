@@ -1,0 +1,124 @@
+# KnowledgeApp Dogfood Run — 2026-07-10 (KST)
+
+## Verdict
+
+**자동 dogfood 가능 범위: 대부분 PASS. 환경 1건 FAIL. 실기기 수동은 미실행.**
+
+| Area | Result | Notes |
+|------|--------|-------|
+| swift test (92) | **PASS** | LLMRouter groq-first 테스트 수정 후 0 failures |
+| verify-cloud-llm | **PASS** | Groq 70B live HTTP 200 |
+| dogfood-e2e | **PASS** | vault·reindex·pipeline·commit·retrieve·RAG cloud cites=6·drift·redaction |
+| score-rag | **PASS** | retrieval_hit@3=100 |
+| verify-mobile | **PASS** | health·pair·ask.fast·review·diet·chat.diet·revoke 401 |
+| verify-field | **PASS*** | *데몬 sock 기동 시. stale sock이면 live RPC ConnectionRefused |
+| verify-tools | **FAIL** | whisper-cli + ggml-large-v3-turbo.bin **MISSING** (llama 7B PRESENT) |
+| Mac app install | **PASS** | ~/Applications/Knowledge.app Team=7QXGG66FG5, AppIcon.icns, no Icon xattr |
+| groq secret | **PASS** | secrets.json groq_api_key len=56 |
+| extended Core HTTP | **PASS** | pair·assistant·diet log/delete·chat diet/knowledge·inbox·health ingest dedupe·week/gaps·LLM cache/usage |
+
+---
+
+## What was run (agent-executable)
+
+```text
+swift test                              # 92 tests, 0 failures
+bash scripts/verify-cloud-llm.sh
+bash scripts/dogfood-e2e.sh             # + package-app side effect
+bash scripts/score-rag.sh
+bash scripts/verify-mobile.sh           # loopback :8747
+bash scripts/verify-tools.sh            # exit 2
+bash scripts/verify-field.sh            # exit 0 with live UDS daemon
+extended HTTP suite on ephemeral port   # knowledged --http-port
+```
+
+### Extended Core HTTP detail (final recheck)
+
+```
+PASS health {knowledge, assistant, diet, inbox, health}
+PASS pair
+PASS assistant.today (body, timeline, gaps, knowledge, next_actions, version)
+PASS assistant.timeline nested list n=7
+PASS diet.log_meal / diet.delete_meal / diet.dashboard
+PASS knowledge.ask (cloud path confirmed earlier: groq 70B + cache marker)
+PASS chat.diet (diet-rules/v1, instant)
+PASS chat.knowledge (cloud/groq/llama-3.3-70b-versatile+retrieve-v2)
+PASS inbox.create / inbox.promote → vault/inbox
+PASS health.ingest accept + same client_id dedupe
+PASS assistant.week_review / assistant.gaps
+PASS llm_answer_cache.json + llm_cloud_usage.json (usage count observed)
+```
+
+Cache note: identical `knowledge.ask` after a **cloud** answer returns `engine=…+cache+retrieve-v2` (confirmed mid-suite). Empty-retrieve questions stay `retrieve-v2` extractive and do not show `+cache` — expected.
+
+Earlier flaky: `/v1/chat` with auto mode + “요약” cue once timed out (likely cloud throttle → local 7B cold path). Mode=`diet`/`knowledge` explicit paths are stable.
+
+---
+
+## FAIL / gaps (honest)
+
+### 1. verify-tools — whisper missing (auto FAIL)
+
+```
+MISSING  whisper.cpp                 tools/whisper.cpp/1.7.5/whisper-cli
+PRESENT  llama.cpp                   tools/llama.cpp/b0/llama-cli (unpinned wrapper)
+MISSING  whisper-large-v3-turbo      tools/models/whisper/ggml-large-v3-turbo.bin
+PRESENT  qwen2.5-7b-instruct-q4_k_m  tools/models/llm/….gguf (~4.4GB, unpinned)
+```
+
+**Impact:** real ASR via whisper.cpp cannot dogfood until binary+model install. Health reports `asr_engine=apple-speech` as fallback when sock live.
+
+### 2. verify-field live RPC requires daemon
+
+If `~/Knowledge/cache/daemon.sock` is stale (file exists, process dead) → `ConnectionRefused` and field FAIL.  
+Fix observed: kill dead processes, start `knowledged`, re-run → `search 미팅 hits=16` PASS.
+
+### 3. Unit tests (fixed this run)
+
+Was: 2 failures expecting catalog `order.first == gemini`.  
+Now: expect `groq` (product free-tier order). **92/92 green.**
+
+### 4. UI contract fix this run
+
+Home menu section label restored to **「바로가기」** (was 「이어서」) so verify-field source contract holds.
+
+---
+
+## Manual-only (agent cannot complete)
+
+| # | Item | Why manual |
+|---|------|------------|
+| 1 | Mic / Screen Capture TCC | System Settings permission UX |
+| 2 | Real meeting record → review → vault | Needs audio + UI click |
+| 3 | iPhone Personal Team Run + pair | Device + Xcode signing |
+| 4 | HealthKit auth + Watch samples | Physical device |
+| 5 | 3-day home DAU / streak feel | Time + human use |
+| 6 | Dock icon visual (rounded full-bleed) | Human eyeball on Desktop |
+| 7 | Tailscale from real phone on :8741 | Phone on same tailnet |
+
+See also: `docs/DOGFOOD.md`, `docs/MOBILE_FIELD_CHECKLIST.md`.
+
+---
+
+## Product signals from dogfood
+
+- **Cloud free path:** Groq `llama-3.3-70b-versatile` live; fallbacks catalogued 8B + Scout.
+- **Rate limit surface:** `cache/llm_answer_cache.json` + `llm_cloud_usage.json` written after completes.
+- **Assistant hub RPCs:** today/week_review/gaps work; timeline is nested under `assistant.today` (no separate `assistant.timeline` method).
+- **Diet delete:** RPC `diet.delete_meal` returns `deleted: true`.
+- **Health ingest:** idempotent on `client_id`.
+- **Mac package:** signed Development Team `7QXGG66FG5`, icns present, no custom Icon fork.
+
+---
+
+## Summary score (agent-automatable)
+
+```
+PASS  9  (tests, cloud-llm, e2e, score-rag, mobile, field†, mac app, groq, extended)
+FAIL  1  (verify-tools whisper)
+SKIP  manual device / TCC / multi-day
+```
+
+† field PASS only with live knowledged UDS.
+
+**Not claiming “product complete”** — ASR tool pin incomplete; real mic/iPhone/HK still owner dogfood.
