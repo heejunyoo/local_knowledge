@@ -5,7 +5,8 @@ import KnowledgeCore
 final class LLMRouterTests: XCTestCase {
     func testCatalogBuiltinHasFreeOrder() {
         let c = LLMProviderCatalog.builtinJuly2026
-        XCTAssertEqual(c.order.first, "gemini")
+        // Free-tier default: Groq first (70B), then 8B/Scout fallbacks; Gemini optional.
+        XCTAssertEqual(c.order.first, "groq")
         XCTAssertTrue(c.providers.keys.contains("groq"))
         XCTAssertTrue(c.providers.keys.contains("openrouter"))
         XCTAssertEqual(c.providers["gemini"]?.kind, "gemini")
@@ -22,7 +23,7 @@ final class LLMRouterTests: XCTestCase {
         let url = dir.appendingPathComponent("config/llm_providers.json")
         XCTAssertTrue(FileManager.default.fileExists(atPath: url.path))
         let loaded = LLMProviderCatalog.load(knowledgeRoot: dir)
-        XCTAssertEqual(loaded.order.first, "gemini")
+        XCTAssertEqual(loaded.order.first, "groq")
     }
 
     func testSecretsRoundTrip() throws {
