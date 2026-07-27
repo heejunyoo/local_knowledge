@@ -246,6 +246,9 @@ public struct DietPlanProjection: Equatable, Sendable {
             "daily_deficit": dailyDeficit,
             "eta_text": etaText,
             "pace_text": paceText,
+            // Honest: goal ETA never calls cloud LLM
+            "engine": "diet-rules/mifflin-7700",
+            "plan_uses_ai": false,
         ]
         if let w = weeksToGoal { d["weeks_to_goal"] = w }
         if let days = daysToGoal { d["days_to_goal"] = days }

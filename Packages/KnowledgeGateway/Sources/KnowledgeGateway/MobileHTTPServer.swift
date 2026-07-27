@@ -250,6 +250,8 @@ public final class MobileHTTPServer: @unchecked Sendable {
             var p = params as? [String: Any] ?? [:]
             p["status"] = "review_needed"
             mappedParams = p
+        case "knowledge.review.get":
+            return try handleReviewGet(id: id, params: params)
         case "knowledge.meetings": mapped = RPCMethod.meetingList.rawValue
         default: mapped = method
         }
@@ -260,6 +262,65 @@ public final class MobileHTTPServer: @unchecked Sendable {
         )
         let res = pipeline.handle(request: req, peer: localPeer)
         return jsonRPCResponse(id: id, result: res.result, error: res.error)
+    }
+
+    /// Full summary + transcript for human reading (not RAG).
+    private func handleReviewGet(id: Any?, params: Any?) throws -> Data {
+        let p = params as? [String: Any] ?? [:]
+        let mid = (p["id"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        guard !mid.isEmpty else {
+            return jsonRPCResponse(id: id, result: nil, error: .invalidParams)
+        }
+        let req = JSONRPCRequest(
+            id: jsonRPCId(id),
+            method: RPCMethod.meetingGet.rawValue,
+            params: .object(["id": .string(mid)])
+        )
+        let res = pipeline.handle(request: req, peer: localPeer)
+        if let err = res.error {
+            return jsonRPCResponse(id: id, result: nil, error: err)
+        }
+        guard case let .object(obj)? = res.result else {
+            return jsonRPCResponse(
+                id: id,
+                result: nil,
+                error: JSONRPCError(code: -32004, message: "meeting not found")
+            )
+        }
+        func str(_ k: String) -> String? {
+            if case let .string(s)? = obj[k] { return s }
+            return nil
+        }
+        let candidate = str("candidate_path")
+        let transcript = str("transcript_path")
+        let vaultRel = str("vault_path")
+        let vaultRoot = AppConfig.load(knowledgeRoot: knowledgeRoot).vaultURL
+        let bundle = MeetingArtifactReader.loadBundle(
+            knowledgeRoot: knowledgeRoot,
+            candidateRel: candidate,
+            transcriptRel: transcript,
+            vaultRel: vaultRel,
+            vaultRoot: vaultRoot
+        )
+        var out: [String: Any] = [
+            "id": mid,
+            "title": str("title") ?? "제목 없음",
+            "status": str("status") ?? "",
+        ]
+        if let mode = str("mode") { out["mode"] = mode }
+        if let candidate { out["candidate_path"] = candidate }
+        if let transcript { out["transcript_path"] = transcript }
+        if let vaultRel { out["vault_path"] = vaultRel }
+        for (k, v) in bundle.asDict() {
+            out[k] = v
+        }
+        if let one = bundle.summary?.oneLine {
+            out["one_line"] = one
+        }
+        if let n = bundle.transcript?.segmentCount {
+            out["transcript_segment_count"] = n
+        }
+        return jsonRPCResponse(id: id, result: JSONValue.fromJSONObject(out), error: nil)
     }
 
     private func handleCoreMethod(method: String, id: Any?) throws -> Data {
@@ -540,14 +601,34 @@ public final class MobileHTTPServer: @unchecked Sendable {
             return jsonRPCResponse(id: id, result: JSONValue.fromJSONObject([
                 "id": w.id, "ts": w.ts, "kind": w.kind, "minutes": w.minutes,
             ]), error: nil)
+        case "diet.estimate_nutrition":
+            // amount g/ml → kcal/protein (catalog). Client may also compute locally.
+            let food = (p["food"] as? String) ?? (p["q"] as? String) ?? (p["text"] as? String) ?? ""
+            let amount = doubleParam(p["amount"]) ?? 0
+            let unitRaw = ((p["unit"] as? String) ?? "g").lowercased()
+            let unit: DietNutritionCalc.Unit = (unitRaw == "ml") ? .ml : .g
+            if let text = p["text"] as? String, amount <= 0 {
+                if let e = DietNutritionCalc.parse(text) {
+                    return jsonRPCResponse(id: id, result: JSONValue.fromJSONObject(e.asDict()), error: nil)
+                }
+                return jsonRPCResponse(id: id, result: .object(["matched": .bool(false)]), error: nil)
+            }
+            if let e = DietNutritionCalc.estimate(foodQuery: food, amount: amount, unit: unit) {
+                return jsonRPCResponse(id: id, result: JSONValue.fromJSONObject(e.asDict()), error: nil)
+            }
+            return jsonRPCResponse(id: id, result: .object(["matched": .bool(false)]), error: nil)
         case "diet.log_metric":
+            let ctx = (p["context"] as? String)
+                ?? ((p["morning_fasted"] as? Bool) == true ? "morning_fasted" : nil)
             let m = try diet.logMetric(
                 weightKg: doubleParam(p["weight_kg"] ?? p["weightKg"]),
-                sleepH: doubleParam(p["sleep_h"] ?? p["sleepH"])
+                sleepH: doubleParam(p["sleep_h"] ?? p["sleepH"]),
+                context: ctx
             )
             var out: [String: Any] = ["id": m.id, "ts": m.ts]
             if let w = m.weightKg { out["weight_kg"] = w }
             if let s = m.sleepH { out["sleep_h"] = s }
+            if let c = m.context { out["context"] = c }
             return jsonRPCResponse(id: id, result: JSONValue.fromJSONObject(out), error: nil)
         case "diet.delete_meal":
             let mealId = stringParam(p["id"])
@@ -618,7 +699,40 @@ public final class MobileHTTPServer: @unchecked Sendable {
             return jsonRPCResponse(id: id, result: .object([
                 "needs_profile": .bool(true),
                 "eta_text": .string("키·몸무게·나이·성별·목표 체중을 입력하면 도달 시점을 계산해요."),
+                "plan_uses_ai": .bool(false),
+                "engine": .string("diet-rules/mifflin-7700"),
             ]), error: nil)
+        case "diet.fasting.status":
+            let previewH = doubleParam(p["preview_hours"] ?? p["target_hours"])
+            return jsonRPCResponse(
+                id: id,
+                result: JSONValue.fromJSONObject(diet.fastingStatus(previewHours: previewH)),
+                error: nil
+            )
+        case "diet.fasting.preview":
+            let hours = doubleParam(p["target_hours"] ?? p["hours"]) ?? 14
+            return jsonRPCResponse(
+                id: id,
+                result: JSONValue.fromJSONObject(diet.fastingEndPreview(targetHours: hours)),
+                error: nil
+            )
+        case "diet.fasting.start":
+            let hours = doubleParam(p["target_hours"] ?? p["hours"])
+            let session = try diet.startFast(targetHours: hours)
+            var out = diet.fastingStatus()
+            out["session"] = [
+                "id": session.id,
+                "started_at": session.startedAt,
+                "target_hours": session.targetHours,
+            ] as [String: Any]
+            if let plan = diet.planProjection() {
+                out["plan"] = plan.asDict()
+            }
+            return jsonRPCResponse(id: id, result: JSONValue.fromJSONObject(out), error: nil)
+        case "diet.fasting.end":
+            let reason = (p["reason"] as? String) ?? "manual"
+            _ = try diet.endFast(reason: reason)
+            return jsonRPCResponse(id: id, result: JSONValue.fromJSONObject(diet.fastingStatus()), error: nil)
         case "diet.day_summary":
             return jsonRPCResponse(id: id, result: JSONValue.fromJSONObject(diet.daySummary()), error: nil)
         case "diet.week_review":

@@ -31,11 +31,63 @@ public final class DietStore: @unchecked Sendable {
         public var ts: String
         public var weightKg: Double?
         public var sleepH: Double?
+        /// e.g. `morning_fasted` — preferred scale for goal ETA
+        public var context: String?
 
         enum CodingKeys: String, CodingKey {
-            case id, ts
+            case id, ts, context
             case weightKg = "weight_kg"
             case sleepH = "sleep_h"
+        }
+    }
+
+    /// Intermittent fasting (default 14h). Rules engine — not LLM.
+    public struct FastingSession: Codable, Equatable, Sendable, Identifiable {
+        public var id: String
+        public var startedAt: String
+        public var targetHours: Double
+        public var endedAt: String?
+        public var endReason: String?
+
+        enum CodingKeys: String, CodingKey {
+            case id
+            case startedAt = "started_at"
+            case targetHours = "target_hours"
+            case endedAt = "ended_at"
+            case endReason = "end_reason"
+        }
+    }
+
+    public struct FastingPrefs: Codable, Equatable, Sendable {
+        public var targetHours: Double
+        public var preferMorningWeight: Bool
+        public var active: FastingSession?
+        public var completedCount: Int
+
+        enum CodingKeys: String, CodingKey {
+            case targetHours = "target_hours"
+            case preferMorningWeight = "prefer_morning_weight"
+            case active
+            case completedCount = "completed_count"
+        }
+
+        public static let `default` = FastingPrefs(
+            targetHours: 14,
+            preferMorningWeight: true,
+            active: nil,
+            completedCount: 0
+        )
+
+        public init(
+            targetHours: Double = 14,
+            preferMorningWeight: Bool = true,
+            active: FastingSession? = nil,
+            completedCount: Int = 0
+        ) {
+            self.targetHours = targetHours
+            self.preferMorningWeight = preferMorningWeight
+            self.active = active
+            self.completedCount = completedCount
         }
     }
 
@@ -118,9 +170,10 @@ public final class DietStore: @unchecked Sendable {
         var metrics: [Metric]
         var goals: Goals?
         var profile: DietProfile?
+        var fasting: FastingPrefs?
 
         enum CodingKeys: String, CodingKey {
-            case meals, workouts, metrics, goals, profile
+            case meals, workouts, metrics, goals, profile, fasting
         }
     }
 
@@ -135,9 +188,10 @@ public final class DietStore: @unchecked Sendable {
            let m = try? JSONDecoder().decode(FileModel.self, from: data) {
             self.model = m
         } else {
-            self.model = FileModel(meals: [], workouts: [], metrics: [], goals: .default, profile: nil)
+            self.model = FileModel(meals: [], workouts: [], metrics: [], goals: .default, profile: nil, fasting: .default)
         }
         if model.goals == nil { model.goals = .default }
+        if model.fasting == nil { model.fasting = .default }
     }
 
     /// Re-read from disk (another process may have written).
@@ -147,6 +201,7 @@ public final class DietStore: @unchecked Sendable {
            let m = try? JSONDecoder().decode(FileModel.self, from: data) {
             model = m
             if model.goals == nil { model.goals = .default }
+            if model.fasting == nil { model.fasting = .default }
         }
     }
 
@@ -171,7 +226,7 @@ public final class DietStore: @unchecked Sendable {
         model.profile = p
         // Sync latest metric weight if empty history
         if p.weightKg > 0 {
-            let m = Metric(id: UUID().uuidString, ts: iso(Date()), weightKg: p.weightKg, sleepH: nil)
+            let m = Metric(id: UUID().uuidString, ts: iso(Date()), weightKg: p.weightKg, sleepH: nil, context: nil)
             model.metrics.append(m)
         }
         try persist()
@@ -200,13 +255,66 @@ public final class DietStore: @unchecked Sendable {
         lock.lock()
         var p = model.profile
         let g = model.goals ?? .default
-        if let w = (model.metrics.reversed().compactMap(\.weightKg).first) {
+        let pick = weightForPlanLocked()
+        if let w = pick?.kg {
             p?.weightKg = w
         }
         let avg = averageDailyKcalLocked(days: 7)
+        let fastingActive = model.fasting?.active != nil
+        let fastingHours = model.fasting?.targetHours ?? 14
+        let weightRefOnly = pick?.isReferenceOnly == true
         lock.unlock()
         guard let profile = p, profile.isComplete else { return nil }
-        return profile.planSummary(avgDailyIntakeKcal: avg, plannedKcal: g.targetKcal)
+        var plan = profile.planSummary(avgDailyIntakeKcal: avg, plannedKcal: g.targetKcal)
+        if fastingActive {
+            plan.etaText += " · 간헐적 단식 \(Int(fastingHours))h 진행 중"
+        }
+        if weightRefOnly {
+            plan.etaText += " · 체중은 건강 참고값(직접 공복 입력이 더 정확)"
+        }
+        plan.etaText += " · 규칙 계산(AI 아님)"
+        return plan
+    }
+
+    /// Prefer user morning-fasted → other user weight → HealthKit as soft reference only.
+    private func preferredWeightKgLocked() -> Double? {
+        weightForPlanLocked()?.kg
+    }
+
+    private struct WeightPick {
+        var kg: Double
+        var source: String // morning_fasted | user | healthkit_ref | none
+        var isReferenceOnly: Bool
+    }
+
+    private func weightForPlanLocked() -> WeightPick? {
+        // 1) Explicit morning / fasted user logs
+        if let m = model.metrics.reversed().first(where: {
+            $0.weightKg != nil
+                && ($0.context == "morning_fasted" || $0.context == "fasted")
+                && !isHealthKitMetric($0)
+        }), let w = m.weightKg {
+            return WeightPick(kg: w, source: "morning_fasted", isReferenceOnly: false)
+        }
+        // 2) Any non-HealthKit weight (manual / profile)
+        if let m = model.metrics.reversed().first(where: {
+            $0.weightKg != nil && !isHealthKitMetric($0)
+        }), let w = m.weightKg {
+            return WeightPick(kg: w, source: "user", isReferenceOnly: false)
+        }
+        // 3) HealthKit weight — reference only (may be missing)
+        if let m = model.metrics.reversed().first(where: {
+            $0.weightKg != nil && isHealthKitMetric($0)
+        }), let w = m.weightKg {
+            return WeightPick(kg: w, source: "healthkit_ref", isReferenceOnly: true)
+        }
+        return nil
+    }
+
+    private func isHealthKitMetric(_ m: Metric) -> Bool {
+        if m.id.hasPrefix("hk-") { return true }
+        if m.context == "healthkit" { return true }
+        return false
     }
 
     public func logMeal(
@@ -226,6 +334,8 @@ public final class DietStore: @unchecked Sendable {
             note: note
         )
         model.meals.append(meal)
+        // First meal ends active fast (eating window opens)
+        _ = try endActiveFastLocked(reason: "meal", at: ts)
         try persist()
         return meal
     }
@@ -258,17 +368,333 @@ public final class DietStore: @unchecked Sendable {
         weightKg: Double?,
         sleepH: Double?,
         ts: Date = Date(),
-        preferredId: String? = nil
+        preferredId: String? = nil,
+        context: String? = nil
     ) throws -> Metric {
         lock.lock(); defer { lock.unlock() }
         let id = preferredId?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty ?? UUID().uuidString
         if model.metrics.contains(where: { $0.id == id }) {
             return model.metrics.first { $0.id == id }!
         }
-        let m = Metric(id: id, ts: iso(ts), weightKg: weightKg, sleepH: sleepH)
+        var ctx = context
+        // Auto-tag morning weight during active fast if caller didn't set context
+        // (never override explicit healthkit / morning tags)
+        if ctx == nil, weightKg != nil, model.fasting?.active != nil {
+            ctx = "morning_fasted"
+        }
+        let m = Metric(id: id, ts: iso(ts), weightKg: weightKg, sleepH: sleepH, context: ctx)
         model.metrics.append(m)
+        // Keep profile current weight in sync for ETA
+        if let w = weightKg, var p = model.profile {
+            p.weightKg = w
+            model.profile = p
+        }
         try persist()
         return m
+    }
+
+    // MARK: - Intermittent fasting (rules, not LLM)
+
+    public func fastingPrefs() -> FastingPrefs {
+        lock.lock(); defer { lock.unlock() }
+        return model.fasting ?? .default
+    }
+
+    /// Common IF presets for UI chips (hours).
+    public static let fastingHourPresets: [Double] = [12, 14, 16, 18, 20]
+
+    /// Start custom-duration fast. Idempotent if already active — returns current.
+    @discardableResult
+    public func startFast(targetHours: Double? = nil, at: Date = Date()) throws -> FastingSession {
+        lock.lock(); defer { lock.unlock() }
+        var prefs = model.fasting ?? .default
+        if let active = prefs.active, parseISO(active.startedAt) != nil, active.endedAt == nil {
+            return active
+        }
+        let hours = Self.clampFastHours(targetHours ?? prefs.targetHours)
+        prefs.targetHours = hours
+        let session = FastingSession(
+            id: UUID().uuidString,
+            startedAt: iso(at),
+            targetHours: hours,
+            endedAt: nil,
+            endReason: nil
+        )
+        prefs.active = session
+        model.fasting = prefs
+        try persist()
+        return session
+    }
+
+    public static func clampFastHours(_ h: Double) -> Double {
+        max(8, min(36, h.rounded()))
+    }
+
+    @discardableResult
+    public func endFast(reason: String = "manual", at: Date = Date()) throws -> FastingSession? {
+        lock.lock(); defer { lock.unlock() }
+        return try endActiveFastLocked(reason: reason, at: at, persistNow: true)
+    }
+
+    @discardableResult
+    private func endActiveFastLocked(reason: String, at: Date, persistNow: Bool = false) throws -> FastingSession? {
+        var prefs = model.fasting ?? .default
+        guard var active = prefs.active, active.endedAt == nil else { return nil }
+        active.endedAt = iso(at)
+        active.endReason = reason
+        let elapsedH = hoursBetween(active.startedAt, and: at) ?? 0
+        if elapsedH + 0.05 >= active.targetHours {
+            prefs.completedCount += 1
+        }
+        prefs.active = nil
+        model.fasting = prefs
+        if persistNow { try persist() }
+        return active
+    }
+
+    /// Preview end time for a duration (no side effects). Used before start.
+    public func fastingEndPreview(targetHours: Double, from: Date = Date()) -> [String: Any] {
+        let hours = Self.clampFastHours(targetHours)
+        let end = from.addingTimeInterval(hours * 3600)
+        let labels = Self.localDayTimeLabels(start: from, end: end)
+        return [
+            "target_hours": hours,
+            "starts_at": iso(from),
+            "ends_at": iso(end),
+            "starts_at_label": labels.startLabel,
+            "ends_at_label": labels.endLabel,
+            "ends_day_word": labels.endDayWord,
+            "preview_line": "\(Int(hours))시간 하면 \(labels.endLabel)에 끝나요",
+            "detail_line": "\(labels.startLabel) 시작 → \(labels.endLabel) 목표 완료",
+        ]
+    }
+
+    /// Status for UI + dashboard. Pure clock math — no cloud LLM.
+    /// Health data is optional reference only (`health_reference`).
+    public func fastingStatus(now: Date = Date(), previewHours: Double? = nil) -> [String: Any] {
+        lock.lock(); defer { lock.unlock() }
+        let prefs = model.fasting ?? .default
+        let defaultHours = Self.clampFastHours(previewHours ?? prefs.targetHours)
+        var out: [String: Any] = [
+            "engine": "diet-rules/v1",
+            "target_hours": defaultHours,
+            "prefer_morning_weight": prefs.preferMorningWeight,
+            "completed_count": prefs.completedCount,
+            "active": false,
+            "plan_uses_ai": false,
+            "plan_note": "목표 도달 예상은 Mifflin–St Jeor + 적자(약 7700kcal≈1kg) 규칙 계산입니다. AI API를 쓰지 않아요.",
+            "hour_presets": Self.fastingHourPresets,
+        ]
+        out["health_reference"] = healthReferenceLocked(now: now)
+
+        guard let active = prefs.active, active.endedAt == nil,
+              let start = parseISO(active.startedAt) else {
+            let preview = fastingEndPreviewUnlocked(targetHours: defaultHours, from: now)
+            out["label"] = "간헐적 단식 대기"
+            out["hint"] = "시간을 고른 뒤 「단식 시작」. 첫 식사 기록 시 자동 종료."
+            out["weight_prompt"] = "매일 아침 공복 체중(직접 입력)이 목표 도달 예상의 기준이에요. 건강 데이터는 참고만 해요."
+            out.merge(preview) { _, new in new }
+            return out
+        }
+
+        let end = start.addingTimeInterval(active.targetHours * 3600)
+        let labels = Self.localDayTimeLabels(start: start, end: end)
+        let elapsed = now.timeIntervalSince(start) / 3600.0
+        let target = active.targetHours
+        let remaining = max(0, target - elapsed)
+        let progress = min(1.0, max(0, elapsed / max(target, 0.1)))
+        let met = elapsed >= target
+        out["active"] = true
+        out["session_id"] = active.id
+        out["target_hours"] = target
+        out["started_at"] = active.startedAt
+        out["ends_at"] = iso(end)
+        out["starts_at_label"] = labels.startLabel
+        out["ends_at_label"] = labels.endLabel
+        out["ends_day_word"] = labels.endDayWord
+        out["preview_line"] = met
+            ? "목표 \(Int(target))h 달성 · \(labels.endLabel) 기준"
+            : "\(labels.endLabel)에 끝나요"
+        out["detail_line"] = "\(labels.startLabel) 시작 → \(labels.endLabel) 목표"
+        out["elapsed_hours"] = (elapsed * 10).rounded() / 10
+        out["remaining_hours"] = (remaining * 10).rounded() / 10
+        out["progress"] = progress
+        out["goal_met"] = met
+        out["label"] = met
+            ? String(format: "목표 %dh 달성 · 공복 %.1fh", Int(target), elapsed)
+            : String(format: "공복 %.1fh / 목표 %dh · %@ 종료", elapsed, Int(target), labels.endLabel)
+        out["hint"] = met
+            ? "목표 공복을 채웠어요. 식사 창을 열거나 「단식 종료」를 누르세요."
+            : String(format: "약 %.1f시간 남음 · %@에 목표. 식사 기록하면 단식이 끝나요.", remaining, labels.endLabel)
+        out["weight_prompt"] = "아침·공복 체중을 직접 입력하면 목표 도달 예상이 갱신돼요. 건강 체중은 참고만."
+        if let pick = weightForPlanLocked() {
+            out["preferred_weight_kg"] = pick.kg
+            out["weight_source"] = pick.source
+            out["weight_is_reference_only"] = pick.isReferenceOnly
+        }
+        return out
+    }
+
+    /// Call without lock when already holding lock.
+    private func fastingEndPreviewUnlocked(targetHours: Double, from: Date) -> [String: Any] {
+        let hours = Self.clampFastHours(targetHours)
+        let end = from.addingTimeInterval(hours * 3600)
+        let labels = Self.localDayTimeLabels(start: from, end: end)
+        return [
+            "starts_at": iso(from),
+            "ends_at": iso(end),
+            "starts_at_label": labels.startLabel,
+            "ends_at_label": labels.endLabel,
+            "ends_day_word": labels.endDayWord,
+            "preview_line": "\(Int(hours))시간 하면 \(labels.endLabel)에 끝나요",
+            "detail_line": "\(labels.startLabel) 시작 → \(labels.endLabel) 목표 완료",
+        ]
+    }
+
+    /// Korean day-relative labels: 오늘/내일/모레 + 오전·오후 시각.
+    public static func localDayTimeLabels(start: Date, end: Date, now: Date = Date()) -> (
+        startLabel: String,
+        endLabel: String,
+        endDayWord: String
+    ) {
+        let cal = Calendar.current
+        let timeFmt = DateFormatter()
+        timeFmt.locale = Locale(identifier: "ko_KR")
+        timeFmt.dateFormat = "a h:mm"
+        let dayFmt = DateFormatter()
+        dayFmt.locale = Locale(identifier: "ko_KR")
+        dayFmt.dateFormat = "M월 d일"
+
+        func dayWord(for date: Date) -> String {
+            let today = cal.startOfDay(for: now)
+            let d0 = cal.startOfDay(for: date)
+            let diff = cal.dateComponents([.day], from: today, to: d0).day ?? 0
+            switch diff {
+            case 0: return "오늘"
+            case 1: return "내일"
+            case 2: return "모레"
+            case -1: return "어제"
+            default: return dayFmt.string(from: date)
+            }
+        }
+
+        let startWord = dayWord(for: start)
+        let endWord = dayWord(for: end)
+        let startLabel = "\(startWord) \(timeFmt.string(from: start))"
+        let endLabel = "\(endWord) \(timeFmt.string(from: end))"
+        return (startLabel, endLabel, endWord)
+    }
+
+    /// Optional HealthKit / sensor context — never required for fasting or ETA.
+    private func healthReferenceLocked(now: Date) -> [String: Any] {
+        var lines: [String] = []
+        var fields: [String: Any] = [
+            "available": false,
+            "role": "reference_only",
+            "disclaimer": "건강(워치) 데이터는 있을 때만 참고합니다. 없어도 단식·목표 도달 예상은 직접 기록만으로 동작해요.",
+        ]
+
+        let hkWeights = model.metrics.filter { $0.weightKg != nil && isHealthKitMetric($0) }
+        let userWeights = model.metrics.filter { $0.weightKg != nil && !isHealthKitMetric($0) }
+        let hkSleep = model.metrics.filter { $0.sleepH != nil && isHealthKitMetric($0) }
+        let anySleep = model.metrics.filter { $0.sleepH != nil }
+        let hkWorkouts = model.workouts.filter {
+            $0.id.hasPrefix("hk-") || $0.intensity == "healthkit"
+        }
+        let cal = Calendar.current
+        let weekAgo = cal.date(byAdding: .day, value: -7, to: now) ?? now.addingTimeInterval(-7 * 86400)
+
+        if let lastHK = hkWeights.reversed().first, let w = lastHK.weightKg {
+            fields["hk_weight_kg"] = w
+            fields["hk_weight_ts"] = lastHK.ts
+            lines.append(String(format: "건강 체중 참고 %.1fkg", w))
+            fields["available"] = true
+        }
+        if let lastUser = userWeights.reversed().first, let w = lastUser.weightKg {
+            fields["user_weight_kg"] = w
+            fields["user_weight_context"] = lastUser.context as Any
+            lines.append(String(format: "직접 체중 %.1fkg%@", w,
+                                lastUser.context == "morning_fasted" ? " (공복)" : ""))
+            fields["available"] = true
+        }
+        // Recent sleep (prefer HK, else any)
+        if let s = (hkSleep.reversed().first ?? anySleep.reversed().first), let h = s.sleepH {
+            fields["recent_sleep_h"] = h
+            fields["sleep_source"] = isHealthKitMetric(s) ? "healthkit_ref" : "user"
+            lines.append(String(format: "최근 수면 참고 %.1f시간", h))
+            fields["available"] = true
+        }
+        // 7d HK workouts
+        let recentHKWO = hkWorkouts.filter { parseISO($0.ts).map { $0 >= weekAgo } ?? false }
+        if !recentHKWO.isEmpty {
+            let mins = recentHKWO.map(\.minutes).reduce(0, +)
+            fields["hk_workout_count_7d"] = recentHKWO.count
+            fields["hk_workout_minutes_7d"] = mins
+            let kinds = Array(Set(recentHKWO.map(\.kind))).prefix(3).joined(separator: "·")
+            lines.append("건강 운동 7일 \(recentHKWO.count)회 · \(mins)분\(kinds.isEmpty ? "" : " (\(kinds))")")
+            fields["available"] = true
+        }
+        // User workouts 7d (for context)
+        let userWO = model.workouts.filter {
+            !( $0.id.hasPrefix("hk-") || $0.intensity == "healthkit" )
+                && (parseISO($0.ts).map { $0 >= weekAgo } ?? false)
+        }
+        if !userWO.isEmpty {
+            fields["user_workout_count_7d"] = userWO.count
+            fields["user_workout_minutes_7d"] = userWO.map(\.minutes).reduce(0, +)
+            lines.append("직접 운동 7일 \(userWO.count)회")
+            fields["available"] = true
+        }
+        if let avg = averageDailyKcalLocked(days: 7) {
+            fields["avg_intake_kcal_7d"] = avg.rounded()
+            lines.append("최근 식사 평균 \(Int(avg.rounded()))kcal/일")
+            fields["available"] = true
+        }
+        if let p = model.profile, p.isComplete {
+            fields["tdee"] = p.tdee.rounded()
+            fields["bmr"] = p.bmr.rounded()
+            lines.append("유지 칼로리 약 \(Int(p.tdee.rounded()))kcal (프로필)")
+            fields["available"] = true
+        }
+        // Active streak / last meal gap for IF context
+        if let lastMeal = model.meals.last, let mealTs = parseISO(lastMeal.ts) {
+            let gapH = now.timeIntervalSince(mealTs) / 3600.0
+            if gapH >= 0 {
+                fields["hours_since_last_meal"] = (gapH * 10).rounded() / 10
+                lines.append(String(format: "마지막 식사 후 %.1f시간", gapH))
+                fields["available"] = true
+            }
+        }
+        if let pick = weightForPlanLocked() {
+            fields["plan_weight_kg"] = pick.kg
+            fields["plan_weight_source"] = pick.source
+            fields["plan_weight_is_reference_only"] = pick.isReferenceOnly
+            if pick.isReferenceOnly {
+                lines.append("목표 계산 체중은 건강 참고값(직접 공복 입력이 더 정확)")
+            }
+        }
+
+        fields["lines"] = lines
+        fields["line_count"] = lines.count
+        if lines.isEmpty {
+            fields["summary"] = "참고할 건강·기록이 아직 없어요. 없어도 단식은 시작할 수 있어요."
+        } else {
+            fields["summary"] = "참고 \(lines.count)항목 (필수 아님)"
+        }
+        return fields
+    }
+
+    private func parseISO(_ s: String) -> Date? {
+        let f1 = ISO8601DateFormatter()
+        f1.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        if let d = f1.date(from: s) { return d }
+        let f2 = ISO8601DateFormatter()
+        return f2.date(from: s)
+    }
+
+    private func hoursBetween(_ startISO: String, and end: Date) -> Double? {
+        guard let start = parseISO(startISO) else { return nil }
+        return end.timeIntervalSince(start) / 3600.0
     }
 
     /// HealthKit / external sensor batch. Idempotent on `client_id`.
@@ -330,7 +756,15 @@ public final class DietStore: @unchecked Sendable {
                         errors.append("[\(idx)] metric needs weight_kg or sleep_h")
                         continue
                     }
-                    _ = try logMetric(weightKg: w, sleepH: sleep, ts: ts, preferredId: clientId)
+                    // HealthKit metrics stay reference-tagged (never pretend user morning scale)
+                    let metricCtx = source == "healthkit" ? "healthkit" : nil
+                    _ = try logMetric(
+                        weightKg: w,
+                        sleepH: sleep,
+                        ts: ts,
+                        preferredId: clientId,
+                        context: metricCtx
+                    )
                     accepted += 1
                 default:
                     errors.append("[\(idx)] unknown type \(type)")
@@ -669,10 +1103,7 @@ public final class DietStore: @unchecked Sendable {
         let weekWP = goals.weeklyWorkouts > 0
             ? Double(weekWO) / Double(goals.weeklyWorkouts) : 0
 
-        var latestWeight: Double?
-        for m in model.metrics.reversed() {
-            if let w = m.weightKg { latestWeight = w; break }
-        }
+        let latestWeight = preferredWeightKgLocked()
 
         var lines = analysisLocked(
             day: day,
@@ -690,15 +1121,20 @@ public final class DietStore: @unchecked Sendable {
             guard var p = profile, p.isComplete else { return nil }
             if let w = latestWeight { p.weightKg = w }
             let avg = averageDailyKcalLocked(days: 7)
-            return p.planSummary(avgDailyIntakeKcal: avg, plannedKcal: goals.targetKcal)
+            var proj = p.planSummary(avgDailyIntakeKcal: avg, plannedKcal: goals.targetKcal)
+            if model.fasting?.active != nil {
+                let h = Int(model.fasting?.targetHours ?? 14)
+                proj.etaText += " · 간헐적 단식 \(h)h 진행 중"
+            }
+            return proj
         }()
         if let plan {
             lines.insert(plan.etaText, at: 0)
             if !plan.paceText.isEmpty {
-                lines.insert("유지 칼로리 약 \(Int(plan.tdee))kcal · 권장 섭취 \(Int(plan.recommendedKcal))kcal · \(plan.paceText)", at: 1)
+                lines.insert("유지 칼로리 약 \(Int(plan.tdee))kcal · 권장 섭취 \(Int(plan.recommendedKcal))kcal · \(plan.paceText) · 규칙 계산(AI 아님)", at: 1)
             }
         } else {
-            lines.insert("키·몸무게·나이·성별·목표 체중을 입력하면 목표 칼로리와 도달 시점을 자동으로 알려 드려요.", at: 0)
+            lines.insert("키·몸무게·나이·성별·목표 체중을 입력하면 목표 칼로리와 도달 시점을 자동으로 알려 드려요. (규칙 계산, AI 아님)", at: 0)
         }
 
         return Dashboard(
@@ -785,6 +1221,7 @@ public final class DietStore: @unchecked Sendable {
         if let plan = d.plan {
             out["plan"] = plan.asDict()
         }
+        out["fasting"] = fastingStatus(now: reference)
         return out
     }
 

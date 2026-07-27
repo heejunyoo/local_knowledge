@@ -25,6 +25,16 @@ public struct DietMealPreset: Equatable, Sendable, Identifiable {
     /// Item line stored in meal log
     public var logItem: String { "\(name) \(grams)\(unit)" }
 
+    /// Scale default serving to custom amount (g/ml).
+    public func scaled(to amount: Double) -> (kcal: Double, proteinG: Double, line: String) {
+        let a = max(0, amount)
+        let factor = grams > 0 ? a / Double(grams) : 1
+        let k = (kcal * factor * 10).rounded() / 10
+        let p = (proteinG * factor * 10).rounded() / 10
+        let aStr = a == a.rounded() ? "\(Int(a))" : String(format: "%.1f", a)
+        return (k, p, "\(name) \(aStr)\(unit)")
+    }
+
     public static let all: [DietMealPreset] = [
         .init(name: "밥·반찬", grams: 300, kcal: 520, proteinG: 18),
         .init(name: "샐러드", grams: 200, kcal: 120, proteinG: 5),
@@ -33,6 +43,9 @@ public struct DietMealPreset: Equatable, Sendable, Identifiable {
         .init(name: "단백질 쉐이크", grams: 30, kcal: 120, proteinG: 24), // scoop powder
         .init(name: "커피", grams: 200, kcal: 5, proteinG: 0, unit: "ml"),
         .init(name: "과일", grams: 150, kcal: 80, proteinG: 1),
+        .init(name: "우유", grams: 200, kcal: 84, proteinG: 6.8, unit: "ml"),
+        .init(name: "두부", grams: 150, kcal: 114, proteinG: 12),
+        .init(name: "요거트", grams: 150, kcal: 105, proteinG: 6),
     ]
 }
 
