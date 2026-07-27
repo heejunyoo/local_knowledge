@@ -457,7 +457,7 @@ public struct HomeView: View {
 
     private var menuBlock: some View {
         VStack(alignment: .leading, spacing: TossSpace.x3) {
-            Text("이어서")
+            Text("바로가기")
                 .font(.system(size: 15, weight: .semibold))
                 .foregroundStyle(TossColor.grey500)
                 .padding(.leading, TossSpace.x1)

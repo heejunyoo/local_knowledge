@@ -15,6 +15,10 @@ public struct DietView: View {
     @State private var mealItems = ""
     @State private var mealKcal = ""
     @State private var mealProtein = ""
+    @State private var mealAmount = ""
+    @State private var mealUnit: DietNutritionCalc.Unit = .g
+    @State private var mealAutoNote = ""
+    @State private var mealKcalManual = false
     @State private var workoutKind = "걷기"
     @State private var workoutMinutes = "30"
     @State private var weightKg = ""
@@ -31,6 +35,7 @@ public struct DietView: View {
     @State private var pSex: DietProfile.Sex = .female
     @State private var pTarget = "60"
     @State private var pActivity: DietProfile.Activity = .light
+    @State private var fastingHours: Double = 14
 
     private let mealPresets = DietMealPreset.all
     private let workoutPresets = DietWorkoutPreset.all
@@ -62,6 +67,8 @@ public struct DietView: View {
                 VStack(alignment: .leading, spacing: TossSpace.x5) {
                     header.tossAppear()
                     planCard
+                    fastingCard
+                    morningWeightInline
                     suggestCard
                     todayHero
                     slotChips
@@ -112,6 +119,144 @@ public struct DietView: View {
         }
     }
 
+    private var fastingStatus: [String: Any] {
+        store.fastingStatus(previewHours: fastingHours)
+    }
+
+    private var fastingCard: some View {
+        let st = fastingStatus
+        let active = (st["active"] as? Bool) == true
+        let presets = (st["hour_presets"] as? [Double]) ?? DietStore.fastingHourPresets
+        let href = st["health_reference"] as? [String: Any] ?? [:]
+        let refLines = href["lines"] as? [String] ?? []
+        let preview = active
+            ? (st["preview_line"] as? String ?? "")
+            : (store.fastingEndPreview(targetHours: fastingHours)["preview_line"] as? String ?? "")
+        return TossCard {
+            VStack(alignment: .leading, spacing: TossSpace.x3) {
+                Text("간헐적 단식")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(TossColor.grey500)
+                Text((st["label"] as? String) ?? "대기")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(TossColor.grey900)
+                if !preview.isEmpty {
+                    Text(preview)
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(TossColor.blue500)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                if let detail = st["detail_line"] as? String, active {
+                    Text(detail)
+                        .font(TossFont.caption())
+                        .foregroundStyle(TossColor.grey500)
+                }
+                if !active {
+                    Text("공복 시간")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(TossColor.grey500)
+                    HStack(spacing: 8) {
+                        ForEach(presets, id: \.self) { h in
+                            let selected = Int(fastingHours) == Int(h)
+                            Button("\(Int(h))시간") { fastingHours = h }
+                                .font(.system(size: 13, weight: .semibold))
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 6)
+                                .background(selected ? TossColor.blue500 : TossColor.blue50)
+                                .foregroundStyle(selected ? Color.white : TossColor.blue500)
+                                .clipShape(Capsule())
+                                .buttonStyle(.plain)
+                        }
+                    }
+                }
+                if let hint = st["hint"] as? String {
+                    Text(hint)
+                        .font(TossFont.caption())
+                        .foregroundStyle(TossColor.grey500)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                if active, let p = st["progress"] as? Double {
+                    ProgressView(value: min(1, max(0, p)))
+                        .tint(TossColor.blue500)
+                }
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("참고 정보 (없어도 됨)")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(TossColor.grey500)
+                    if refLines.isEmpty {
+                        Text("건강·식사 참고 없음. 직접 기록만으로 동작해요.")
+                            .font(.system(size: 11))
+                            .foregroundStyle(TossColor.grey500)
+                    } else {
+                        ForEach(Array(refLines.prefix(8).enumerated()), id: \.offset) { _, line in
+                            Text("· \(line)")
+                                .font(.system(size: 11))
+                                .foregroundStyle(TossColor.grey700)
+                        }
+                        Text("워치/건강 값은 참고만. 목표 계산은 공복 직접 체중 우선.")
+                            .font(.system(size: 10))
+                            .foregroundStyle(TossColor.grey500)
+                    }
+                }
+                HStack(spacing: TossSpace.x4) {
+                    if active {
+                        Button("단식 종료") {
+                            runStore("단식 종료") { _ = try store.endFast(reason: "manual") }
+                        }
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(TossColor.blue500)
+                        .buttonStyle(.plain)
+                    } else {
+                        Button("\(Int(fastingHours))시간 단식 시작") {
+                            runStore("\(Int(fastingHours))h 단식 시작") {
+                                _ = try store.startFast(targetHours: fastingHours)
+                            }
+                        }
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(TossColor.blue500)
+                        .buttonStyle(.plain)
+                    }
+                }
+                Text("첫 식사 기록 시 단식이 자동 종료돼요.")
+                    .font(.system(size: 11))
+                    .foregroundStyle(TossColor.grey500)
+            }
+        }
+    }
+
+    private var morningWeightInline: some View {
+        TossCard {
+            VStack(alignment: .leading, spacing: TossSpace.x3) {
+                Text("아침 공복 체중")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(TossColor.grey500)
+                Text((fastingStatus["weight_prompt"] as? String)
+                     ?? "매일 아침 공복에 재면 목표 도달 예상이 안정적이에요.")
+                    .font(TossFont.caption())
+                    .foregroundStyle(TossColor.grey500)
+                HStack(spacing: TossSpace.x3) {
+                    TextField("kg", text: $weightKg)
+                        .textFieldStyle(.roundedBorder)
+                        .frame(maxWidth: 120)
+                    Button("공복 체중 저장") {
+                        guard let w = Double(weightKg), w > 30, w < 300 else {
+                            notify("체중을 확인해 주세요")
+                            return
+                        }
+                        runStore(String(format: "공복 %.1fkg 저장", w)) {
+                            _ = try store.logMetric(weightKg: w, sleepH: nil, context: "morning_fasted")
+                            weightKg = ""
+                        }
+                    }
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(TossColor.blue500)
+                    .buttonStyle(.plain)
+                    .disabled(weightKg.isEmpty)
+                }
+            }
+        }
+    }
+
     private func runStore(_ label: String, _ body: () throws -> Void) {
         do {
             try body()
@@ -151,6 +296,9 @@ public struct DietView: View {
                         Text(plan.paceText)
                             .font(.system(size: 12, weight: .medium))
                             .foregroundStyle(TossColor.blue500)
+                        Text("규칙 계산 (Mifflin + 적자) · AI API 미사용")
+                            .font(.system(size: 11))
+                            .foregroundStyle(TossColor.grey500)
                         if let avg = plan.avgIntakeUsed {
                             Text("최근 기록 평균 섭취 약 \(Int(avg))kcal/일 기준으로 계산했어요.")
                                 .font(.system(size: 11))
@@ -413,13 +561,13 @@ public struct DietView: View {
     }
 
     private var placeholderNL: String {
-        if let s = selectedSlot { return "예: \(s.rawValue) 샐러드 350kcal" }
+        if let s = selectedSlot { return "예: \(s.rawValue) 닭가슴살 150g · 커피 300ml" }
         return "예: 운동 걷기 30분"
     }
 
     private var mealPresetRow: some View {
         VStack(alignment: .leading, spacing: TossSpace.x2) {
-            Text("빠른 식사 (기본 분량·대략 kcal)")
+            Text("빠른 식사 (기본 분량 · g/ml 비례 kcal)")
                 .font(.system(size: 13, weight: .semibold))
                 .foregroundStyle(TossColor.grey500)
             Text("그램은 대략값이에요. 나중에 한 줄로 수정해도 됩니다.")
@@ -609,9 +757,36 @@ public struct DietView: View {
                         }
                     }
                     .pickerStyle(.segmented)
-                    TextField("음식", text: $mealItems)
-                    TextField("kcal", text: $mealKcal)
-                    TextField("단백질 g", text: $mealProtein)
+                    TextField("음식 (예: 닭가슴살)", text: $mealItems)
+                        .onChange(of: mealItems) { _, _ in recomputeMealNutrition() }
+                    HStack {
+                        TextField("분량", text: $mealAmount)
+                            .onChange(of: mealAmount) { _, _ in
+                                mealKcalManual = false
+                                recomputeMealNutrition()
+                            }
+                        Picker("단위", selection: $mealUnit) {
+                            Text("g").tag(DietNutritionCalc.Unit.g)
+                            Text("ml").tag(DietNutritionCalc.Unit.ml)
+                        }
+                        .pickerStyle(.segmented)
+                        .frame(maxWidth: 140)
+                        .onChange(of: mealUnit) { _, _ in
+                            mealKcalManual = false
+                            recomputeMealNutrition()
+                        }
+                    }
+                    if !mealAutoNote.isEmpty {
+                        Text(mealAutoNote)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    TextField("kcal (자동·수정 가능)", text: $mealKcal)
+                        .onChange(of: mealKcal) { _, _ in mealKcalManual = true }
+                    TextField("단백질 g (자동·수정 가능)", text: $mealProtein)
+                    Text("g/ml만 넣어도 kcal·단백질을 대략 계산해요. 숫자는 직접 고칠 수 있어요.")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
                     Button("식사 저장") {
                         saveMeal()
                         sheet = nil
@@ -873,11 +1048,29 @@ public struct DietView: View {
                     intensity: nil
                 )
             }
+        } else if let est = DietNutritionCalc.parse(line) {
+            let msg = "\(est.itemLine) · ~\(Int(est.kcal))kcal · P\(Int(est.proteinG))g"
+            runStore("\(msg) 저장됐어요") {
+                _ = try store.logMealWithSlot(
+                    slot: selectedSlot,
+                    items: [est.itemLine],
+                    kcal: est.kcal,
+                    proteinG: est.proteinG,
+                    note: est.note
+                )
+            }
         } else {
+            // plain kcal number still works: "샐러드 350kcal"
             let kcal: Double? = {
-                if let r = try? NSRegularExpression(pattern: "(\\d+(?:\\.\\d+)?)"),
+                if let r = try? NSRegularExpression(pattern: "(\\d+(?:\\.\\d+)?)\\s*kcal", options: .caseInsensitive),
                    let m = r.firstMatch(in: line, range: NSRange(line.startIndex..., in: line)),
                    let rr = Range(m.range(at: 1), in: line) {
+                    return Double(line[rr])
+                }
+                if let r = try? NSRegularExpression(pattern: "(\\d+(?:\\.\\d+)?)"),
+                   let m = r.firstMatch(in: line, range: NSRange(line.startIndex..., in: line)),
+                   let rr = Range(m.range(at: 1), in: line),
+                   !line.lowercased().contains("g"), !line.lowercased().contains("ml") {
                     return Double(line[rr])
                 }
                 return nil
@@ -895,21 +1088,70 @@ public struct DietView: View {
         quickLine = ""
     }
 
+    private func recomputeMealNutrition() {
+        let name = mealItems.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !name.isEmpty else {
+            mealAutoNote = ""
+            return
+        }
+        // Prefer amount field; else parse name line for "150g"
+        if let amt = Double(mealAmount.trimmingCharacters(in: .whitespacesAndNewlines)), amt > 0 {
+            if let e = DietNutritionCalc.estimate(foodQuery: name, amount: amt, unit: mealUnit) {
+                applyEstimate(e, forceKcal: !mealKcalManual)
+            }
+            return
+        }
+        if let e = DietNutritionCalc.parse(name, defaultUnit: mealUnit) {
+            mealAmount = e.amount == e.amount.rounded() ? "\(Int(e.amount))" : String(format: "%.1f", e.amount)
+            mealUnit = e.unit
+            applyEstimate(e, forceKcal: !mealKcalManual)
+        }
+    }
+
+    private func applyEstimate(_ e: DietNutritionCalc.Estimate, forceKcal: Bool) {
+        if forceKcal {
+            mealKcal = e.kcal == e.kcal.rounded() ? "\(Int(e.kcal))" : String(format: "%.0f", e.kcal)
+            mealProtein = String(format: "%.1f", e.proteinG)
+        } else if mealProtein.isEmpty {
+            mealProtein = String(format: "%.1f", e.proteinG)
+        }
+        mealAutoNote = e.matchedCatalog
+            ? "자동: ~\(Int(e.kcal))kcal · 단백질 \(String(format: "%.1f", e.proteinG))g · \(e.note)"
+            : e.note
+    }
+
     private func saveMeal() {
-        let items = mealItems.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
+        var items = mealItems.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
         guard !items.isEmpty else {
             notify("음식 이름을 입력해 주세요")
             return
         }
-        runStore("식사 저장됐어요") {
+        var kcal = Double(mealKcal)
+        var protein = Double(mealProtein)
+        var note: String? = nil
+        // Auto from amount if kcal empty
+        if kcal == nil || kcal == 0, let amt = Double(mealAmount), amt > 0 {
+            if let e = DietNutritionCalc.estimate(foodQuery: items.joined(separator: " "), amount: amt, unit: mealUnit) {
+                kcal = e.kcal
+                protein = protein ?? e.proteinG
+                note = e.note
+                items = [e.itemLine]
+            }
+        } else if let amt = Double(mealAmount), amt > 0 {
+            let aStr = amt == amt.rounded() ? "\(Int(amt))" : String(format: "%.1f", amt)
+            if let first = items.first, !first.contains(mealUnit.rawValue) {
+                items[0] = "\(first) \(aStr)\(mealUnit.rawValue)"
+            }
+        }
+        runStore("식사 저장됐어요\(kcal.map { " · \(Int($0))kcal" } ?? "")") {
             _ = try store.logMealWithSlot(
                 slot: selectedSlot,
                 items: items,
-                kcal: Double(mealKcal),
-                proteinG: Double(mealProtein),
-                note: nil
+                kcal: kcal,
+                proteinG: protein,
+                note: note
             )
-            mealItems = ""; mealKcal = ""; mealProtein = ""
+            mealItems = ""; mealKcal = ""; mealProtein = ""; mealAmount = ""; mealAutoNote = ""; mealKcalManual = false
             sheet = nil
         }
     }

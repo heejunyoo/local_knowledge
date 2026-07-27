@@ -1,7 +1,9 @@
 import Foundation
 import KnowledgeCore
+import KnowledgeWorkers
 
 /// Load candidate summary JSON for review UI (friendly display).
+/// Prefer `MeetingArtifactReader` for full summary + transcript bundles.
 public enum MeetingSummaryLoader {
     public struct Display: Equatable, Sendable {
         public var oneLine: String
@@ -27,35 +29,37 @@ public enum MeetingSummaryLoader {
         public var isEmpty: Bool {
             oneLine.isEmpty && discussion.isEmpty && decisions.isEmpty && actions.isEmpty && open.isEmpty
         }
+
+        public init(from view: MeetingArtifactReader.SummaryView) {
+            self.oneLine = view.oneLine
+            self.discussion = view.discussion
+            self.decisions = view.decisions
+            self.actions = view.actions
+            self.open = view.open
+        }
     }
 
     public static func load(knowledgeRoot: URL, candidateRel: String?) -> Display? {
-        guard let rel = candidateRel else { return nil }
-        let url = knowledgeRoot.appendingPathComponent(rel)
-        guard let data = try? Data(contentsOf: url) else { return nil }
-        // Prefer typed decode
-        let dec = JSONDecoder()
-        dec.dateDecodingStrategy = .iso8601
-        if let s = try? dec.decode(MeetingSummaryV1.self, from: data) {
-            return Display(
-                oneLine: s.oneLineSummary,
-                discussion: s.keyDiscussionPoints.map(\.text),
-                decisions: s.decisions.map(\.text),
-                actions: s.actionItems.map(\.text),
-                open: s.unresolvedItems.map(\.text)
-            )
-        }
-        // Loose parse
-        guard let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return nil }
-        func texts(_ key: String) -> [String] {
-            ((obj[key] as? [[String: Any]]) ?? []).compactMap { $0["text"] as? String }
-        }
-        return Display(
-            oneLine: (obj["one_line_summary"] as? String) ?? "",
-            discussion: texts("key_discussion_points"),
-            decisions: texts("decisions"),
-            actions: texts("action_items"),
-            open: texts("unresolved_items")
+        guard let v = MeetingArtifactReader.loadSummary(
+            knowledgeRoot: knowledgeRoot,
+            candidateRel: candidateRel
+        ) else { return nil }
+        return Display(from: v)
+    }
+
+    public static func loadBundle(
+        knowledgeRoot: URL,
+        candidateRel: String?,
+        transcriptRel: String?,
+        vaultRel: String? = nil,
+        vaultRoot: URL? = nil
+    ) -> MeetingArtifactReader.Bundle {
+        MeetingArtifactReader.loadBundle(
+            knowledgeRoot: knowledgeRoot,
+            candidateRel: candidateRel,
+            transcriptRel: transcriptRel,
+            vaultRel: vaultRel,
+            vaultRoot: vaultRoot
         )
     }
 }

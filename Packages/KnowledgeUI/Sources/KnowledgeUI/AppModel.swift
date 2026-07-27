@@ -76,6 +76,7 @@ public final class AppModel: ObservableObject {
         public var audioPath: String?
         public var vaultPath: String?
         public var candidatePath: String?
+        public var transcriptPath: String?
         public var oneLine: String?
     }
 
@@ -902,6 +903,7 @@ public final class AppModel: ObservableObject {
                     audioPath: m.audioPath,
                     vaultPath: m.vaultPath,
                     candidatePath: m.candidatePath,
+                    transcriptPath: m.transcriptPath,
                     oneLine: Self.loadOneLine(
                         knowledgeRoot: knowledgeRoot,
                         candidatePath: m.candidatePath
