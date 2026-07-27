@@ -3,6 +3,11 @@ import Foundation
 /// Local Diet SoT — file-backed JSON under knowledge root.
 /// Shared by Mac UI (direct) and Core gateway (mobile RPC).
 public final class DietStore: @unchecked Sendable {
+    // REFACTOR P0: golden snapshot baseline protection (docs/REFACTOR_ACTION_PLAN_WEB_2026-07.md §2.3).
+    // Guarding persist() catches every write path (native Mac UI DietView, HTTP gateway, UDS daemon)
+    // since they all end up here regardless of which DietStore instance calls it.
+    // Companion to MobileHTTPServer.frozenWriteMethods — remove both after the P1 gate passes.
+    public static var frozenForMigration = true
     public struct Meal: Codable, Equatable, Sendable, Identifiable {
         public var id: String
         public var ts: String
@@ -1361,6 +1366,9 @@ public final class DietStore: @unchecked Sendable {
     }
 
     private func persist() throws {
+        guard !Self.frozenForMigration else {
+            throw NSError(domain: "diet", code: -32000, userInfo: [NSLocalizedDescriptionKey: "frozen_for_migration"])
+        }
         try FileManager.default.createDirectory(
             at: url.deletingLastPathComponent(),
             withIntermediateDirectories: true

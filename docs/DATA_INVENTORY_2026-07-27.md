@@ -65,14 +65,15 @@ Meetings/2026/07/dogfood-1783648014.md → 실파일 존재 (iCloud vault 자체
 
 **⚠️ 액션플랜 C-1/C-4 정정 사항**: 문서는 "`Meetings/` 인덱스 7건 중 파일 실존 3건 → 4건 stale, vault md 225 vs 인덱스 217 → 불일치 8건"이라고 기재했으나, **실측 결과 stale 0건 / 미인덱스 4건 / 불일치 총 4건**이다. 원인은 (a) iCloud vault 자체에 문서 작성 시점 이후(또는 미인지 상태로) `Meetings/` 서브폴더가 이미 존재했고 dogfood 테스트 파일 4건이 그 안에 실존했으며, (b) 정규화 없이 비교하면 전량이 불일치로 잘못 잡히는 문제가 있었기 때문이다. **P1 이관 목표 행수는 이 문서의 실측치를 기준으로 한다.**
 
-### P1 이관 목표 행수 (확정)
+### P1 이관 목표 행수 (확정 — **§8의 P0-8 중 드리프트 반영, 224→225로 갱신**)
 ```
-vault_md 이관 대상  = 224(현재 인덱스, obsidian) − 7(Meetings, F-1 제외) + 4(신규 미인덱스) = 221
+vault_md 이관 대상  = 225(§8 최종 안정화 시점 인덱스, obsidian) − 7(Meetings, F-1 제외) + 4(신규 미인덱스) = 222
 notes_app           = 19  (note_mirror 그대로)
-knowledge_chunk     = 621 전량 마이그레이션 대상이나, Meetings 소속 chunk는 제외 후 재계산 필요 (P1에서 unit_id 기준 필터링)
+knowledge_chunk     = 627(§8 최종치) 전량 마이그레이션 대상이나, Meetings 소속 chunk는 제외 후 재계산 필요 (P1에서 unit_id 기준 필터링)
 diet_meal / workout / metric = 25 / 8 / 8
 inbox_item          = 2 (전부 promoted)
 ```
+> 224→225, 621→627로 바뀐 이유: P0-5에서 vault에 추가한 참조 노트(`CyberSourceKey_20250918223005.md`) 1건이 P0-8 중 자동 재인덱싱으로 정당하게 인덱스에 반영됨 (§8 "실측 추가 발견 2"). 4건의 미인덱스 목록 자체는 변하지 않았다(§2 위 표).
 
 ## 3. Vault 구성 (실측 — 크기 **정정**)
 
@@ -136,15 +137,20 @@ inbox.json  items 2 (전부 status=promoted)
 브랜치: refactor/web-p0
 ```
 
-동결 시점(2026-07-27) 해시:
+동결 시점(2026-07-27, **최종 안정화 이후**) 해시 — `PRAGMA wal_checkpoint(TRUNCATE)` 실행 후 측정:
 ```
-1ce6f78be895005b150f52dbfb50ea258d5162905bada2d385389d2b105ce41a  ~/Knowledge/index/knowledge.db
+8610efe19d3e0332708a33b06d770e50b8fb83f2fae78ee88ff5c9f3e8e02649  ~/Knowledge/index/knowledge.db
 87e444e7e6485f19b8d8b444e67a5696dd902a0c3a8a5b834b07de15082cbf28  ~/Knowledge/services/diet/diet.json
 473bf5840f243a5a4e31ceeef741ead4f76e1b4f443b03381cec1ce06a0fc8ca  ~/Knowledge/services/inbox/inbox.json
 ```
-→ P1 착수 시점에 재계산해 동일한지 확인 (G1-6).
+→ P1 착수 시점에 재계산해 동일한지 확인 (G1-6). **주의**: `knowledge.db`는 WAL 모드라 `-wal` 파일에 커밋되지 않은 변경이 남아있을 수 있다. 순수 `knowledge.db` 해시만 비교하면 실제 변경을 놓칠 수 있으므로, G1-6 재확인 시 먼저 `sqlite3 ~/Knowledge/index/knowledge.db "PRAGMA wal_checkpoint(TRUNCATE);"`로 체크포인트한 뒤 해시를 비교할 것.
 
-**실측 추가 발견**: 문서 P0-8 초안은 `MobileHTTPServer.swift`의 `handleRPC`(JSON-RPC 디스패치) 진입부만 동결 대상으로 명시했으나, 실측 결과 `/v1/chat`(자연어 채팅) 경로의 `handleDietChat`이 `diet.logWorkout`/`diet.logMeal`을 **`handleRPC`를 거치지 않고 직접 호출**하고 있어 최초 가드만으로는 우회 가능했다. 같은 커밋에서 `handleDietChat`의 두 쓰기 분기에도 동일 가드를 추가해 막았다 (G0-4에서 `/v1/chat` 경로까지 실제 curl로 검증 완료).
+**실측 추가 발견 1 — `/v1/chat` 우회**: 문서 P0-8 초안은 `MobileHTTPServer.swift`의 `handleRPC`(JSON-RPC 디스패치) 진입부만 동결 대상으로 명시했으나, 실측 결과 `/v1/chat`(자연어 채팅) 경로의 `handleDietChat`이 `diet.logWorkout`/`diet.logMeal`을 **`handleRPC`를 거치지 않고 직접 호출**하고 있어 최초 가드만으로는 우회 가능했다. 같은 커밋에서 `handleDietChat`의 두 쓰기 분기에도 동일 가드를 추가해 막았다.
+
+**실측 추가 발견 2 — 로컬 UDS 자동 재인덱싱으로 실제 드리프트 발생, 재채취**: G0-1 최종 재확인 과정에서 `assistant.today`/`corpus.status`/검색 골든이 재현되지 않는 것을 발견했다. 원인 추적 결과, **Mac 앱 자신이 1.5초 주기 폴링에서 `AppModel.reindexSearchIfNeeded()`를 통해 UDS 소켓으로 `search.reindex`를 자동 호출**하고 있었고, 이 경로는 `MobileHTTPServer`를 전혀 거치지 않아(`PipelineService.handle`을 직접 호출) 최초 동결 가드가 적용되지 않았다. 이 자동 재인덱싱이 P0-5에서 vault에 추가한 참조 노트(`CyberSourceKey_20250918223005.md`) 1건을 실제로 인덱싱해 `knowledge_unit`이 224→225(총 243→244), `knowledge_chunk`가 621→627로 **실제 증가**했다.
+- 대응: `PipelineService.dispatch()`(UDS·게이트웨이 공통 진입점)와 `DietStore`/`InboxStore`의 `persist()`(모든 쓰기 경로의 공통 저장 지점)에 동일 동결 가드를 추가해, 앱 내 어떤 경로로 들어와도(네이티브 Mac UI, HTTP RPC, UDS RPC) 막히도록 했다.
+- 이 증가분은 **되돌리지 않는다** — 참조 노트는 P0-5에서 의도적으로 추가한 정당한 파일이며, 인덱스가 이를 반영하는 것 자체는 옳다. 대신 **골든 스냅샷을 이 안정화된 최종 상태(244/627/244)에서 재채취**했고(G0-1 재검증 PASS, diff 0), 이 문서의 §1 수치는 P0-3 채취 시점의 정직한 기록으로 그대로 두되 이 절에서 이후 변경을 추적한다.
+- 검증: 수정 적용 후 30초간 폴링이 활성 상태로 실행되는 동안 `knowledge_unit` 행수 불변(244) 확인. `corpus.sync`/`search.reindex`를 RPC로 직접 호출해도 `frozen_for_migration` 반환 확인.
 
 ---
 *이 문서는 P0 시점에 동결된다. 이후 수치가 바뀌면(재채취 등) 이 문서가 아니라 신규 날짜의 문서를 만든다.*

@@ -2,6 +2,10 @@ import Foundation
 
 /// Lightweight capture inbox (W2) — text only; promote writes a vault note file.
 public final class InboxStore: @unchecked Sendable {
+    // REFACTOR P0: golden snapshot baseline protection (docs/REFACTOR_ACTION_PLAN_WEB_2026-07.md §2.3).
+    // Companion to DietStore.frozenForMigration / MobileHTTPServer.frozenWriteMethods —
+    // remove all three after the P1 gate passes.
+    public static var frozenForMigration = true
     public struct Item: Codable, Equatable, Sendable, Identifiable {
         public var id: String
         public var ts: String
@@ -55,6 +59,9 @@ public final class InboxStore: @unchecked Sendable {
 
     public func promote(id: String) throws -> Item {
         lock.lock(); defer { lock.unlock() }
+        guard !Self.frozenForMigration else {
+            throw NSError(domain: "inbox", code: -32000, userInfo: [NSLocalizedDescriptionKey: "frozen_for_migration"])
+        }
         guard let idx = model.items.firstIndex(where: { $0.id == id }) else {
             throw NSError(domain: "inbox", code: 404, userInfo: [NSLocalizedDescriptionKey: "not found"])
         }
@@ -107,6 +114,9 @@ public final class InboxStore: @unchecked Sendable {
     }
 
     private func persist() throws {
+        guard !Self.frozenForMigration else {
+            throw NSError(domain: "inbox", code: -32000, userInfo: [NSLocalizedDescriptionKey: "frozen_for_migration"])
+        }
         try FileManager.default.createDirectory(
             at: url.deletingLastPathComponent(),
             withIntermediateDirectories: true

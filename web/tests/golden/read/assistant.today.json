@@ -9,8 +9,8 @@
       "protein_g": 0,
       "streak_days": 0,
       "suggest": {
-        "subtitle": "걷기 20분만 남겨도 좋아요",
-        "title": "오늘 운동은요?"
+        "subtitle": "단백질 목표에 도움이 돼요",
+        "title": "저녁을 기록해 주세요"
       },
       "target_kcal": 2185,
       "target_protein_g": 138,
@@ -49,8 +49,9 @@
       },
       {
         "kind": "diet_suggest",
-        "label": "오늘 운동은요?",
-        "subtitle": "걷기 20분만 남겨도 좋아요"
+        "label": "저녁을 기록해 주세요",
+        "slot": "저녁",
+        "subtitle": "단백질 목표에 도움이 돼요"
       }
     ],
     "timeline": [],

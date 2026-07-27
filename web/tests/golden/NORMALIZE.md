@@ -42,13 +42,22 @@ diet.fasting.status, diet.ping, health.sync_status`
 - `results/<id>.json`: `{id, category, q, count, doc_ids}` — `doc_id` 는 API가 반환한 순위 그대로(랭킹 알고리즘 회귀 대상이므로 정렬하지 않음).
 - 실측 확인: `결제`(20건) vs `결제를`(3건) — 조사 결합형 과매칭 현상이 현재 FTS5로도 재현됨 (방향성 §5.1, D-4 논거).
 
-## G0-1 재현성 검증 결과 (2026-07-27)
+## G0-1 재현성 검증 결과 (2026-07-27, 1차 — P0-8 이전)
 ```
 bash web/scripts/capture-golden.sh --out /tmp/g1
 bash web/scripts/capture-golden.sh --out /tmp/g2
 diff -r /tmp/g1 /tmp/g2   # → 출력 없음, exit=0
 ```
 → **PASS.** 정규화 후 완전 재현됨.
+
+## G0-1 재검증 (2026-07-27, 2차 — P0-8 심화 수정 후, **현재 저장소의 골든은 이 버전**)
+P0-8 진행 중 발견한 자동 재인덱싱 드리프트(`docs/DATA_INVENTORY_2026-07-27.md` §8 "실측 추가 발견 2" 참조)로 1차 골든이 무효화되어 재채취했다.
+```
+bash web/scripts/capture-golden.sh --out /tmp/gr1
+bash web/scripts/capture-golden.sh --out /tmp/gr2
+diff -r /tmp/gr1 /tmp/gr2   # → 출력 없음, exit=0
+```
+→ **PASS.** `knowledge_unit`이 244(기존 243 대비 +1 — P0-5에서 추가한 참조 노트가 정당하게 반영됨)로 안정화된 상태에서 재현성 확인. 이후 P1 마이그레이션 목표 행수도 이 최종 상태를 기준으로 한다(§1의 원 수치는 P0-3 시점 기록으로 그대로 둠 — §8 참조).
 
 ## 재채취가 필요한 경우
 - P0-8 쓰기 동결이 깨졌다고 판단될 때(G1-6 실패).

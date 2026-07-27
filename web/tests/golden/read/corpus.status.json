@@ -5,7 +5,7 @@
     "files": 0,
     "meetings": 0,
     "notes": 19,
-    "obsidian": 224,
+    "obsidian": 225,
     "sources": [
       {
         "enabled": true,
@@ -35,7 +35,7 @@
         "last_sync_at": "<TS>",
         "root_path": "/Users/heejunyoo/Obsidian/Main",
         "source_type": "obsidian",
-        "unit_count": 224
+        "unit_count": 225
       },
       {
         "enabled": true,
@@ -45,9 +45,9 @@
         "last_sync_at": "<TS>",
         "root_path": "/Users/heejunyoo/Library/Mobile Documents/com~apple~CloudDocs/heejun_pkm/heejun_PKM",
         "source_type": "obsidian",
-        "unit_count": 224
+        "unit_count": 225
       }
     ],
-    "total_units": 243
+    "total_units": 244
   }
 }

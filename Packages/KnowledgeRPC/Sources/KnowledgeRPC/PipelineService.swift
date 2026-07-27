@@ -5,6 +5,13 @@ import KnowledgeWorkers
 
 /// In-process request handler used by the daemon (and tests).
 public final class PipelineService: @unchecked Sendable {
+    // REFACTOR P0: golden snapshot baseline protection (docs/REFACTOR_ACTION_PLAN_WEB_2026-07.md §2.3).
+    // This is the single choke point for BOTH the Mac app's local UDS socket calls
+    // (e.g. AppModel.reindexSearchIfNeeded, which bypasses MobileHTTPServer entirely) and
+    // the gateway's fallback dispatch — found because a real corpus.status/search drift
+    // appeared in golden re-capture despite MobileHTTPServer's guard already being in place.
+    // Companion to DietStore/InboxStore.frozenForMigration — remove after the P1 gate passes.
+    public static var frozenWriteMethods: Set<RPCMethod> = [.searchReindex, .corpusSync]
     public static let version = DaemonVersion.current
     private let store: KnowledgeStore
     private let policy: PeerPolicy
@@ -61,7 +68,11 @@ public final class PipelineService: @unchecked Sendable {
     }
 
     private func dispatch(method: String, params: JSONValue?) throws -> JSONValue {
-        switch RPCMethod(rawValue: method) {
+        let resolved = RPCMethod(rawValue: method)
+        if let resolved, Self.frozenWriteMethods.contains(resolved) {
+            throw JSONRPCError.app("frozen_for_migration", code: -32000)
+        }
+        switch resolved {
         case .ping:
             return .object(["pong": .bool(true)])
 
