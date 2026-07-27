@@ -20,6 +20,10 @@ struct DietMobileView: View {
     @State private var mealItems = ""
     @State private var mealKcal = ""
     @State private var mealProtein = ""
+    @State private var mealAmount = ""
+    @State private var mealUnit: DietNutritionCalc.Unit = .g
+    @State private var mealAutoNote = ""
+    @State private var mealKcalManual = false
     @State private var workoutKind = "걷기"
     @State private var workoutMin = "30"
     @State private var weightKg = ""
@@ -45,6 +49,9 @@ struct DietMobileView: View {
     @State private var goalsError: String?
     @State private var pendingDelete: PendingDelete?
     @State private var deleteBusyId: String?
+    @State private var fastingBusy = false
+    @State private var morningWeightOnly = true
+    @State private var fastingHours: Double = 14
 
     private struct PendingDelete: Identifiable {
         var id: String
@@ -76,6 +83,8 @@ struct DietMobileView: View {
                     VStack(alignment: .leading, spacing: KSpace.x5) {
                         header
                         planCard
+                        fastingCard
+                        morningWeightCard
                         suggestCard
                         todayHero
                         slotChips
@@ -226,10 +235,225 @@ struct DietMobileView: View {
                                 .font(.caption)
                                 .foregroundStyle(KColor.grey500)
                         }
+                        Text("규칙 계산 (Mifflin + 적자) · AI API 미사용")
+                            .font(.system(size: 11))
+                            .foregroundStyle(KColor.grey500)
                         Button("정보 수정") { showProfile = true }
                             .font(.caption.weight(.semibold))
                             .foregroundStyle(KColor.blue500)
                     }
+                }
+            }
+        }
+    }
+
+    private var fastingDict: [String: Any] {
+        dashboard["fasting"] as? [String: Any] ?? [:]
+    }
+
+    private var fastingActive: Bool {
+        (fastingDict["active"] as? Bool) == true
+    }
+
+    private var fastingHourPresets: [Double] {
+        if let arr = fastingDict["hour_presets"] as? [Double], !arr.isEmpty { return arr }
+        if let arr = fastingDict["hour_presets"] as? [Int] { return arr.map(Double.init) }
+        return [12, 14, 16, 18, 20]
+    }
+
+    private var fastingEndPreviewLine: String {
+        if fastingActive {
+            return (fastingDict["preview_line"] as? String)
+                ?? (fastingDict["ends_at_label"] as? String).map { "\($0)에 끝나요" }
+                ?? ""
+        }
+        // Local preview when idle so chips update instantly without round-trip
+        let end = Date().addingTimeInterval(fastingHours * 3600)
+        let labels = localDayTimeLabels(start: Date(), end: end)
+        return "\(Int(fastingHours))시간 하면 \(labels.end)에 끝나요"
+    }
+
+    private func localDayTimeLabels(start: Date, end: Date) -> (start: String, end: String) {
+        let cal = Calendar.current
+        let timeFmt = DateFormatter()
+        timeFmt.locale = Locale(identifier: "ko_KR")
+        timeFmt.dateFormat = "a h:mm"
+        let dayFmt = DateFormatter()
+        dayFmt.locale = Locale(identifier: "ko_KR")
+        dayFmt.dateFormat = "M월 d일"
+        func word(_ d: Date) -> String {
+            let today = cal.startOfDay(for: Date())
+            let d0 = cal.startOfDay(for: d)
+            switch cal.dateComponents([.day], from: today, to: d0).day ?? 0 {
+            case 0: return "오늘"
+            case 1: return "내일"
+            case 2: return "모레"
+            default: return dayFmt.string(from: d)
+            }
+        }
+        return ("\(word(start)) \(timeFmt.string(from: start))", "\(word(end)) \(timeFmt.string(from: end))")
+    }
+
+    private var healthRefLines: [String] {
+        let href = fastingDict["health_reference"] as? [String: Any] ?? [:]
+        return href["lines"] as? [String] ?? []
+    }
+
+    private var fastingCard: some View {
+        KCard {
+            VStack(alignment: .leading, spacing: 10) {
+                Text("간헐적 단식")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(KColor.grey500)
+                Text((fastingDict["label"] as? String) ?? "간헐적 단식 대기")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(KColor.grey900)
+
+                if !fastingEndPreviewLine.isEmpty {
+                    Text(fastingEndPreviewLine)
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(KColor.blue500)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                if let detail = fastingDict["detail_line"] as? String, fastingActive {
+                    Text(detail)
+                        .font(.caption)
+                        .foregroundStyle(KColor.grey500)
+                }
+
+                if !fastingActive {
+                    Text("공복 시간")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(KColor.grey500)
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 8) {
+                            ForEach(fastingHourPresets, id: \.self) { h in
+                                let selected = Int(fastingHours) == Int(h)
+                                Button {
+                                    fastingHours = h
+                                } label: {
+                                    Text("\(Int(h))시간")
+                                        .font(.system(size: 13, weight: .semibold))
+                                        .padding(.horizontal, 12)
+                                        .padding(.vertical, 8)
+                                        .background(selected ? KColor.blue500 : KColor.blue50)
+                                        .foregroundStyle(selected ? Color.white : KColor.blue500)
+                                        .clipShape(Capsule())
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
+                    }
+                    Text({
+                        let L = localDayTimeLabels(
+                            start: Date(),
+                            end: Date().addingTimeInterval(fastingHours * 3600)
+                        )
+                        return "시작 \(L.start) → 종료 \(L.end)"
+                    }())
+                        .font(.caption)
+                        .foregroundStyle(KColor.grey500)
+                }
+
+                if let hint = fastingDict["hint"] as? String, !hint.isEmpty {
+                    Text(hint)
+                        .font(.caption)
+                        .foregroundStyle(KColor.grey500)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                if fastingActive {
+                    let prog = doubleVal(fastingDict["progress"])
+                    ProgressView(value: min(1, max(0, prog)))
+                        .tint(KColor.blue500)
+                    if let rem = fastingDict["remaining_hours"] as? Double {
+                        Text(String(format: "남은 시간 약 %.1f시간", rem))
+                            .font(.caption)
+                            .foregroundStyle(KColor.grey500)
+                    }
+                }
+
+                // Optional health / diet reference (never required)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("참고 정보 (없어도 됨)")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(KColor.grey500)
+                    if healthRefLines.isEmpty {
+                        Text("건강·식사 참고 데이터가 없어요. 직접 기록만으로 단식·목표 예상이 동작해요.")
+                            .font(.system(size: 11))
+                            .foregroundStyle(KColor.grey500)
+                    } else {
+                        ForEach(Array(healthRefLines.prefix(8).enumerated()), id: \.offset) { _, line in
+                            Text("· \(line)")
+                                .font(.system(size: 11))
+                                .foregroundStyle(KColor.grey700)
+                        }
+                        Text("워치/건강 값은 참고만 하며, 목표 계산 우선순위는 공복 직접 체중이에요.")
+                            .font(.system(size: 10))
+                            .foregroundStyle(KColor.grey500)
+                    }
+                }
+                .padding(.top, 2)
+
+                HStack(spacing: 12) {
+                    if fastingActive {
+                        Button {
+                            Task { await endFasting() }
+                        } label: {
+                            if fastingBusy { ProgressView() } else { Text("단식 종료") }
+                        }
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(KColor.blue500)
+                        .disabled(fastingBusy)
+                    } else {
+                        Button {
+                            Task { await startFasting() }
+                        } label: {
+                            if fastingBusy {
+                                ProgressView()
+                            } else {
+                                Text("\(Int(fastingHours))시간 단식 시작")
+                            }
+                        }
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(KColor.blue500)
+                        .disabled(fastingBusy || !core.isPaired)
+                    }
+                }
+                Text("첫 식사 기록 시 단식이 자동 종료돼요.")
+                    .font(.system(size: 11))
+                    .foregroundStyle(KColor.grey500)
+            }
+        }
+    }
+
+    private var morningWeightCard: some View {
+        KCard {
+            VStack(alignment: .leading, spacing: 10) {
+                Text("아침 공복 체중")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(KColor.grey500)
+                Text((fastingDict["weight_prompt"] as? String)
+                     ?? "매일 아침 공복에 재면 목표 도달 예상이 안정적이에요.")
+                    .font(.caption)
+                    .foregroundStyle(KColor.grey500)
+                    .fixedSize(horizontal: false, vertical: true)
+                if let w = fastingDict["preferred_weight_kg"] as? Double
+                    ?? dashboard["latest_weight_kg"] as? Double {
+                    Text(String(format: "최근 기준 체중 %.1f kg", w))
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundStyle(KColor.grey900)
+                }
+                HStack(spacing: 8) {
+                    TextField("kg", text: $weightKg)
+                        .keyboardType(.decimalPad)
+                        .textFieldStyle(.roundedBorder)
+                    Button("공복 체중 저장") {
+                        morningWeightOnly = true
+                        Task { await saveMorningWeight() }
+                    }
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(KColor.blue500)
+                    .disabled(weightKg.isEmpty || !core.isPaired)
                 }
             }
         }
@@ -350,7 +574,7 @@ struct DietMobileView: View {
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(KColor.grey500)
                 HStack {
-                    TextField("예: \(selectedSlot) 샐러드 400kcal", text: $quickLine)
+                    TextField("예: \(selectedSlot) 닭가슴살 150g · 커피 300ml", text: $quickLine)
                         .textInputAutocapitalization(.never)
                         .padding(12)
                         .background(KColor.grey100)
@@ -367,7 +591,7 @@ struct DietMobileView: View {
 
     private var mealPresetRow: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("빠른 식사 (기본 분량 · 대략 kcal)")
+            Text("빠른 식사 (기본 분량 · g/ml 비례)")
                 .font(.system(size: 13, weight: .semibold))
                 .foregroundStyle(KColor.grey500)
             Text("그램은 대략값이에요. 정확히 몰라도 탭만 하면 됩니다.")
@@ -646,9 +870,39 @@ struct DietMobileView: View {
                         ForEach(slots, id: \.self) { Text($0).tag($0) }
                     }
                     .pickerStyle(.segmented)
-                    TextField("음식", text: $mealItems)
-                    TextField("kcal", text: $mealKcal).keyboardType(.decimalPad)
-                    TextField("단백질 g", text: $mealProtein).keyboardType(.decimalPad)
+                    TextField("음식 (예: 닭가슴살)", text: $mealItems)
+                        .onChange(of: mealItems) { _, _ in recomputeMealNutrition() }
+                    HStack {
+                        TextField("분량", text: $mealAmount)
+                            .keyboardType(.decimalPad)
+                            .onChange(of: mealAmount) { _, _ in
+                                mealKcalManual = false
+                                recomputeMealNutrition()
+                            }
+                        Picker("단위", selection: $mealUnit) {
+                            Text("g").tag(DietNutritionCalc.Unit.g)
+                            Text("ml").tag(DietNutritionCalc.Unit.ml)
+                        }
+                        .pickerStyle(.segmented)
+                        .frame(maxWidth: 120)
+                        .onChange(of: mealUnit) { _, _ in
+                            mealKcalManual = false
+                            recomputeMealNutrition()
+                        }
+                    }
+                    if !mealAutoNote.isEmpty {
+                        Text(mealAutoNote)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    TextField("kcal (자동·수정 가능)", text: $mealKcal)
+                        .keyboardType(.decimalPad)
+                        .onChange(of: mealKcal) { _, _ in mealKcalManual = true }
+                    TextField("단백질 g (자동·수정 가능)", text: $mealProtein)
+                        .keyboardType(.decimalPad)
+                    Text("g/ml만 넣어도 kcal·단백질을 대략 계산해요.")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
                     Button("식사 저장") { Task { await saveMeal() } }
                 }
                 Section("운동") {
@@ -1023,9 +1277,25 @@ struct DietMobileView: View {
                 let minutes = Int(line.filter(\.isNumber)) ?? 20
                 try await core.dietLogWorkout(kind: line, minutes: minutes, intensity: nil)
                 showFlash("운동 \(minutes)분 저장됐어요")
+            } else if let est = DietNutritionCalc.parse(line) {
+                let text = line.contains(selectedSlot) ? est.itemLine : "\(selectedSlot) \(est.itemLine)"
+                try await core.dietLogMeal(
+                    items: [text],
+                    kcal: est.kcal,
+                    proteinG: est.proteinG,
+                    note: est.note
+                )
+                showFlash("\(est.itemLine) · ~\(Int(est.kcal))kcal · P\(Int(est.proteinG))g")
             } else {
-                let digits = line.components(separatedBy: CharacterSet.decimalDigits.inverted).filter { !$0.isEmpty }
-                let kcal = digits.first.flatMap { Double($0) }
+                // "샐러드 350kcal" still works
+                let kcal: Double? = {
+                    if let r = try? NSRegularExpression(pattern: #"(\d+(?:\.\d+)?)\s*kcal"#, options: .caseInsensitive),
+                       let m = r.firstMatch(in: line, range: NSRange(line.startIndex..., in: line)),
+                       let rr = Range(m.range(at: 1), in: line) {
+                        return Double(line[rr])
+                    }
+                    return nil
+                }()
                 let text = line.contains(selectedSlot) ? line : "\(selectedSlot) \(line)"
                 try await core.dietLogMeal(items: [text], kcal: kcal, proteinG: nil, note: line)
                 showFlash("식사 저장됐어요")
@@ -1040,19 +1310,66 @@ struct DietMobileView: View {
         }
     }
 
+    private func recomputeMealNutrition() {
+        let name = mealItems.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !name.isEmpty else {
+            mealAutoNote = ""
+            return
+        }
+        if let amt = Double(mealAmount.trimmingCharacters(in: .whitespacesAndNewlines)), amt > 0 {
+            if let e = DietNutritionCalc.estimate(foodQuery: name, amount: amt, unit: mealUnit) {
+                applyEstimate(e, forceKcal: !mealKcalManual)
+            }
+            return
+        }
+        if let e = DietNutritionCalc.parse(name, defaultUnit: mealUnit) {
+            mealAmount = e.amount == e.amount.rounded() ? "\(Int(e.amount))" : String(format: "%.1f", e.amount)
+            mealUnit = e.unit
+            applyEstimate(e, forceKcal: !mealKcalManual)
+        }
+    }
+
+    private func applyEstimate(_ e: DietNutritionCalc.Estimate, forceKcal: Bool) {
+        if forceKcal {
+            mealKcal = e.kcal == e.kcal.rounded() ? "\(Int(e.kcal))" : String(format: "%.0f", e.kcal)
+            mealProtein = String(format: "%.1f", e.proteinG)
+        } else if mealProtein.isEmpty {
+            mealProtein = String(format: "%.1f", e.proteinG)
+        }
+        mealAutoNote = e.matchedCatalog
+            ? "자동: ~\(Int(e.kcal))kcal · 단백질 \(String(format: "%.1f", e.proteinG))g"
+            : e.note
+    }
+
     private func saveMeal() async {
-        let items = mealItems.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
+        var items = mealItems.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
         guard !items.isEmpty else {
             showFlash("음식 이름을 입력해 주세요")
             return
         }
+        var kcal = Double(mealKcal)
+        var protein = Double(mealProtein)
+        var note: String? = nil
+        if (kcal == nil || kcal == 0), let amt = Double(mealAmount), amt > 0 {
+            if let e = DietNutritionCalc.estimate(foodQuery: items.joined(separator: " "), amount: amt, unit: mealUnit) {
+                kcal = e.kcal
+                protein = protein ?? e.proteinG
+                note = e.note
+                items = [e.itemLine]
+            }
+        } else if let amt = Double(mealAmount), amt > 0 {
+            let aStr = amt == amt.rounded() ? "\(Int(amt))" : String(format: "%.1f", amt)
+            if let first = items.first, !first.contains(mealUnit.rawValue) {
+                items[0] = "\(first) \(aStr)\(mealUnit.rawValue)"
+            }
+        }
         let labeled = items.map { $0.contains(selectedSlot) ? $0 : "\(selectedSlot) \($0)" }
         do {
-            try await core.dietLogMeal(items: labeled, kcal: Double(mealKcal), proteinG: Double(mealProtein), note: nil)
-            mealItems = ""; mealKcal = ""; mealProtein = ""
+            try await core.dietLogMeal(items: labeled, kcal: kcal, proteinG: protein, note: note)
+            mealItems = ""; mealKcal = ""; mealProtein = ""; mealAmount = ""; mealAutoNote = ""; mealKcalManual = false
             showLog = false
             kHapticSuccess()
-            showFlash("식사 저장됐어요")
+            showFlash("식사 저장됐어요\(kcal.map { " · \(Int($0))kcal" } ?? "")")
             await reload()
         } catch {
             err = error.localizedDescription
@@ -1081,7 +1398,11 @@ struct DietMobileView: View {
             return
         }
         do {
-            try await core.dietLogMetric(weightKg: Double(weightKg), sleepH: Double(sleepH))
+            try await core.dietLogMetric(
+                weightKg: Double(weightKg),
+                sleepH: Double(sleepH),
+                morningFasted: morningWeightOnly && Double(weightKg) != nil
+            )
             weightKg = ""; sleepH = ""
             showLog = false
             kHapticSuccess()
@@ -1090,6 +1411,65 @@ struct DietMobileView: View {
         } catch {
             err = error.localizedDescription
             showFlash("지표 저장 실패: \(error.localizedDescription)")
+            kHapticLight()
+        }
+    }
+
+    private func saveMorningWeight() async {
+        guard let w = Double(weightKg.trimmingCharacters(in: .whitespacesAndNewlines)), w > 30, w < 300 else {
+            showFlash("체중(kg)을 확인해 주세요")
+            return
+        }
+        do {
+            try await core.dietLogMetric(weightKg: w, sleepH: nil, morningFasted: true)
+            weightKg = ""
+            kHapticSuccess()
+            showFlash(String(format: "공복 체중 %.1fkg 저장 · 목표 도달 예상 갱신", w))
+            feedback.success(String(format: "공복 %.1fkg 반영", w))
+            await reload()
+        } catch {
+            err = error.localizedDescription
+            showFlash("저장 실패: \(error.localizedDescription)")
+            feedback.error(error.localizedDescription)
+            kHapticLight()
+        }
+    }
+
+    private func startFasting() async {
+        fastingBusy = true
+        defer { fastingBusy = false }
+        do {
+            let r = try await core.dietFastingStart(targetHours: fastingHours)
+            kHapticSuccess()
+            let endLabel = r["ends_at_label"] as? String
+            let label = endLabel.map { "\(Int(fastingHours))h 단식 시작 · \($0) 종료" }
+                ?? (r["label"] as? String)
+                ?? "\(Int(fastingHours))시간 단식 시작"
+            showFlash(label)
+            feedback.success(label)
+            if let plan = r["plan"] as? [String: Any], let eta = plan["eta_text"] as? String {
+                planEta = eta
+            }
+            await reload()
+        } catch {
+            err = error.localizedDescription
+            feedback.error(error.localizedDescription)
+            kHapticLight()
+        }
+    }
+
+    private func endFasting() async {
+        fastingBusy = true
+        defer { fastingBusy = false }
+        do {
+            _ = try await core.dietFastingEnd(reason: "manual")
+            kHapticSuccess()
+            showFlash("단식을 종료했어요")
+            feedback.info("단식 종료 · 식사 창")
+            await reload()
+        } catch {
+            err = error.localizedDescription
+            feedback.error(error.localizedDescription)
             kHapticLight()
         }
     }

@@ -200,6 +200,7 @@ struct HomeMobileView: View {
     @State private var goReview = false
     @State private var goDiet = false
     @State private var goAsk = false
+    @ObservedObject private var hk = HealthKitBridge.shared
 
     var body: some View {
         NavigationStack {
@@ -240,6 +241,54 @@ struct HomeMobileView: View {
                                             SettingsMobileView()
                                         } label: {
                                             Text("설정 열기")
+                                                .font(.system(size: 14, weight: .semibold))
+                                                .foregroundStyle(KColor.blue500)
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        // Health permission / empty sync — do not silently pretend Watch data is live
+                        if core.isPaired && hk.isAvailable && hk.needsUserAction {
+                            KCard {
+                                VStack(alignment: .leading, spacing: 10) {
+                                    Text("워치·건강 연결")
+                                        .font(.system(size: 15, weight: .semibold))
+                                        .foregroundStyle(KColor.grey900)
+                                    Text(hk.statusTitle)
+                                        .font(.system(size: 13, weight: .semibold))
+                                        .foregroundStyle(KColor.blue500)
+                                    Text(hk.statusDetail)
+                                        .font(.system(size: 13))
+                                        .foregroundStyle(KColor.grey500)
+                                        .fixedSize(horizontal: false, vertical: true)
+                                    if let first = hk.guideSteps.first {
+                                        Text(first)
+                                            .font(.system(size: 12))
+                                            .foregroundStyle(KColor.grey500)
+                                            .fixedSize(horizontal: false, vertical: true)
+                                    }
+                                    HStack(spacing: 12) {
+                                        if hk.phase == .shouldRequest {
+                                            Button("권한 허용하기") {
+                                                Task {
+                                                    _ = await hk.requestAuthorization()
+                                                    await core.syncHealthKitIfPossible(forceAuth: false)
+                                                }
+                                            }
+                                            .font(.system(size: 14, weight: .semibold))
+                                            .foregroundStyle(KColor.blue500)
+                                        }
+                                        Button("설정에서 허용") {
+                                            hk.openAppSettings()
+                                        }
+                                        .font(.system(size: 14, weight: .semibold))
+                                        .foregroundStyle(KColor.blue500)
+                                        NavigationLink {
+                                            SettingsMobileView()
+                                        } label: {
+                                            Text("안내 전체")
                                                 .font(.system(size: 14, weight: .semibold))
                                                 .foregroundStyle(KColor.blue500)
                                         }
@@ -740,6 +789,11 @@ struct ReviewMobileView: View {
 
     var body: some View {
         List {
+            Section {
+                Text("전사·요약을 직접 읽어 확인하는 화면이에요. 물어보기 검색과는 별개예요.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
             if items.isEmpty && !busy {
                 Section {
                     Text(core.connected
@@ -751,21 +805,21 @@ struct ReviewMobileView: View {
             }
             ForEach(Array(items.enumerated()), id: \.offset) { _, m in
                 let id = (m["id"] as? String) ?? ""
-                VStack(alignment: .leading, spacing: 8) {
-                    Text((m["title"] as? String).flatMap { $0.isEmpty ? nil : $0 } ?? "제목 없음")
-                        .font(.headline)
-                    Text(m["status"] as? String ?? "")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    Button {
-                        Task { await accept(id: id) }
-                    } label: {
-                        if acceptingId == id { ProgressView() }
-                        else { Text("노트에 저장").fontWeight(.semibold) }
+                let title = (m["title"] as? String).flatMap { $0.isEmpty ? nil : $0 } ?? "제목 없음"
+                NavigationLink {
+                    ReviewDetailMobileView(meetingId: id, titleHint: title)
+                } label: {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text(title).font(.headline)
+                        Text(m["status"] as? String ?? "")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        Text("탭하여 전사·요약 전체 보기")
+                            .font(.caption2)
+                            .foregroundStyle(KColor.blue500)
                     }
-                    .disabled(id.isEmpty || acceptingId != nil || !core.connected)
+                    .padding(.vertical, 4)
                 }
-                .padding(.vertical, 4)
             }
         }
         .navigationTitle("확인함")
@@ -784,16 +838,180 @@ struct ReviewMobileView: View {
             feedback.error("확인함을 불러오지 못했어요: \(error.localizedDescription)")
         }
     }
+}
 
-    private func accept(id: String) async {
-        guard !id.isEmpty else {
-            feedback.error("저장할 항목 id가 없어요")
+/// Full transcript + summary reader on iPhone.
+struct ReviewDetailMobileView: View {
+    @EnvironmentObject var core: CoreClient
+    @EnvironmentObject var feedback: ActionFeedback
+    let meetingId: String
+    let titleHint: String
+
+    @State private var detail: [String: Any] = [:]
+    @State private var busy = true
+    @State private var accepting = false
+    @State private var tab = 0 // 0 summary 1 transcript 2 note
+
+    var body: some View {
+        List {
+            if busy {
+                Section { ProgressView("불러오는 중…") }
+            } else {
+                Section {
+                    Text((detail["title"] as? String) ?? titleHint)
+                        .font(.title3.weight(.bold))
+                    if let st = detail["status"] as? String, !st.isEmpty {
+                        Text(st).font(.caption).foregroundStyle(.secondary)
+                    }
+                    Text("요약·전사는 직접 확인용 · 물어보기와 별개")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+                Section {
+                    Picker("", selection: $tab) {
+                        Text("요약").tag(0)
+                        Text("전사").tag(1)
+                        if detail["vault_markdown"] != nil { Text("노트").tag(2) }
+                    }
+                    .pickerStyle(.segmented)
+                }
+                if tab == 0 {
+                    summarySections
+                } else if tab == 1 {
+                    transcriptSections
+                } else {
+                    noteSection
+                }
+                if (detail["status"] as? String) == "review_needed" {
+                    Section {
+                        Button {
+                            Task { await accept() }
+                        } label: {
+                            if accepting { ProgressView() }
+                            else { Text("노트에 저장").fontWeight(.semibold) }
+                        }
+                        .disabled(accepting || !core.connected)
+                    }
+                }
+            }
+        }
+        .navigationTitle("기록 보기")
+        .navigationBarTitleDisplayMode(.inline)
+        .task { await load() }
+        .refreshable { await load() }
+    }
+
+    @ViewBuilder
+    private var summarySections: some View {
+        let s = detail["summary"] as? [String: Any] ?? [:]
+        let one = (s["one_line"] as? String) ?? (detail["one_line"] as? String) ?? ""
+        if !one.isEmpty {
+            Section("한 줄") {
+                Text(one).font(.body.weight(.semibold))
+            }
+        }
+        bulletSection("이야기한 것", s["discussion"] as? [String] ?? [])
+        bulletSection("결정", s["decisions"] as? [String] ?? [])
+        bulletSection("할 일", s["actions"] as? [String] ?? [])
+        bulletSection("남은 이슈", s["open"] as? [String] ?? [])
+        if one.isEmpty
+            && (s["discussion"] as? [String] ?? []).isEmpty
+            && (s["decisions"] as? [String] ?? []).isEmpty {
+            Section {
+                Text("요약을 불러오지 못했어요. 전사 탭을 확인해 주세요.")
+                    .foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var transcriptSections: some View {
+        let t = detail["transcript"] as? [String: Any] ?? [:]
+        let segs = t["segments"] as? [[String: Any]] ?? []
+        let full = t["full_text"] as? String ?? ""
+        if let n = t["segment_count"] as? Int ?? detail["transcript_segment_count"] as? Int {
+            Section {
+                Text("\(n)구간")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        if !segs.isEmpty {
+            Section("시간순 전사") {
+                ForEach(Array(segs.enumerated()), id: \.offset) { _, seg in
+                    let time = seg["time_label"] as? String ?? ""
+                    let text = seg["text"] as? String ?? ""
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(time)
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(KColor.blue500)
+                        Text(text)
+                            .font(.body)
+                    }
+                    .padding(.vertical, 2)
+                }
+            }
+        }
+        if !full.isEmpty {
+            Section("연속 텍스트") {
+                Text(full)
+                    .font(.body)
+                    .textSelection(.enabled)
+            }
+        }
+        if segs.isEmpty && full.isEmpty {
+            Section {
+                Text("전사 파일이 없거나 비어 있어요.")
+                    .foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var noteSection: some View {
+        if let md = detail["vault_markdown"] as? String, !md.isEmpty {
+            Section("저장된 노트") {
+                Text(md).font(.body).textSelection(.enabled)
+            }
+        } else {
+            Section {
+                Text("아직 vault 노트가 없어요.")
+                    .foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    private func bulletSection(_ title: String, _ items: [String]) -> some View {
+        Group {
+            if !items.isEmpty {
+                Section(title) {
+                    ForEach(Array(items.enumerated()), id: \.offset) { _, line in
+                        Text("· \(line)")
+                    }
+                }
+            }
+        }
+    }
+
+    private func load() async {
+        busy = true
+        defer { busy = false }
+        guard !meetingId.isEmpty else {
+            feedback.error("항목 id가 없어요")
             return
         }
-        acceptingId = id
-        defer { acceptingId = nil }
         do {
-            try await core.reviewAccept(id: id)
+            detail = try await core.reviewGet(id: meetingId)
+        } catch {
+            feedback.error("기록을 불러오지 못했어요: \(error.localizedDescription)")
+        }
+    }
+
+    private func accept() async {
+        accepting = true
+        defer { accepting = false }
+        do {
+            try await core.reviewAccept(id: meetingId)
             feedback.success("노트에 저장했어요")
             await load()
         } catch {
@@ -869,40 +1087,98 @@ struct SettingsMobileView: View {
                     }
                 }
             }
-            Section("Apple 건강 (W1)") {
+            Section {
                 if !hk.isAvailable {
-                    Text("이 기기에서 건강 데이터를 쓸 수 없어요.")
+                    Text(hk.statusTitle)
+                        .font(.subheadline.weight(.semibold))
+                    Text(hk.statusDetail)
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 } else {
-                    Text("워치·아이폰 운동·수면·체중을 앱을 열 때 Mac으로 가져와요. 쓰기는 하지 않아요.")
+                    LabeledContent("상태") {
+                        Text(hk.statusTitle)
+                            .foregroundStyle(hk.needsUserAction ? KColor.red500 : KColor.green500)
+                            .multilineTextAlignment(.trailing)
+                    }
+                    Text(hk.statusDetail)
                         .font(.caption)
                         .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+
+                    if !core.isPaired {
+                        Text("먼저 Mac Core와 페어링해야 건강 데이터를 보낼 수 있어요.")
+                            .font(.caption)
+                            .foregroundStyle(KColor.red500)
+                    }
+
+                    if !hk.guideSteps.isEmpty {
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text("허용 방법")
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(.secondary)
+                            ForEach(Array(hk.guideSteps.enumerated()), id: \.offset) { i, step in
+                                Text("\(i + 1). \(step)")
+                                    .font(.caption)
+                                    .foregroundStyle(KColor.grey700)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                        }
+                        .padding(.vertical, 4)
+                    }
+
                     Button {
                         Task {
                             healthBusy = true
-                            await core.syncHealthKitIfPossible(forceAuth: true)
+                            let ok = await hk.requestAuthorization()
                             healthBusy = false
-                            if let e = hk.lastError, !e.isEmpty, core.healthSyncLine.contains("실패") || core.healthSyncLine == e {
-                                feedback.error(e)
-                            } else if !core.healthSyncLine.isEmpty {
-                                if core.healthSyncLine.contains("실패") || core.healthSyncLine.contains("권한") {
-                                    feedback.error(core.healthSyncLine)
-                                } else {
-                                    feedback.success(core.healthSyncLine)
-                                }
+                            if ok {
+                                feedback.success("권한 요청을 완료했어요. 이어서 동기화해 주세요.")
                             } else {
-                                feedback.info("동기화할 건강 데이터가 없거나 권한이 필요해요")
+                                feedback.error(hk.lastError ?? "권한 요청에 실패했어요")
+                            }
+                        }
+                    } label: {
+                        Label(
+                            hk.phase == .shouldRequest ? "권한 허용하기" : "권한 다시 요청",
+                            systemImage: "heart.text.square"
+                        )
+                    }
+                    .disabled(healthBusy || !hk.isAvailable)
+
+                    Button {
+                        Task {
+                            healthBusy = true
+                            await core.syncHealthKitIfPossible(forceAuth: false)
+                            healthBusy = false
+                            if core.healthSyncLine.contains("반영") {
+                                feedback.success(core.healthSyncLine)
+                            } else if hk.needsUserAction || core.healthSyncLine.contains("권한") || core.healthSyncLine.contains("거부") {
+                                feedback.error(core.healthSyncLine.isEmpty ? hk.statusDetail : core.healthSyncLine)
+                            } else {
+                                feedback.info(core.healthSyncLine.isEmpty ? hk.statusDetail : core.healthSyncLine)
                             }
                         }
                     } label: {
                         if healthBusy {
                             ProgressView()
                         } else {
-                            Text(hk.authorizationRequested ? "건강 다시 동기화" : "건강 연결 · 동기화")
+                            Label("지금 Mac으로 동기화", systemImage: "arrow.triangle.2.circlepath")
                         }
                     }
                     .disabled(!core.isPaired || healthBusy)
+
+                    Button {
+                        hk.openAppSettings()
+                    } label: {
+                        Label("설정 앱에서 허용하기", systemImage: "gear")
+                    }
+
+                    Button {
+                        hk.openHealthApp()
+                    } label: {
+                        Label("건강 앱 열기 (데이터 확인)", systemImage: "heart.fill")
+                    }
+
                     if !core.healthSyncLine.isEmpty {
                         Text(core.healthSyncLine)
                             .font(.caption)
@@ -912,6 +1188,13 @@ struct SettingsMobileView: View {
                         Text(e).font(.caption).foregroundStyle(KColor.red500)
                     }
                 }
+            } header: {
+                Text("Apple 건강 (워치 → 앱)")
+            } footer: {
+                Text("읽기만 합니다. 거부 여부는 iOS 정책상 앱이 확정할 수 없어, 데이터가 비면 설정 안내를 띄워요.")
+            }
+            .task {
+                await hk.refreshPermissionState()
             }
             Section {
                 Button(role: .destructive) {

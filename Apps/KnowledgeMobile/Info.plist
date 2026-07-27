@@ -43,5 +43,9 @@
 	<string>워치·아이폰에 쌓인 운동·수면·체중을 Mac 개인 비서(식단·타임라인)에 반영합니다. 데이터는 페어링된 Mac Core에만 보냅니다.</string>
 	<key>NSHealthUpdateUsageDescription</key>
 	<string>건강 앱에 쓰기는 하지 않습니다. 읽기만 사용합니다.</string>
+	<key>LSApplicationQueriesSchemes</key>
+	<array>
+		<string>x-apple-health</string>
+	</array>
 </dict>
 </plist>

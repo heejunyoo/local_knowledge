@@ -127,33 +127,53 @@ public final class CoreClient: ObservableObject {
     }
 
     /// W1 pull-on-open: Health → Core health.ingest (idempotent).
+    /// Always refreshes permission state so UI can guide Settings / Health app.
     public func syncHealthKitIfPossible(forceAuth: Bool = false) async {
-        guard isPaired else { return }
         let hk = HealthKitBridge.shared
-        guard hk.isAvailable else { return }
-        if forceAuth || hk.authorizationRequested {
-            if forceAuth {
+        await hk.refreshPermissionState()
+
+        guard isPaired else {
+            healthSyncLine = "Mac과 페어링된 뒤 건강 데이터를 보낼 수 있어요."
+            return
+        }
+        guard hk.isAvailable else {
+            healthSyncLine = hk.statusDetail
+            return
+        }
+
+        // First-time or explicit: show system permission sheet.
+        if forceAuth || hk.phase == .shouldRequest {
+            if hk.phase == .shouldRequest || forceAuth {
                 let ok = await hk.requestAuthorization()
                 if !ok {
-                    healthSyncLine = hk.lastError ?? "건강 권한 필요"
+                    healthSyncLine = hk.lastError ?? "건강 권한이 필요해요. 설정 → 건강에서 허용해 주세요."
                     return
                 }
             }
-            do {
-                let samples = try await hk.collectSamples(days: 7)
-                guard !samples.isEmpty else {
-                    healthSyncLine = "건강 데이터 없음 (최근 7일)"
-                    return
-                }
-                let result = try await healthIngest(samples: samples)
-                let accepted = result["accepted"] as? Int ?? Int(result["accepted"] as? Double ?? 0)
-                let deduped = result["deduped"] as? Int ?? Int(result["deduped"] as? Double ?? 0)
-                healthSyncLine = "건강 동기 \(accepted)건 반영 · 중복 \(deduped)"
-                hk.lastSyncSummary = healthSyncLine
-            } catch {
-                healthSyncLine = error.localizedDescription
-                hk.lastError = error.localizedDescription
+        }
+
+        // Still never requested and not forcing → do not silently skip.
+        if hk.phase == .shouldRequest {
+            healthSyncLine = "건강 권한을 아직 허용하지 않았어요. 설정에서 「권한 허용하기」를 눌러 주세요."
+            return
+        }
+
+        do {
+            let samples = try await hk.collectSamples(days: 7)
+            guard !samples.isEmpty else {
+                hk.markEmptySyncOutcome()
+                healthSyncLine = hk.statusDetail
+                return
             }
+            let result = try await healthIngest(samples: samples)
+            let accepted = result["accepted"] as? Int ?? Int(result["accepted"] as? Double ?? 0)
+            let deduped = result["deduped"] as? Int ?? Int(result["deduped"] as? Double ?? 0)
+            hk.markSuccessfulSync(accepted: accepted, deduped: deduped)
+            healthSyncLine = hk.lastSyncSummary
+        } catch {
+            healthSyncLine = error.localizedDescription
+            hk.lastError = error.localizedDescription
+            hk.needsUserAction = true
         }
     }
 
@@ -322,6 +342,15 @@ public final class CoreClient: ObservableObject {
         return []
     }
 
+    /// Full summary + transcript for reading (independent of ask/RAG).
+    public func reviewGet(id: String) async throws -> [String: Any] {
+        let rpc = try await rpc(method: "knowledge.review.get", params: ["id": id])
+        if let err = rpc["error"] as? [String: Any] {
+            throw NSError(domain: "core", code: 1, userInfo: [NSLocalizedDescriptionKey: err["message"] as? String ?? "error"])
+        }
+        return rpc["result"] as? [String: Any] ?? [:]
+    }
+
     public func reviewAccept(id: String) async throws {
         let rpc = try await rpc(method: "knowledge.review.accept", params: ["id": id])
         if let err = rpc["error"] as? [String: Any] {
@@ -357,11 +386,32 @@ public final class CoreClient: ObservableObject {
         _ = try await dietRPC("diet.log_workout", params: p)
     }
 
-    public func dietLogMetric(weightKg: Double?, sleepH: Double?) async throws {
+    public func dietLogMetric(weightKg: Double?, sleepH: Double?, morningFasted: Bool = false) async throws {
         var p: [String: Any] = [:]
         if let weightKg { p["weight_kg"] = weightKg }
         if let sleepH { p["sleep_h"] = sleepH }
+        if morningFasted { p["morning_fasted"] = true; p["context"] = "morning_fasted" }
         _ = try await dietRPC("diet.log_metric", params: p)
+    }
+
+    public func dietFastingStatus(previewHours: Double? = nil) async throws -> [String: Any] {
+        var p: [String: Any] = [:]
+        if let previewHours { p["preview_hours"] = previewHours }
+        return try await dietRPC("diet.fasting.status", params: p)
+    }
+
+    public func dietFastingPreview(targetHours: Double) async throws -> [String: Any] {
+        try await dietRPC("diet.fasting.preview", params: ["target_hours": targetHours])
+    }
+
+    @discardableResult
+    public func dietFastingStart(targetHours: Double = 14) async throws -> [String: Any] {
+        try await dietRPC("diet.fasting.start", params: ["target_hours": targetHours])
+    }
+
+    @discardableResult
+    public func dietFastingEnd(reason: String = "manual") async throws -> [String: Any] {
+        try await dietRPC("diet.fasting.end", params: ["reason": reason])
     }
 
     public func dietSetGoals(kcal: Double, protein: Double, weeklyWorkouts: Int, dayMinutes: Int) async throws {
