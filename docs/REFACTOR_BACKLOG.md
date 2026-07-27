@@ -19,3 +19,9 @@
 - **[해결] 빈 백업이 success로 커밋됨**: `pg_dump | gzip` 파이프에 `pipefail`이 없어 pg_dump 실패에도 gzip이 exit 0을 반환, 0바이트 백업이 "성공"으로 커밋됐다. `set -o pipefail` + 압축 해제 크기 검증(1000바이트 미만이면 실패)을 추가.
 - **[해결] RESTORE.md 절차가 틀렸음**: "docker postgres:16에 psql로 부어라"라고 썼으나, `supabase db dump` 산출물은 `auth` 스키마·`anon`/`service_role` role·`vector` 타입을 전제해 순정 Postgres에서는 **테이블이 0개 생성된다**(실측 725 에러). 복원 대상별 분기 + 순정 Postgres용 prelude SQL + "에러 수백 건은 정상, 판정은 행수 대조"를 실측 기반으로 재작성했다.
 - **Obsidian Git 플러그인 미설치**: vault에 커뮤니티 플러그인 `obsidian-git`이 설치되어 있지 않음(GUI 전용 설치라 자동화 불가). G2-1/G2-2는 git 레벨 왕복(별도 clone과의 push/pull)으로 대체 검증했으나, 실제 Obsidian 앱에서의 자동 커밋/pull 동작은 오너가 플러그인 설치 후 재확인 필요(`COMMIT_PROTOCOL.md` 설정값 안내 참조).
+
+## P3에서 발견
+
+- **RLS 무관 보안 경고 3건 (P3 이전부터 존재, 004_rls.sql 적용 후에도 남음)**: `get_advisors(security)` 기준
+  (1) `public.search_docs` 함수 `search_path` 미고정(WARN), (2)(3) `pg_trgm`/`vector` 익스텐션이 `public`
+  스키마에 설치됨(WARN, 별도 스키마로 이동 권장). P3 스코프(RLS·인증) 밖이라 손대지 않음 — 필요 시 별도 이슈로 처리.

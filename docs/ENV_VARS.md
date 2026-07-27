@@ -21,12 +21,16 @@
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | RLS 적용 하 공개 가능 | 브라우저+서버 | 채움 |
 | `SUPABASE_SERVICE_ROLE_KEY` | RLS 우회 | **마이그레이션 스크립트 전용**, `web/app`·`web/lib` import 금지 (P3) | 미사용(아래 참고) |
 | `SUPABASE_DB_URL` | Postgres 접속 문자열 | 로컬 스크립트 · GitHub Actions 백업 | 채움. **direct(`db.<ref>...:5432`)는 IPv6 전용이라 대부분의 CI/로컬에서 불가 → Session Pooler를 쓸 것.** 아래 §Postgres 직결 참고 |
+| `INGEST_API_TOKEN` | Shortcuts `health.ingest` 인그레스 전용 Bearer 토큰(≥32바이트 랜덤) | `/api/health/ingest` 라우트(P4a/P4b에서 라우트 본체 구현 시 사용) | **미채움 — 라우트가 아직 없어 값 발급 보류.** 값은 Shortcuts 앱에만 저장, 문서에 기록 금지 |
 
-### owner_id placeholder (P1 실측 발견)
-P3 인증 도입 전이라 실제 Supabase Auth 사용자가 없다. `web/scripts/migrate-from-sqlite.ts`로 이관한 모든 행의 `owner_id`는 고정 placeholder UUID `00000000-0000-0000-0000-000000000001`이다. **P3에서 실제 사용자가 가입하면, 그 사용자의 `auth.uid()`로 아래 1건의 UPDATE만 실행하면 된다** (테이블마다 반복):
-```sql
-update <table> set owner_id = '<실제 auth uid>' where owner_id = '00000000-0000-0000-0000-000000000001';
-```
+### P3 인증 도입 완료 (2026-07-27)
+- `web/supabase/migrations/004_rls.sql` 적용됨 — 14개 테이블 전부 RLS 활성화 + `owner_all`(owner_id = auth.uid()) 정책.
+- `/api/health/ingest`, `/api/cron/*`, `/login`은 `web/lib/supabase/proxy.ts`의 세션 리다이렉트 제외 경로로 지정됨(라우트 본체는 아직 미구현).
+
+### owner_id placeholder → 실제 오너로 교체 완료 (2026-07-27, P3)
+`web/scripts/create-owner-user.ts`로 `naheejun87@gmail.com` 계정을 생성(`auth.uid() = 47e5b22d-a1f1-4266-b4e5-cd2524b0a37f`)한 뒤,
+14개 테이블 전부에서 placeholder(`00000000-0000-0000-0000-000000000001`) → 위 uid로 UPDATE 실행 및 실측 확인 완료
+(`placeholder_left=0`, 테이블별 행수는 P1 이관량과 일치). 이후 신규 placeholder 데이터가 생기지 않는 한 이 절차는 반복할 필요 없다.
 
 ### ★ Postgres 직결 — 반드시 Session Pooler를 쓸 것 (P1 발견 → P2에서 해결·실측 확정)
 
