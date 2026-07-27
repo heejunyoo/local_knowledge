@@ -213,6 +213,18 @@ public final class MobileHTTPServer: @unchecked Sendable {
         return http(200, out)
     }
 
+    // REFACTOR P0: 골든 스냅샷 기준선 보호 (docs/REFACTOR_ACTION_PLAN_WEB_2026-07.md §2.3)
+    // P1 게이트 통과 후 이 블록을 제거한다.
+    private static let frozenWriteMethods: Set<String> = [
+        "diet.log_meal", "diet.log_workout", "diet.log_metric",
+        "diet.delete_meal", "diet.delete_workout", "diet.delete_metric",
+        "diet.goals.set", "diet.profile.set",
+        "diet.fasting.start", "diet.fasting.end",
+        "inbox.create", "inbox.promote", "inbox.delete",
+        "corpus.sync", "search.reindex",
+        "assistant.onboarding.dismissed", "health.ingest",
+    ]
+
     private func handleRPC(_ body: Data) throws -> Data {
         guard let obj = try JSONSerialization.jsonObject(with: body) as? [String: Any] else {
             return http(400, ["error": "invalid json"])
@@ -220,6 +232,10 @@ public final class MobileHTTPServer: @unchecked Sendable {
         let id = obj["id"]
         let method = obj["method"] as? String ?? ""
         let params = obj["params"]
+
+        if Self.frozenWriteMethods.contains(method) {
+            return jsonRPCResponse(id: id, result: nil, error: .app("frozen_for_migration", code: -32000))
+        }
 
         if method.hasPrefix("core.") {
             return try handleCoreMethod(method: method, id: id)
@@ -922,6 +938,16 @@ public final class MobileHTTPServer: @unchecked Sendable {
                 kind = re.stringByReplacingMatches(in: kind, range: NSRange(kind.startIndex..., in: kind), withTemplate: "")
             }
             kind = kind.trimmingCharacters(in: .whitespacesAndNewlines)
+            // REFACTOR P0: /v1/chat bypasses the handleRPC frozenWriteMethods guard
+            // (docs/REFACTOR_ACTION_PLAN_WEB_2026-07.md §2.3) — block here too.
+            if Self.frozenWriteMethods.contains("diet.log_workout") {
+                return http(200, [
+                    "answer": "지금은 골든 스냅샷 기준선 보호를 위해 기록이 잠시 멈춰 있어요 (frozen_for_migration). 웹 전환 완료 후 다시 기록할 수 있어요.",
+                    "engine": "frozen_for_migration",
+                    "sources": [] as [[String: Any]],
+                    "trace": trace + ["frozen:diet.log_workout"],
+                ])
+            }
             let w = try diet.logWorkout(kind: kind.isEmpty ? "workout" : String(kind.prefix(40)), minutes: minutes, intensity: nil)
             trace.append("diet.log_workout")
             let day = diet.daySummary()
@@ -935,6 +961,15 @@ public final class MobileHTTPServer: @unchecked Sendable {
         // Heuristic meal if kcal or 먹/식사 present with content
         if message.contains("kcal") || message.contains("칼로리") || message.contains("먹") || message.contains("식사") || message.contains("점심") || message.contains("저녁") || message.contains("아침") {
             let kcal = firstDouble(in: message)
+            // REFACTOR P0: same bypass concern as diet.log_workout above.
+            if Self.frozenWriteMethods.contains("diet.log_meal") {
+                return http(200, [
+                    "answer": "지금은 골든 스냅샷 기준선 보호를 위해 기록이 잠시 멈춰 있어요 (frozen_for_migration). 웹 전환 완료 후 다시 기록할 수 있어요.",
+                    "engine": "frozen_for_migration",
+                    "sources": [] as [[String: Any]],
+                    "trace": trace + ["frozen:diet.log_meal"],
+                ])
+            }
             let meal = try diet.logMeal(items: [message], kcal: kcal, proteinG: nil, note: message)
             trace.append("diet.log_meal")
             let day = diet.daySummary()
