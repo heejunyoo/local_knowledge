@@ -21,6 +21,16 @@
 1. **1 세션 = 1 Phase.** Phase가 끝나면 `/clear`. Phase 중간에 다음 Phase 작업을 미리 하지 않습니다.
 2. Phase 시작 시 **이 문서의 해당 Phase 절만** 읽고, 필요하면 방향성 문서의 참조 절(§표기)을 읽습니다. 전체를 다시 읽지 마세요.
 3. Phase 착수 전 **Plan 모드로 그 Phase의 세부 단계를 먼저 정렬**하고 승인받습니다 (3파일 이상 변경이므로).
+4. **★ Phase 종료 시 그 절을 as-built로 갱신하고, 다음 Phase 절에 "착수 전 인지"를 추가합니다.**
+   (2026-07-27 P3에서 신설) 이 문서는 명세가 아니라 체크리스트이고, 규약 2번에 따라 실행자는
+   **자기 Phase 절만** 읽습니다. 그래서 어떤 절의 공백·스테일 표기는 그 절을 실행하는 사람
+   눈에만 보이고, 고쳐두지 않으면 다음 사람에게 그대로 재발합니다. 갱신할 것:
+   - 원문과 달라진 것(파일명·버전·API 이름) → 실제 값으로 고치고 **원문 값도 함께 남긴다**
+     ("원문은 X였으나 실제는 Y") — 왜 달라졌는지가 다음 판단의 근거가 됩니다.
+   - **원문에 없었는데 필요했던 단계** → 절 안에 정식 단계로 추가 (P3-0, P3-3b가 그 예)
+   - 미완으로 이월한 것 → "as-built (미완 — P4x로 이월)"로 명시 (P3-4가 그 예)
+   - 다음 Phase의 게이트와 충돌하는 현재 구현 → 다음 Phase 절 머리에 경고
+     (P3의 리다이렉트 동작 ↔ G4a-5의 401 요구가 그 예)
 
 ### 0.2 안전 바닥 (완화 불가)
 - **사전 승인 필요(Ask-Before-Act):** Supabase 프로젝트 생성·스키마 적용·Vercel 배포·GitHub 레포 생성·외부 API 키 발급·기존 데이터 삭제·기존 테스트 삭제.
@@ -734,16 +744,32 @@ G2-5 vault 레포에 백업 파일이 없음: git ls-files | grep -c 'sql.gz' �
 
 ---
 
-### P3 — 인증 (Supabase Auth + RLS)
+### P3 — 인증 (Supabase Auth + RLS) — ✅ 완료 (2026-07-27)
 
 > **방향성 §6.5.2: 이 프로젝트에서 실패 확률이 가장 높은 단계입니다.** 전례 0건.
 > 그래서 **독립 게이트**로 분리했습니다. "직접 구현"이 아니라 **"설정"** 이라는 점을 계속 확인하세요.
 
+> **★ 이 절은 실행 후 as-built로 갱신되었습니다 (2026-07-27).** 착수 당시 원문에는
+> ① 스캐폴드 부재(아래 P3-0), ② 콜백 라우트 누락(P3-3), ③ 마이그레이션 번호·파일명 스테일이
+> 있었고, 그중 ②가 실제 로그인 실패로 이어졌습니다. 경위는 §P3 회고 참조.
+
 #### 작업 단계
+
+**P3-0. Next.js 스캐폴드 ← 원문에 없던 선행 단계 (P4a-1에서 이관)**
+- 원문은 P4a-1에 `create-next-app`을 두었으나, P3-3이 미들웨어·로그인 페이지를 요구하므로
+  **스캐폴드 없이는 P3를 착수할 수 없다.** 실제로 P3에서 먼저 생성했다.
+- `web/`에 App Router + TypeScript로 생성. **Tailwind·ESLint 미도입**(기존에 없던 의존성을
+  리팩토링 중 새로 들이지 않는다 — F-6).
+- 기존 `web/package.json`·`tsconfig.json`은 P1 스크립트(`scripts/`, `lib/`)용이므로
+  **덮어쓰지 말고 병합**한다. 병합 후 `npm run migrate`가 여전히 동작하는지 확인할 것.
+- 실측 버전: `next@16.2.12`, `react@19.2.4`, `@supabase/ssr@^0.12.3`, `@supabase/supabase-js@^2.110.8`.
 
 **P3-1. Auth 방식 확정**
 - **매직링크(이메일 OTP)** 를 1순위로 합니다. 비밀번호 저장·재설정 흐름을 아예 만들지 않아도 됩니다.
 - 사용자 1명 → Supabase Auth 설정에서 **신규 가입 비활성화(Disable signup)** 후 오너 계정만 수동 생성. 이게 없으면 URL을 아는 누구나 가입해 자기 테넌트를 만듭니다.
+- **as-built**: 오너 계정은 `web/scripts/create-owner-user.ts`(service_role,
+  `admin.createUser({email, email_confirm:true})`)로 생성. Disable signup은 MCP에 설정 툴이
+  없어 **대시보드에서 수동 처리**했고, `GET /auth/v1/settings`의 `disable_signup: true`로 검증 가능하다.
 
 **P3-2. RLS 정책 — 모든 테이블에 예외 없이**
 ```sql
@@ -764,27 +790,71 @@ alter table llm_answer_cache   enable row level security;
 
 -- 각 테이블에 대해 동일 패턴
 create policy owner_all on <table>
-  for all
+  for all to authenticated          -- ← as-built: 원문에 없던 TO 절 추가
   using (owner_id = auth.uid())
   with check (owner_id = auth.uid());
 ```
 - **`enable row level security`를 빠뜨린 테이블이 하나라도 있으면 그 테이블은 anon 키로 전부 읽힙니다.** 게이트 G3-3이 이걸 잡습니다.
-- 마이그레이션 파일: `web/supabase/migrations/002_rls.sql`
+- **마이그레이션 파일: `web/supabase/migrations/004_rls.sql`** (원문은 `002_rls.sql`이라고
+  했으나 P1 이후 002·003이 검색 기능에 쓰여 번호가 밀렸다. **파일명을 기억으로 조립하지 말고
+  `ls web/supabase/migrations/`로 다음 번호를 확인할 것.**)
+- `to authenticated`는 Supabase 보안 체크리스트 권고다. TO 절이 없으면 anon 역할도 정책
+  평가 대상이 되어 의도가 흐려진다.
+- **owner_id placeholder 교체**: RLS를 켜면 P1이 심어둔 placeholder
+  (`00000000-...-0001`) 행은 실제 오너에게 보이지 않는다. 오너 계정 생성 직후
+  14개 테이블에 UPDATE 1건씩 실행해야 한다 — 절차·실측 결과는 `docs/ENV_VARS.md`.
 
 **P3-3. Next.js 통합**
 - `@supabase/ssr` 사용. 서버 컴포넌트/라우트 핸들러/미들웨어 각각의 클라이언트를 분리 생성.
-- `middleware.ts`: `(app)` 그룹 전체를 보호, 미인증 시 `/login` 리다이렉트.
+  → as-built: `web/lib/supabase/{client,server,proxy}.ts`
+- **미들웨어 파일명은 `proxy.ts`다** (원문 `middleware.ts`는 Next 15 이하 표기).
+  Next 16은 루트 `proxy.ts`에서 `export async function proxy()` + `config.matcher`.
+  빌드 로그에 `ƒ Proxy (Middleware)`가 찍히면 인식된 것이다.
+- `(app)` 그룹 전체를 보호, 미인증 시 `/login` 리다이렉트.
 - **키 사용 규칙 (위반 시 전체 무의미):**
   | 키 | 사용처 |
   |---|---|
   | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | 브라우저·서버 모두. RLS가 걸린 상태에서만 안전 |
-  | `SUPABASE_SERVICE_ROLE_KEY` | **마이그레이션 스크립트 전용.** 앱 코드(`web/app`, `web/lib`)에서 import 금지 |
-- 미들웨어 보호 대상에서 제외할 경로: `/login`, `/api/cron/*`(별도 시크릿 헤더로 보호), `/api/health/ingest`(Shortcuts용 — **별도 토큰 인증** 필요)
+  | `SUPABASE_SERVICE_ROLE_KEY` | **마이그레이션·관리 스크립트 전용.** 앱 코드(`web/app`, `web/lib`)에서 import 금지 |
+- 보호 대상에서 제외할 경로: `/login`, **`/auth/callback`, `/auth/confirm`**,
+  `/api/cron/*`(별도 시크릿 헤더로 보호), `/api/health/ingest`(Shortcuts용 — **별도 토큰 인증** 필요)
+
+**P3-3b. ★ 인증 콜백 라우트 — 원문 누락 항목 (실제 로그인 실패의 원인)**
+
+> 매직링크는 "리다이렉트만" 만들면 동작하지 않는다. Supabase가 인증을 끝낸 뒤
+> **일회용 자격증명을 URL 파라미터로 돌려보내는데, 그것을 세션 쿠키로 교환하는 라우트가
+> 없으면** 미들웨어가 그 요청을 다시 `/login`으로 튕겨내고 자격증명은 버려진다.
+> 사용자 눈에는 "링크를 눌렀는데 로그인 화면이 그대로"로 보인다.
+
+두 가지 흐름을 **모두** 지원해야 한다:
+
+| 흐름 | 파라미터 | 라우트 | 교환 API |
+|---|---|---|---|
+| PKCE (브라우저에서 `signInWithOtp` 호출 시 기본) | `?code=` | `app/auth/callback/route.ts` | `exchangeCodeForSession(code)` |
+| token hash (서버에서 발급한 링크. 브라우저 verifier 쿠키 불필요) | `?token_hash=&type=` | `app/auth/confirm/route.ts` | `verifyOtp({type, token_hash})` |
+
+- **매직링크가 반드시 콜백 경로로 떨어지지는 않는다.** 기본값은 Site URL 루트(`/`)다.
+  따라서 `proxy.ts`는 미인증 요청을 무조건 `/login`으로 보내지 말고,
+  **`code`/`token_hash` 파라미터가 있으면 해당 콜백 라우트로 넘겨야** 한다.
+  이렇게 하면 대시보드의 Site URL·Redirect 허용목록 설정과 무관하게 동작한다.
+- 로그인 페이지에서는 `signInWithOtp({ email, options: { emailRedirectTo: origin + '/auth/callback' } })`.
+
+**P3-3c. 로컬 개발 시 이메일 발송 제한 우회**
+- Supabase 무료 티어 기본 SMTP는 발송 건수 제한이 매우 낮아, 로그인 테스트를 몇 번 하면
+  `email rate limit exceeded`로 막힌다. **기다리지 말 것.**
+- `web/scripts/generate-magic-link.ts` — `admin.generateLink()`는 **메일을 보내지 않고**
+  토큰만 만들므로 제한과 무관하다. 출력된 `/auth/confirm?token_hash=...` URL을 브라우저에
+  붙여넣으면 로그인된다. **로컬 전용 도구이며 service_role 키를 쓴다.**
 
 **P3-4. Shortcuts 인그레스 인증**
 - `health.ingest`는 브라우저 세션이 없으므로 매직링크로 보호 불가.
 - **긴 랜덤 토큰(≥32바이트)을 환경변수에 두고 `Authorization: Bearer` 검증** + 해당 라우트는 `service_role` 없이 `owner_id`를 서버에서 고정 주입.
 - 토큰은 Shortcuts 앱 안에만 저장. 문서에 값 기록 금지.
+- **as-built (미완 — P4a/P4b로 이월)**: P3에서는 환경변수 이름(`INGEST_API_TOKEN`)을
+  `ENV_VARS.md`·`ENV_EXAMPLE.txt`에 등재하고 `proxy.ts` 제외 경로에 넣는 데까지만 했다.
+  **Bearer 검증 로직과 라우트 본체는 없다** — `/api/health/ingest` 엔드포인트 자체가 아직
+  존재하지 않기 때문이다(없는 라우트에 인증만 먼저 넣는 것은 F-6 위반). 토큰 값도 미발급.
+  → 라우트를 만드는 Phase에서 **같은 커밋에** 구현할 것.
 
 #### 게이트 — **DB 레이어 차단 증명이 핵심**
 ```
@@ -799,15 +869,50 @@ G3-3  ★ anon 키로 REST 직접 호출 시 전 테이블 0행:
       done
       → 전부 [] 또는 권한 오류. 한 건이라도 데이터가 나오면 FAIL
 G3-4  신규 가입 시도 → 거부됨
+      실측 방법: curl "$SUPABASE_URL/auth/v1/settings" -H "apikey: $ANON_KEY"
+      → disable_signup: true 확인 (가입을 실제로 시도해 쓰레기 계정을 만들지 말 것)
 G3-5  service_role 키가 클라이언트 번들에 없음:
       grep -r "service_role" web/app web/lib | grep -v "\.md"  → 출력 없음
-      그리고 빌드 산출물 검사: grep -r "$(echo $SERVICE_ROLE_PREFIX)" web/.next  → 출력 없음
+      그리고 빌드 산출물 검사: grep -rl -- "$SECRET" web/.next  → 출력 없음
+      ※ 검사 함정 2가지:
+        · `grep ... | head` 로 판정하지 말 것 — 파이프라인 종료코드는 head의 것이라 항상 0이다.
+        · 키 앞부분(JWT 헤더 `eyJhbGciOi...`)은 anon 키와 동일해 오탐이 난다. 값 전체로 검색할 것.
+        · 대조군: anon 키는 `.next/static`에서 **발견되어야** 정상이다(공개 키). 안 나오면 검사 자체가 무의미한 것이다.
 ```
+
+**실측 결과 (2026-07-27) — 전부 PASS**
+
+| 게이트 | 결과 |
+|---|---|
+| G3-1 | `/` → 307 → `/login` |
+| G3-2 | 링크 클릭 → `sb-<ref>-auth-token` 쿠키 발급 → 보호된 `/` 200 (리다이렉트 없음) |
+| G3-3 | 14개 테이블 전부 `[]` |
+| G3-4 | `disable_signup: true` |
+| G3-5 | `.next` 전체에 secret 키 없음 (대조군으로 검사 유효성 확인) |
+| 추가 | 로그인 상태 조회 시 `knowledge_unit` 236 / `search_doc` 236 / `diet_meal` 25 / `settings` 8행 — P1 이관량과 일치. **RLS가 오너 본인을 막지 않는 것까지 확인.** |
+
+> **G3-2 단서**: 위 검증은 `token_hash` 경로(`/auth/confirm`)로 수행했다.
+> 이메일 발송 경로(PKCE `code` → `/auth/callback`)는 라우팅만 검증했고 실제 코드 교환은
+> 발송 제한 때문에 미검증이다. P4a 착수 시 한 번 확인할 것.
 
 #### 하지 말 것
 - 자체 세션/JWT/CSRF 구현 (Supabase가 처리)
 - `owner_id`를 클라이언트가 보낸 값으로 채우기 (**항상 `auth.uid()` 기본값 또는 서버 주입**)
 - RLS 없이 "일단 동작하게" 배포
+- **미인증 요청을 무조건 `/login`으로 리다이렉트** (P3-3b 참조 — 인증 자격증명까지 버려진다)
+
+#### P3 회고 — 왜 두 번 헛돌았나 (재발 방지)
+
+1. **원문에 콜백 라우트가 없었다.** 그러나 매직링크에 콜백이 필요한 것은 기본이므로,
+   플랜의 공백이 아니라 **구현자가 메꿨어야 할 부분**이다. 플랜은 체크리스트지 명세가 아니다.
+2. **실패 시 로그를 먼저 보지 않고 추측했다.** 이게 실제 낭비의 원인이다.
+   MCP `get_logs(service:"auth")` 한 번이면 다음이 바로 보였다:
+   ```
+   path=/verify  status=303  auth_event: {action: "login", actor_username: ...}
+   ```
+   = **Supabase는 로그인을 성공시켰다 → 문제는 앱 쪽 다운스트림**. 이 한 줄을 먼저 확인했으면
+   이메일 템플릿을 고치라는 잘못된 안내와 콜백 형식 오판(둘 다 헛수고)을 건너뛸 수 있었다.
+   → **인증이 실패하면 코드를 고치기 전에 auth 로그부터 읽는다.**
 
 ---
 
@@ -818,11 +923,23 @@ G3-5  service_role 키가 클라이언트 번들에 없음:
 - 구현: `/api/rpc` 단일 라우트에서 `{method, params}` 디스패치 + 주요 메서드는 REST 별칭도 제공(§8).
 - **응답 JSON 형태를 골든과 동일하게 맞춥니다.** 필드 추가·이름 변경·정렬 변경 전부 금지.
 
+#### 착수 전 인지 (P3 실행 결과 반영, 2026-07-27)
+
+1. **`create-next-app`은 이미 P3-0에서 완료됐다.** 다시 하지 말 것 — 기존
+   `package.json`/`tsconfig.json`을 덮어써서 P1 스크립트를 깨뜨린다.
+   Vercel Root Directory = `web` 설정만 남아 있다. **배포는 P3 인증이 붙은 상태로만.**
+2. **★ `proxy.ts`는 현재 모든 미인증 요청을 `/login`으로 307 리다이렉트한다.**
+   게이트 **G4a-5는 `/api/rpc`에 401을 요구**하므로 그대로면 통과하지 못한다.
+   `/api/*` 경로는 리다이렉트 대신 `401`(JSON)을 반환하도록 분기해야 한다.
+   제외 경로(`/api/cron/*`, `/api/health/ingest`)는 각자의 인증을 쓰므로 별도 처리.
+3. `/`는 현재 P3 검증용 5줄짜리 플레이스홀더다(`web/app/page.tsx`). P5에서 Hub로 대체된다.
+4. `/api/health/ingest`의 Bearer 토큰(`INGEST_API_TOKEN`) 검증 로직은 **아직 없다.**
+   P3에서는 제외 경로 지정과 환경변수 이름만 정해뒀다 — 라우트 본체를 만들 때 함께 구현할 것.
+
 #### 작업 단계
-1. `create-next-app` (App Router, TypeScript). Vercel Root Directory = `web`. **배포는 P3 인증이 붙은 상태로만.**
-2. `lib/settings.ts` — 방향성 §6.5.4 **P-1 패턴**: DB `settings` 로드 → 모듈 스코프 캐시 → TTL. 서버리스에서 인스턴스별 캐시임을 주석으로 명시하고, 설정 변경 시 무효화 경로(`?refresh=1`)를 둡니다.
-3. `lib/db/` — 쿼리 함수. **컴포넌트에서 SQL 직접 작성 금지.**
-4. 읽기 메서드 구현 (§8 표의 읽기 계열):
+1. `lib/settings.ts` — 방향성 §6.5.4 **P-1 패턴**: DB `settings` 로드 → 모듈 스코프 캐시 → TTL. 서버리스에서 인스턴스별 캐시임을 주석으로 명시하고, 설정 변경 시 무효화 경로(`?refresh=1`)를 둡니다.
+2. `lib/db/` — 쿼리 함수. **컴포넌트에서 SQL 직접 작성 금지.**
+3. 읽기 메서드 구현 (§8 표의 읽기 계열):
    - `core.ping/health/services`
    - `assistant.today` / `assistant.week_review` / `assistant.gaps` / `assistant.gaps.evening`
    - `timeline.list`
@@ -831,7 +948,7 @@ G3-5  service_role 키가 클라이언트 번들에 없음:
    - `inbox.list`
    - `diet.day_summary` / `diet.dashboard` / `diet.week_review` / `diet.goals*` / `diet.profile.get` / `diet.fasting.status`
      - ※ diet 도메인 로직 본체는 P4b. P4a에서는 **조회에 필요한 최소 범위만** 번역합니다.
-5. **★ D-3 확정: default-deny 상태기계 이식 → `web/lib/domain/state-machine.ts`**
+4. **★ D-3 확정: default-deny 상태기계 이식 → `web/lib/domain/state-machine.ts`**
 
    원본 `PipelineGraph.swift`(161줄) + `CrashRecovery.swift`(108줄)의 **구조를 그대로** 옮기되, 상태 집합만 교체합니다. 원본 Swift는 P7에서 `legacy/`로 아카이브합니다.
 
@@ -872,8 +989,8 @@ G3-5  service_role 키가 클라이언트 번들에 없음:
    - 선언되지 않은 임의 전이 20개가 전부 거부됨 (default-deny)
    - `open → promoted` 직행이 거부됨 (와일드카드 금지)
    - heartbeat 만료 시나리오 4종이 기대 상태·기대 규칙 id로 회수됨
-6. `/api/cron/keepalive` (P2-5) + Vercel Cron 등록.
-7. `lib/redaction.ts` — `docs/redaction_patterns.json`·`redaction_allowlist.json`을 **데이터 파일 그대로 로드**. 로직만 TS로 옮깁니다.
+5. `/api/cron/keepalive` (P2-5) + Vercel Cron 등록.
+6. `lib/redaction.ts` — `docs/redaction_patterns.json`·`redaction_allowlist.json`을 **데이터 파일 그대로 로드**. 로직만 TS로 옮깁니다.
 
 #### 게이트
 ```
@@ -888,6 +1005,8 @@ G4a-3 ★ 상태기계(D-3):
       · 위 전이가 전부 state_event에 rule id와 함께 기록됨
 G4a-4 ingest_job: corpus.sync 실행 중 중단 → 고아 running이 R2″로 failed 회수 → 재큐잉 성공
 G4a-5 인증: 로그아웃 상태에서 /api/rpc 호출 → 401 (200 + 빈 데이터 아님)
+      ※ 307 리다이렉트도 FAIL이다. P3의 proxy.ts 기본 동작이 리다이렉트이므로
+        /api/* 분기를 추가하지 않으면 여기서 걸린다 (위 "착수 전 인지" 2번).
 G4a-6 검색: settings['search.mode']='tsvector' 상태에서 골든 검색 결과 재현 (D-4)
 ```
 
