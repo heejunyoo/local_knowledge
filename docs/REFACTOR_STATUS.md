@@ -2,8 +2,8 @@
 
 | Field | Value |
 |-------|-------|
-| 최종 갱신 | 2026-07-27 |
-| 현재 위치 | **P0·P1·P2·P3 완료 → 다음은 P4a(읽기 API 계층)** |
+| 최종 갱신 | 2026-07-28 |
+| 현재 위치 | **P4a(읽기 API 계층) 진행 중** — 아래 "P4a 진행 상황" 참고 |
 | 실행 지시서 | `docs/REFACTOR_ACTION_PLAN_WEB_2026-07.md` (P4a 절만 읽을 것 — **§"착수 전 인지" 4건 필독**) |
 | 결정 근거 | `docs/REFACTOR_DIRECTION_WEB_2026-07.md` |
 | 미해결 이슈 | `docs/REFACTOR_BACKLOG.md` |
@@ -17,8 +17,38 @@
 | P1 스키마+이관 | ✅ 완료 | G1-1~G1-6 PASS | `web/supabase/migrations/`, `web/scripts/migrate-from-sqlite.ts`, `FTS_COMPARISON_2026-07.md` |
 | P2 Vault→Git | ✅ 완료 | G2-1~G2-5 PASS (G2-2 단서 아래) | 레포 2개 신규 생성 (아래) |
 | P3 인증 | ✅ 완료 | G3-1~G3-5 PASS (실측표는 액션플랜 P3 절) | Next 스캐폴드 + `004_rls.sql` + `proxy.ts` + 콜백 2종 |
-| **P4a 읽기 API** | ⬜ **다음** | 골든 diff 0 · 상태기계 default-deny | — |
+| **P4a 읽기 API** | 🟡 **진행 중** | 골든 diff 0 · 상태기계 default-deny | 아래 "P4a 진행 상황" |
 | P4b~P7 | ⬜ 미착수 | — | — |
+
+## P4a 진행 상황 (2026-07-28)
+
+완료: 인증 401 분기, vitest 도입, `lib/settings.ts`(P-1), `lib/redaction.ts`,
+`lib/domain/diet-read.ts`, `/api/rpc` 디스패처 + core/assistant/timeline/diet
+읽기 라우트 12종 + REST 별칭. 매직링크 실 세션으로 전부 curl 검증 완료
+(커밋 로그에 실측값 포함). 남은 것: knowledge/corpus/inbox 읽기(P4a-6),
+G4a-1 자동 회귀 테스트, D-3 상태기계(inbox_item·ingest_job), cron
+keepalive, health.ingest.
+
+### ★ 이번 세션에서 드러난 스코프 조정 2건 (오너 승인 완료)
+
+1. **`core.health`는 G4a-1(골든 diff 0)의 문서화된 예외.** 액션플랜 §8이
+   "로컬 경로·데몬 필드 제거"를 명시하는데, 실제 골든은 core="Heejun의
+   Mac mini"·gateway="m4"·knowledge.{db_path,vault_path,asr_engine,
+   llama_ready,llm_engine,whisper_ready,recording_count,
+   review_needed_count}가 전부 Mac 로컬 데몬 상태라 Vercel에서 재현 불가능
+   (의미 없음). 새 구현은 `ok`/`services`/`diet`만 유지하고 `core`/`gateway`는
+   제거, `knowledge`는 `{ok: <DB 도달성>}`으로 축소했다
+   (`web/lib/rpc/handlers.ts` `core_health()`). G4a-1 회귀 테스트(P4a-8)는
+   이 메서드를 축소된 필드 집합으로만 비교한다.
+2. **`diet.dashboard`·`diet.fasting.status`는 P4a에서 제외, 별도 세션으로 이관.**
+   액션플랜은 이를 "조회 전용, 최소 범위"로 분류했지만 실제 골든을 까 보니
+   Mifflin-St Jeor 플랜 투영(eta_text·pace_text 등 시간상대 한국어 문장),
+   HealthKit 참고값 포맷팅, "오늘/내일" 요일상대 문구 생성까지 포함된
+   `DietStore.swift`(1400줄)의 도메인 로직 본체였다(C-3 절이 이미 경고한
+   그 부분). `diet.day_summary/week_review/goals/profile.get/ping`은
+   단순 집계·Mifflin BMR/TDEE 공식이라 이번에 완료했지만, 두 메서드는
+   `DietPlanProjection`·`FastingPrefs` 전체 이식이 필요해 후속 작업으로
+   분리했다.
 
 ## 지금 존재하는 레포 3개
 
