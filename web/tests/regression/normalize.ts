@@ -45,6 +45,13 @@ export function normalize(value: unknown, key: string | null = null): unknown {
     return sorted;
   }
   if (typeof value === "string") {
+    // 이미 정규화된 값(골든 JSON을 다시 normalize()에 통과시킬 때) 재마스킹
+    // 방지 — hours_since_last_meal처럼 숫자 volatile 키의 정규화 결과가
+    // "<N>"인 경우, 문자열 분기의 volatile 규칙이 무조건 "<TS>"로 덮어써
+    // 멱등성이 깨지는 것을 발견해 추가했다(P4b, diet.dashboard/fasting.status
+    // 골든 diff에서 처음 드러남 — 그 전까지는 volatile 키가 전부 문자열
+    // 타임스탬프였어서 이 경로가 실행되지 않았다).
+    if (value === "<TS>" || value === "<N>" || value === "<UUID>") return value;
     if ((key && VOLATILE_KEYS.has(key)) || ISO_TS_RE.test(value)) {
       return "<TS>";
     }

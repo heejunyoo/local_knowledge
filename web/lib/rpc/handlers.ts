@@ -8,6 +8,7 @@
 import { createClient } from "@/lib/supabase/server";
 import * as dietRead from "@/lib/domain/diet-read";
 import * as nutritionCalc from "@/lib/domain/diet-nutrition-calc";
+import * as dietDb from "@/lib/db/diet";
 import { fetchDietGoals, fetchDietProfile, fetchRecentDietSnapshots } from "@/lib/db/diet";
 import {
   fetchInboxOpenCount,
@@ -273,4 +274,313 @@ export async function inbox_promote(params: unknown) {
  */
 export async function health_sync_status() {
   return { ok: true, mirror: "diet", pull_mode: "app_open", mac_healthkit: false };
+}
+
+// ---------------------------------------------------------------------------
+// P4b: diet 쓰기 도메인 + dashboard/fasting/plan/coach 조립.
+// Swift 원본: MobileHTTPServer.swift의 diet.* case들, DietStore.swift.
+// ---------------------------------------------------------------------------
+
+interface DietGatewayContext {
+  now: Date;
+  /** 오늘이 먼저 오는 30일 스냅샷(activityStreak 스캔 범위, assistant_today와 동일). */
+  snapshots30: dietRead.DaySnapshot[];
+  /** snapshots30 앞 7개 — 주간 바/평균 섭취 계산용. */
+  sevenDay: dietRead.DaySnapshot[];
+  today: dietRead.DaySnapshot;
+  profile: dietRead.Profile | null;
+  goals: dietRead.Goals;
+  metricsAsc: dietRead.Metric[];
+  workoutsAsc: dietRead.Workout[];
+  lastMeal: dietRead.Meal | null;
+  fastingPrefs: dietRead.FastingPrefs;
+  avgDailyIntakeKcal: number | null;
+}
+
+async function fetchDietGatewayContext(now: Date = new Date()): Promise<DietGatewayContext> {
+  const [snapshots30, profile, goals, metricsAsc, workoutsAsc, lastMeal, fastingPrefs] = await Promise.all([
+    dietDb.fetchRecentDietSnapshots(29, now),
+    dietDb.fetchDietProfile(),
+    dietDb.fetchDietGoals(),
+    dietDb.fetchAllMetrics(),
+    dietDb.fetchAllWorkouts(),
+    dietDb.fetchLastMeal(),
+    dietDb.fetchFastingPrefs(),
+  ]);
+  const sevenDay = snapshots30.slice(0, 7);
+  return {
+    now,
+    snapshots30,
+    sevenDay,
+    today: snapshots30[0],
+    profile,
+    goals,
+    metricsAsc,
+    workoutsAsc,
+    lastMeal,
+    fastingPrefs,
+    avgDailyIntakeKcal: dietRead.averageDailyKcal(sevenDay),
+  };
+}
+
+function fastingStatusFromContext(ctx: DietGatewayContext, previewHours: number | null = null) {
+  return dietRead.fastingStatus({
+    now: ctx.now,
+    previewHours,
+    prefs: ctx.fastingPrefs,
+    healthReferenceInput: {
+      now: ctx.now,
+      metricsAsc: ctx.metricsAsc,
+      workoutsAsc: ctx.workoutsAsc,
+      lastMeal: ctx.lastMeal,
+      profile: ctx.profile,
+      avgDailyIntakeKcal: ctx.avgDailyIntakeKcal,
+    },
+  });
+}
+
+function dashboardFromContext(ctx: DietGatewayContext) {
+  return dietRead.dashboard({
+    goals: ctx.goals,
+    today: ctx.today,
+    sevenDaySnapshots: ctx.sevenDay,
+    profile: ctx.profile,
+    metricsAsc: ctx.metricsAsc,
+    fastingPrefs: ctx.fastingPrefs,
+  });
+}
+
+/** 원본 DietStore.planProjection() — diet.plan/profile.set/fasting.start가 공유하는 접미사 3종 로직. */
+async function computePlanProjection(profileOverride?: dietRead.Profile | null): Promise<dietRead.PlanProjection | null> {
+  const profile = profileOverride !== undefined ? profileOverride : await dietDb.fetchDietProfile();
+  if (!profile || !dietRead.profileIsComplete(profile)) return null;
+  const [goals, metricsAsc, sevenDay, fastingPrefs] = await Promise.all([
+    dietDb.fetchDietGoals(),
+    dietDb.fetchAllMetrics(),
+    dietDb.fetchRecentDietSnapshots(6),
+    dietDb.fetchFastingPrefs(),
+  ]);
+  const pick = dietRead.weightForPlan(metricsAsc);
+  const planProfile = pick ? { ...profile, weightKg: pick.kg } : profile;
+  const avg = dietRead.averageDailyKcal(sevenDay);
+  return dietRead.planProjectionWithSuffixes(
+    planProfile,
+    avg,
+    goals.targetKcal,
+    Boolean(fastingPrefs.active),
+    fastingPrefs.targetHours,
+    pick?.isReferenceOnly ?? false,
+  );
+}
+
+export async function diet_dashboard() {
+  const ctx = await fetchDietGatewayContext();
+  const dash = dashboardFromContext(ctx);
+  const fasting = fastingStatusFromContext(ctx);
+  return dietRead.dashboardDict(dash, fasting);
+}
+
+export async function diet_fasting_status(params: unknown) {
+  const p = (params ?? {}) as { preview_hours?: number; target_hours?: number };
+  const previewH =
+    typeof p.preview_hours === "number" ? p.preview_hours : typeof p.target_hours === "number" ? p.target_hours : null;
+  const ctx = await fetchDietGatewayContext();
+  return fastingStatusFromContext(ctx, previewH);
+}
+
+export async function diet_fasting_preview(params: unknown) {
+  const p = (params ?? {}) as { target_hours?: number; hours?: number };
+  const hours = typeof p.target_hours === "number" ? p.target_hours : typeof p.hours === "number" ? p.hours : 14;
+  const now = new Date();
+  return dietRead.fastingEndPreview(hours, now, now);
+}
+
+export async function diet_fasting_start(params: unknown) {
+  const p = (params ?? {}) as { target_hours?: number; hours?: number };
+  const hours = typeof p.target_hours === "number" ? p.target_hours : typeof p.hours === "number" ? p.hours : null;
+  const session = await dietDb.startFast(hours);
+  const out = (await diet_fasting_status({})) as Record<string, unknown>;
+  out.session = { id: session.id, started_at: session.startedAt, target_hours: session.targetHours };
+  const plan = await computePlanProjection();
+  if (plan) out.plan = dietRead.planProjectionDict(plan);
+  return out;
+}
+
+export async function diet_fasting_end(params: unknown) {
+  const p = (params ?? {}) as { reason?: string };
+  await dietDb.endFast(typeof p.reason === "string" ? p.reason : "manual", new Date());
+  return diet_fasting_status({});
+}
+
+export async function diet_plan() {
+  const profile = await dietDb.fetchDietProfile();
+  if (!profile || !dietRead.profileIsComplete(profile)) {
+    return {
+      needs_profile: true,
+      eta_text: "키·몸무게·나이·성별·목표 체중을 입력하면 도달 시점을 계산해요.",
+      plan_uses_ai: false,
+      engine: "diet-rules/mifflin-7700",
+    };
+  }
+  const plan = await computePlanProjection(profile);
+  return dietRead.planProjectionDict(plan!);
+}
+
+export async function diet_coach(params: unknown) {
+  const p = (params ?? {}) as { message?: string };
+  const ctx = await fetchDietGatewayContext();
+  const dash = dashboardFromContext(ctx);
+  const lines = [...dash.analysisLines];
+  const sleepHint = dietRead.sleepCoachHint(dietRead.latestSleepHours(ctx.sevenDay.slice(0, 3)));
+  if (sleepHint) lines.push(sleepHint);
+  const streak = dietRead.activityStreak(ctx.snapshots30);
+  if (streak > 0) lines.push(`연속 기록 ${streak}일`);
+  const msg = typeof p.message === "string" ? p.message.trim() : "";
+  if (msg) lines.push(`질문 메모: ${msg}`);
+  return {
+    answer: lines.join("\n"),
+    engine: "diet-rules/v1",
+    day: dietRead.daySummaryDict(ctx.today),
+    progress: {
+      kcal: dash.kcalProgress,
+      protein: dash.proteinProgress,
+      workout: dash.workoutProgress,
+      weekly_workouts: dash.weeklyWorkoutProgress,
+    },
+    streak_days: streak,
+  };
+}
+
+export async function diet_suggest() {
+  const now = new Date();
+  const [today] = await dietDb.fetchRecentDietSnapshots(0, now);
+  const s = dietRead.suggestedAction(now, today);
+  const out: Record<string, unknown> = { title: s.title, subtitle: s.subtitle };
+  if (s.slot) out.slot = s.slot;
+  return out;
+}
+
+export async function diet_goals_set(params: unknown) {
+  const p = (params ?? {}) as Record<string, unknown>;
+  const g = await dietDb.fetchDietGoals();
+  const next: dietRead.Goals = {
+    targetKcal: typeof p.target_kcal === "number" ? p.target_kcal : g.targetKcal,
+    targetProteinG: typeof p.target_protein_g === "number" ? p.target_protein_g : g.targetProteinG,
+    weeklyWorkouts: typeof p.weekly_workouts === "number" ? p.weekly_workouts : g.weeklyWorkouts,
+    targetWorkoutMinutesPerDay:
+      typeof p.target_workout_minutes_per_day === "number" ? p.target_workout_minutes_per_day : g.targetWorkoutMinutesPerDay,
+  };
+  await dietDb.setDietGoals(next);
+  return dietRead.goalsDict(next);
+}
+
+const ACTIVITIES: dietRead.Activity[] = ["sedentary", "light", "moderate", "active"];
+
+export async function diet_profile_set(params: unknown) {
+  const p = (params ?? {}) as Record<string, unknown>;
+  const sex: dietRead.Sex = p.sex === "male" ? "male" : "female";
+  const activity: dietRead.Activity = ACTIVITIES.includes(p.activity as dietRead.Activity)
+    ? (p.activity as dietRead.Activity)
+    : "light";
+  const profile: dietRead.Profile = {
+    heightCm: typeof p.height_cm === "number" ? p.height_cm : 165,
+    weightKg: typeof p.weight_kg === "number" ? p.weight_kg : 65,
+    age: typeof p.age === "number" ? p.age : 30,
+    sex,
+    targetWeightKg: typeof p.target_weight_kg === "number" ? p.target_weight_kg : 60,
+    activity,
+  };
+  await dietDb.setDietProfile(profile);
+  const applyGoals = typeof p.apply_goals === "boolean" ? p.apply_goals : true;
+  const goals = applyGoals ? await dietDb.applyRecommendedGoalsFromProfile(profile) : await dietDb.fetchDietGoals();
+  const out: Record<string, unknown> = { ...dietRead.profileDict(profile), goals: dietRead.goalsDict(goals) };
+  const plan = await computePlanProjection(profile);
+  if (plan) out.plan = dietRead.planProjectionDict(plan);
+  return out;
+}
+
+function stringParam(v: unknown): string {
+  return typeof v === "string" ? v : "";
+}
+
+export async function diet_log_meal(params: unknown) {
+  const p = (params ?? {}) as { items?: unknown; note?: string; kcal?: number; protein_g?: number; proteinG?: number };
+  let items: string[];
+  if (Array.isArray(p.items)) items = p.items as string[];
+  else if (typeof p.items === "string") items = [p.items];
+  else if (typeof p.note === "string" && p.note) items = [p.note];
+  else items = ["meal"];
+  const meal = await dietDb.insertMeal({
+    items,
+    kcal: typeof p.kcal === "number" ? p.kcal : null,
+    proteinG: typeof p.protein_g === "number" ? p.protein_g : typeof p.proteinG === "number" ? p.proteinG : null,
+    note: typeof p.note === "string" ? p.note : null,
+  });
+  const out: Record<string, unknown> = { id: meal.id, ts: meal.ts, items: meal.items };
+  if (meal.kcal != null) out.kcal = meal.kcal;
+  if (meal.proteinG != null) out.protein_g = meal.proteinG;
+  if (meal.note != null) out.note = meal.note;
+  return out;
+}
+
+export async function diet_log_workout(params: unknown) {
+  const p = (params ?? {}) as { kind?: string; minutes?: number; intensity?: string };
+  const w = await dietDb.insertWorkout({
+    kind: typeof p.kind === "string" ? p.kind : "workout",
+    minutes: typeof p.minutes === "number" ? p.minutes : 0,
+    intensity: typeof p.intensity === "string" ? p.intensity : null,
+  });
+  return { id: w.id, ts: w.ts, kind: w.kind, minutes: w.minutes };
+}
+
+export async function diet_log_metric(params: unknown) {
+  const p = (params ?? {}) as {
+    context?: string; morning_fasted?: boolean; weight_kg?: number; weightKg?: number; sleep_h?: number; sleepH?: number;
+  };
+  const ctx = typeof p.context === "string" ? p.context : p.morning_fasted === true ? "morning_fasted" : null;
+  const m = await dietDb.insertMetric({
+    weightKg: typeof p.weight_kg === "number" ? p.weight_kg : typeof p.weightKg === "number" ? p.weightKg : null,
+    sleepH: typeof p.sleep_h === "number" ? p.sleep_h : typeof p.sleepH === "number" ? p.sleepH : null,
+    context: ctx,
+  });
+  const out: Record<string, unknown> = { id: m.id, ts: m.ts };
+  if (m.weightKg != null) out.weight_kg = m.weightKg;
+  if (m.sleepH != null) out.sleep_h = m.sleepH;
+  if (m.context != null) out.context = m.context;
+  return out;
+}
+
+export async function diet_delete_meal(params: unknown) {
+  const id = stringParam((params as { id?: unknown })?.id);
+  if (!id) throw new Error("diet.delete_meal: missing id");
+  const removed = await dietDb.deleteMeal(id);
+  return { deleted: removed, id };
+}
+
+export async function diet_delete_workout(params: unknown) {
+  const id = stringParam((params as { id?: unknown })?.id);
+  if (!id) throw new Error("diet.delete_workout: missing id");
+  const removed = await dietDb.deleteWorkout(id);
+  return { deleted: removed, id };
+}
+
+export async function diet_delete_metric(params: unknown) {
+  const id = stringParam((params as { id?: unknown })?.id);
+  if (!id) throw new Error("diet.delete_metric: missing id");
+  const removed = await dietDb.deleteMetric(id);
+  return { deleted: removed, id };
+}
+
+/**
+ * 원본 diet.json은 파일 SoT 전체 덤프(디버그 전용) — 액션플랜이 "디버그 전용으로
+ * 축소"를 명시적으로 허용해 1:1 이식 대신 최소 상태 요약만 반환한다.
+ */
+export async function diet_json() {
+  const goals = await dietDb.fetchDietGoals();
+  const profile = await dietDb.fetchDietProfile();
+  return {
+    debug: true,
+    goals: dietRead.goalsDict(goals),
+    profile: profile ? dietRead.profileDict(profile) : null,
+  };
 }

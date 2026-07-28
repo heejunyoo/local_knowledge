@@ -16,10 +16,7 @@ const GOLDEN_DIR = path.join(__dirname, "..", "golden", "read");
 const METHODS = fs.readdirSync(GOLDEN_DIR).map((f) => f.replace(/\.json$/, ""));
 
 // 아직 구현되지 않은 라우트 — 각자의 phase 완료 후 이 목록에서 뺀다.
-const NOT_YET_IMPLEMENTED = new Set([
-  "diet.dashboard", // P4a-12(별도 세션): Mifflin 플랜 투영·HealthKit 참고값·요일상대 문구
-  "diet.fasting.status", // P4a-12(별도 세션): 위와 동일 엔진 의존
-]);
+const NOT_YET_IMPLEMENTED = new Set<string>([]);
 
 // 문서화된 diff-0 예외 — REFACTOR_STATUS.md "P4a 진행 상황" §1 참고.
 // Mac 로컬 데몬 필드(db_path 등)는 Vercel에 존재하지 않아 축소된 필드만 비교한다.
