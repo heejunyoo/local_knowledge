@@ -3,8 +3,8 @@
 | Field | Value |
 |-------|-------|
 | 최종 갱신 | 2026-07-28 |
-| 현재 위치 | **P4b 완료**(diet 쓰기 도메인 + `health.ingest`, 게이트 G4b-1~G4b-3 통과 · G4b-4 이월). **다음: P5(웹 UI) 착수 여부 결정** 또는 P4b/P4a 잔여 게이트(G4a-2/G4a-6/corpus.status 갭) 우선 처리, 아래 "다음 작업" 참고 |
-| 다음 세션 읽기 순서 | ① 이 파일 ② 착수할 phase에 맞춰 액션플랜 §P5 또는 잔여 게이트 항목 ③ 막히면 `REFACTOR_BACKLOG.md` |
+| 현재 위치 | **P5 구현 완료**(Hub·검색·Diet·Inbox·Settings 5라우트 + PWA + D-4 검색모드 확정). 게이트 G5-4/G5-5 통과, G5-1/G5-2/G5-3는 Chrome 확장 미연결로 curl 기반 기능 검증만 완료·시각적 브라우저 검증 이월. **다음: Chrome 확장 연결 후 G5-1~G5-3 마무리** 또는 P4a 잔여 게이트(G4a-2/G4a-6/corpus.status 갭) 처리, 아래 "다음 작업" 참고 |
+| 다음 세션 읽기 순서 | ① 이 파일 ② G5-1~G5-3 마무리 또는 액션플랜 §P6 ③ 막히면 `REFACTOR_BACKLOG.md` |
 | 결정 근거 | `docs/REFACTOR_DIRECTION_WEB_2026-07.md` (D-3 정의 §2.2) |
 | 미해결 이슈 | `docs/REFACTOR_BACKLOG.md` |
 | 작업 브랜치 | `refactor/web-p0` |
@@ -19,7 +19,18 @@
 | P3 인증 | ✅ | Next 스캐폴드 + `004_rls.sql` + `proxy.ts` |
 | P4a 읽기 API | ✅ 구현 11/11, 게이트 G4a-1/3/4/5 통과. G4a-2/G4a-6은 외부 의존(PAT/재실행)이라 이월 유지 | 아래 |
 | **P4b diet 쓰기 + health.ingest** | ✅ 게이트 G4b-1~G4b-3 통과, G4b-4 이월(발화 채널 미결정) | 아래 |
-| P5~P7 | ⬜ | — |
+| **P5 웹 UI** | ✅ 구현 완료(chat 제외 5라우트), G5-4/G5-5 통과 · G5-1/G5-2/G5-3 브라우저 실검증 이월 | 아래 |
+| P6~P7 | ⬜ | — |
+
+## P5 게이트 현황
+
+| 게이트 | 상태 |
+|---|---|
+| G5-1 폰 브라우저에서 URL만으로 로그인 → 전부 동작 | ⬜ curl로 5라우트 전부 200·실 데이터 렌더 확인했으나, 실제 폰 브라우저 시각 검증은 Chrome 확장 미연결로 이월 |
+| G5-2 데스크톱 브라우저 동일 | ⬜ 위와 동일 사유로 이월(기능은 curl로 검증 완료) |
+| G5-3 PWA 설치 후 홈 화면 아이콘으로 실행 가능 | ⬜ manifest.json/sw.js/아이콘 200 응답 확인까지만. 실기기 설치는 오너 몫 |
+| G5-4 Lighthouse 성능·접근성 각 80 이상 | ✅ `next build && next start` 프로덕션 빌드 + `npx lighthouse`(쿠키 주입)로 5라우트 전부 측정 — 성능 96~99, 접근성 95~96 |
+| G5-5 D-4 후속 판단 완료 | ✅ `docs/FTS_COMPARISON_2026-07.md`에 3줄 결론 기록, `settings['search.mode']`='tsvector' 확정(변경 불필요) |
 
 ## P4a 게이트 현황
 
@@ -110,10 +121,49 @@ JSON(이미 정규화된 값)을 테스트가 다시 `normalize()`에 통과시�
 G4b-4(단식 리마인더 실제 발화)는 이월 — 위 "P4b 게이트 현황" 및 액션플랜
 §P4b 각주 참고.
 
+## P5 (웹 UI, 커밋 8개 — `git log`의 "P5-" 커밋)
+
+**스코프 조정(계획 단계에서 발견, 오너 승인)**: 액션플랜 §P5는 `/chat`을
+포함하지만 백엔드 `knowledge.ask`는 P6에서만 구현되어(`dispatch.ts` 미등록)
+이번 세션은 **`/chat` 제외** — Hub·검색·Diet·Inbox·Settings 5라우트만
+구현. P6 완료 후 별도 세션에서 추가.
+
+순서: 공통 기반(`theme.css`=TossTheme.swift 이식, `lib/rpc/client.ts`
+브라우저 fetch 헬퍼, `components/ui/*` 프리미티브, `AppShell`+5탭
+`BottomNav`) → Hub(`assistant.today` 1회 호출 서버 컴포넌트) → 검색
+(`knowledge.search`, 4상태) → Diet(가장 큼 — 계획/단식/링/슬롯/한줄입력/
+프리셋/오늘기록/주간·목표·내정보 바텀시트, `DietView.swift` 1202줄 이식) →
+Inbox(`ReviewInboxView.swift`는 미팅 리뷰라 F-1로 폐기, 실제 백엔드인
+텍스트 인박스 상태기계에 맞춰 재구성) → Settings(`SettingsView.swift`의
+Mac 전용 항목 대신 코퍼스 상태+동기화+검색모드 표시+로그아웃으로 축소) →
+PWA(`sips`로 아이콘 리사이즈, `manifest.json`, 데이터 캐시 없는 오프라인
+셸 `sw.js`) → D-4 검색모드 확정.
+
+D-4: 실 DB(오너 코퍼스 236 단위) 대상 EXPLAIN ANALYZE로 tsvector/trgm/
+hybrid 재확인 — trgm은 tsvector가 이미 찾은 문서의 부분집합만 반환(신규
+회수 0)하면서 약 16배 느려(5.5ms vs 86ms) `tsvector` 확정
+(`docs/FTS_COMPARISON_2026-07.md`).
+
+검증: 매 슬라이스마다 dev 서버 + curl(쿠키 세션)로 5라우트 전부 실 DB
+데이터 렌더 확인, Diet는 log_meal→dashboard 반영→delete_meal→원복 왕복,
+Inbox는 create→promote(PAT 미발급으로 promote_failed 경로까지) 확인 후
+테스트 데이터 정리(SQL). `npm run test`(116개)·`test:regression`(23개)
+전부 유지. `next build && next start` 프로덕션 빌드 후 `npx lighthouse`에
+쿠키를 주입해 5라우트 전부 측정 — 성능 96~99·접근성 95~96(위 게이트 표).
+접근성 감점 원인은 전부 `--toss-blue-500`(#3182F6) 텍스트의 대비비 — Toss
+디자인 토큰 자체의 특성이라 이번 세션에서 임의 변경하지 않음(색상 변경은
+전체 앱 정체성에 영향, 오너 판단 필요 시 별도 논의).
+
+**Chrome 확장 미연결로 이번 세션은 curl 기반 기능 검증까지만 완료** —
+실제 폰·데스크톱 브라우저에서의 시각 확인(G5-1/G5-2)과 PWA 홈 화면 설치
+실기기 확인(G5-3)은 다음 세션(확장 연결 후) 또는 오너가 직접 진행.
+
 ## 다음 작업
 
-- **P5(웹 UI) 착수 여부 결정** — 액션플랜 §P5 참고. 착수 시 D-4 후속 판단
-  (검색 모드 확정)도 §P5 범위에 포함됨.
+- **G5-1~G5-3 마무리** — Chrome 확장(https://claude.ai/chrome) 설치·연결
+  후 모바일/데스크톱 뷰포트로 5라우트 시각 확인 + PWA 실기기 설치 확인.
+- **P6(생성 경로 이식) 착수 여부 결정** — LLM 라우팅·extractive fallback
+  구현 후 `/chat` 라우트를 P5에 추가하는 후속 작업 포함.
 - **G4b-4(단식 리마인더 실제 발화) 후속** — 실제 알림 채널(이메일/Web Push
   예외 허용/기타) 결정은 오너 몫. 결정 후 pg_cron 스케줄 등록 + 별도 phase로.
 - (아무 때나) G4a-2(inbox 왕복): GitHub PAT 발급 후 vault 레포 실제 커밋
