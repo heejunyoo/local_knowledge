@@ -2,8 +2,8 @@ import * as h from "./handlers";
 
 type Handler = (params: unknown) => Promise<unknown>;
 
-// P4a 스코프: 읽기 전용. knowledge/corpus/inbox(P4a-6), 상태기계가 필요한
-// 쓰기 메서드(P4a-9)는 여기에 추가되기 전까지 method not found로 거부된다.
+// P4a 스코프: 읽기 전용 + D-3 상태기계 쓰기(inbox.promote/corpus.sync/
+// search.reindex, task 9). diet 쓰기 등 나머지는 P4b에서 추가된다.
 const REGISTRY: Record<string, Handler> = {
   "core.ping": h.core_ping,
   "core.services": h.core_services,
@@ -21,8 +21,11 @@ const REGISTRY: Record<string, Handler> = {
   "knowledge.health": h.knowledge_health,
   "knowledge.search": h.knowledge_search,
   "corpus.status": h.corpus_status,
+  "corpus.sync": h.corpus_sync,
+  "search.reindex": h.search_reindex,
   "inbox.list": h.inbox_list,
   "inbox.create": h.inbox_create,
+  "inbox.promote": h.inbox_promote,
 };
 
 export interface RpcError {

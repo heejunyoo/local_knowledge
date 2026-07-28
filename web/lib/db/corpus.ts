@@ -40,3 +40,36 @@ export async function fetchCorpusStatus() {
     })),
   };
 }
+
+/**
+ * corpus.sync 워커 (ingest_job kind='corpus_sync'). 원본 Swift는 로컬 파일을
+ * 직접 스캔했지만(GitHub PAT 미발급 상태에서 웹은 재현 불가), 이미 DB에 있는
+ * knowledge_unit 집계로 connected_source.unit_count/last_sync_at을 재계산하는
+ * 실작업으로 대체한다(오너 승인, REFACTOR_STATUS 참고). 외부 API 불필요 —
+ * G4a-4(고아 회수→재큐잉) 검증에 이 워커를 쓴다. GitHub 기반 실제 vault
+ * 재수집은 PAT 발급 후 별도 task(REFACTOR_BACKLOG.md).
+ */
+export async function syncConnectedSourceStats(): Promise<{ updated: number }> {
+  const supabase = await createClient();
+  const { data: sources, error: sourcesError } = await supabase
+    .from("connected_source")
+    .select("id,source_type");
+  if (sourcesError) throw sourcesError;
+
+  let updated = 0;
+  for (const source of sources ?? []) {
+    const { count, error } = await supabase
+      .from("knowledge_unit")
+      .select("unit_id", { count: "exact", head: true })
+      .eq("source_type", source.source_type);
+    if (error) throw error;
+
+    const { error: updateError } = await supabase
+      .from("connected_source")
+      .update({ unit_count: count ?? 0, last_sync_at: new Date().toISOString(), last_error: null })
+      .eq("id", source.id);
+    if (updateError) throw updateError;
+    updated++;
+  }
+  return { updated };
+}

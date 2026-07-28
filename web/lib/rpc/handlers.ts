@@ -3,13 +3,21 @@
 //
 // 스코프: core.*, assistant.*, timeline.list, diet.{day_summary,week_review,
 // goals,profile.get,ping}. diet.dashboard·diet.fasting.status는 별도 세션
-// (REFACTOR_STATUS.md 참고). knowledge/corpus/inbox는 P4a-6.
+// (REFACTOR_STATUS.md 참고). knowledge/corpus/inbox는 P4a-6, D-3 상태기계
+// 쓰기(inbox.promote/corpus.sync/search.reindex)는 P4a-9(task 9).
 import { createClient } from "@/lib/supabase/server";
 import * as dietRead from "@/lib/domain/diet-read";
 import { fetchDietGoals, fetchDietProfile, fetchRecentDietSnapshots } from "@/lib/db/diet";
-import { fetchInboxOpenCount, fetchInboxList, insertInboxItem } from "@/lib/db/inbox";
+import {
+  fetchInboxOpenCount,
+  fetchInboxList,
+  insertInboxItem,
+  promoteInboxItem,
+  reclaimStaleInboxItems,
+} from "@/lib/db/inbox";
 import { fetchCorpusStatus } from "@/lib/db/corpus";
 import { searchDocs } from "@/lib/db/search";
+import { runIngestJob, reclaimStaleIngestJobs } from "@/lib/db/ingest";
 
 export async function core_ping() {
   return { pong: true };
@@ -158,7 +166,18 @@ export async function diet_ping() {
 }
 
 export async function corpus_status() {
+  // 상주 워커 금지 원칙(방향성 §4.1-1) — 다음 요청 진입 시 고아 ingest_job을
+  // lazy하게 회수한다(R2″, G4a-4).
+  await reclaimStaleIngestJobs();
   return fetchCorpusStatus();
+}
+
+export async function corpus_sync() {
+  return runIngestJob("corpus_sync");
+}
+
+export async function search_reindex() {
+  return runIngestJob("search_reindex");
 }
 
 /**
@@ -202,6 +221,9 @@ export async function knowledge_search(params: unknown) {
 }
 
 export async function inbox_list(params: unknown) {
+  // 상주 워커 금지 원칙(방향성 §4.1-1) — 다음 요청 진입 시 고아 inbox_item을
+  // lazy하게 회수한다(R2′/R3′, G4a-3).
+  await reclaimStaleInboxItems();
   const p = (params ?? {}) as { include_promoted?: boolean };
   const items = await fetchInboxList(Boolean(p.include_promoted));
   return { items, open_count: await fetchInboxOpenCount() };
@@ -210,4 +232,10 @@ export async function inbox_list(params: unknown) {
 export async function inbox_create(params: unknown) {
   const p = (params ?? {}) as { text?: string; message?: string };
   return insertInboxItem(p.text ?? p.message ?? "");
+}
+
+export async function inbox_promote(params: unknown) {
+  const p = (params ?? {}) as { id?: string };
+  if (!p.id) throw new Error("inbox.promote: missing id");
+  return promoteInboxItem(p.id);
 }

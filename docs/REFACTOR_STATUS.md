@@ -3,8 +3,8 @@
 | Field | Value |
 |-------|-------|
 | 최종 갱신 | 2026-07-28 |
-| 현재 위치 | P4a 읽기 API 완료(9/12) → **다음: task 9 상태기계(D-3)** |
-| 다음 세션 읽기 순서 | ① 이 파일 ② 액션플랜 §P4a "작업 단계 4·5"만 ③ 막히면 `REFACTOR_BACKLOG.md` |
+| 현재 위치 | task 9(상태기계 D-3) 완료 → **다음: task 10 `/api/cron/keepalive`** |
+| 다음 세션 읽기 순서 | ① 이 파일 ② 액션플랜 §P4a "작업 단계 5"(task 10~11)만 ③ 막히면 `REFACTOR_BACKLOG.md` |
 | 결정 근거 | `docs/REFACTOR_DIRECTION_WEB_2026-07.md` (D-3 정의 §2.2) |
 | 미해결 이슈 | `docs/REFACTOR_BACKLOG.md` |
 | 작업 브랜치 | `refactor/web-p0` |
@@ -17,7 +17,7 @@
 | P1 스키마+이관 | ✅ | `web/supabase/migrations/`, `migrate-from-sqlite.ts` |
 | P2 Vault→Git | ✅ | 레포 2개 신규(아래) |
 | P3 인증 | ✅ | Next 스캐폴드 + `004_rls.sql` + `proxy.ts` |
-| **P4a 읽기 API** | 🟡 9/12 | 아래 |
+| **P4a 읽기 API** | 🟡 10/12 | 아래 |
 | P4b~P7 | ⬜ | — |
 
 ## P4a 게이트 현황
@@ -25,26 +25,32 @@
 | 게이트 | 상태 |
 |---|---|
 | G4a-1 골든 diff 0 | ✅ 15/18 (`npm run test:regression`), 3건 skip(미구현: dashboard·fasting.status·health.sync_status) |
-| G4a-2 inbox 왕복 | ⬜ GitHub PAT 미발급 — task 9 이후 별도 |
-| G4a-3 상태기계 default-deny | ⬜ **다음(task 9)** |
-| G4a-4 ingest_job 고아 회수 | ⬜ task 9에 포함 |
+| G4a-2 inbox 왕복 | ⬜ GitHub PAT 미발급 — 코드는 준비됨(`defaultVaultCommit`), 토큰 발급 후 별도 세션 |
+| G4a-3 상태기계 default-deny | ✅ `tests/domain/state-machine.test.ts`(23종 거부) |
+| G4a-4 ingest_job 고아 회수 | ✅ 유닛 테스트 + 실 DB 검증(`tests/regression/state-machine.regression.test.ts`) |
 | G4a-5 미인증 401 | ✅ |
 | G4a-6 검색 골든 30건 | ⬜ `compare-search.ts` 변경 없음, 재실행만 필요 |
 
-## 완료 (task 1~8, 커밋 9개 — 상세는 `git log`의 "P4a-" 커밋)
+## 완료 (task 1~9, 커밋 9개+ — 상세는 `git log`의 "P4a-" 커밋)
 
 401 분기, vitest(+회귀용 별도 config), `lib/settings.ts`(P-1), `lib/redaction.ts`,
 `lib/domain/diet-read.ts`, `/api/rpc` + core/assistant/timeline/diet/knowledge/
 corpus/inbox 읽기 17종 + REST 별칭, G4a-1 회귀 자동화.
 
+**task 9(상태기계 D-3)**: `lib/domain/state-machine.ts`(순수 default-deny 그래프
++ R2/R3 복구 규칙) + `lib/db/state-event.ts` + `inbox.promote`/`corpus.sync`/
+`search.reindex` RPC 3종 + 고아 회수 lazy 트리거(`inbox.list`/`corpus.status`
+진입 시). `corpus.sync`/`search.reindex`는 GitHub PAT 없이 가능한 DB 내부
+실작업(`syncConnectedSourceStats`/`reindexMissingSearchDocs`)으로 연결 —
+GitHub 기반 실제 vault 재수집은 이월(`REFACTOR_BACKLOG.md` "P4a-9에서 발견").
+유닛 테스트 33종 + 실 DB 검증 3종 전부 통과, G4a-1 회귀 무변화(15/18 유지).
+회귀 스위트가 2개 파일(`golden.test.ts` + 신규)로 늘면서 각 파일이 동시에
+같은 오너 이메일로 매직링크 인증을 시도해 서로의 링크를 무효화하는 경쟁
+상태가 발생 — `vitest.regression.config.ts`에 `fileParallelism: false` 추가로
+해결(연속 2회 실행으로 재현 확인).
+
 ## 다음 작업
 
-9. **상태기계 D-3** `web/lib/domain/state-machine.ts` — 액션플랜 §P4a 작업 단계 4
-   그대로. `inbox_item`+`ingest_job` 그래프, `state_event` 기록, 유닛 테스트
-   (미선언 전이 20종 거부·와일드카드 금지·heartbeat 회수 4종·attempts 상한).
-   커밋 함수는 주입형으로 만들 것(GitHub PAT 없이 테스트 가능해야 함).
-   `ingest_job`은 PAT 불필요 — `corpus.sync`/`search.reindex`에 실제 연결하고
-   G4a-4까지 이번에 검증.
 10. `/api/cron/keepalive` + `vercel.json` Cron 등록.
 11. `/api/health/ingest`(Bearer `INGEST_API_TOKEN`) + `health.sync_status`.
     토큰 값은 직접 생성하지 말고 오너가 발급하도록 안내.
@@ -62,6 +68,10 @@ corpus/inbox 읽기 17종 + REST 별칭, G4a-1 회귀 자동화.
 - **`diet.dashboard`·`diet.fasting.status`**: "조회 전용 최소 범위"로 분류돼
   있었지만 실제론 Mifflin 플랜 투영·HealthKit 참고값 등 도메인 로직 본체
   (C-3 경고) → P4a에서 제외, task 12로 이관.
+- **`corpus.sync`/`search.reindex`(task 9)**: GitHub PAT 미발급으로 원본 Swift의
+  실제 obsidian/notes/files 재수집을 재현할 수 없어 DB 내부 실작업(connected_source
+  통계 재계산 / search_doc 누락분 upsert)으로 축소. 상세·후속 task는
+  `REFACTOR_BACKLOG.md` "P4a-9에서 발견" 참고.
 
 ## 레포 3개
 

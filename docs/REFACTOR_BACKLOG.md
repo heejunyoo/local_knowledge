@@ -31,6 +31,28 @@
   두 obsidian 커넥터가 같은 물리 vault를 가리켜 `unit_id` 충돌로 8건이 어느 한쪽에서 덮어써졌을
   가능성이 유력하지만 미검증. G4a-1 회귀 스위트(`tests/regression/golden.test.ts`)는 corpus.status를
   구조 검증(키 존재·타입)만 하고 값 diff-0 대상에서 제외했다 — P4b 이전에 원인 확인 필요.
+  **주의(P4a-9, task 9 검증 중 발생)**: `corpus.sync`(`syncConnectedSourceStats`, `lib/db/corpus.ts`)를
+  G4a-4 실 DB 검증 목적으로 1회 실행하면서 `connected_source.unit_count`가 217(라이브 `knowledge_unit`
+  집계)로 갱신돼 위 문단이 근거로 든 "225 스냅샷 보존" 상태가 더 이상 아니다(2026-07-28). `knowledge_unit`
+  원본 데이터는 이 작업으로 건드리지 않았으므로 8건 갭 자체의 근본 원인 조사(두 obsidian 커넥터의
+  `unit_id` 충돌 여부)는 여전히 `knowledge_unit`을 직접 조회해 진행 가능하다 — 다만 앞으로
+  `connected_source.unit_count`는 상시 라이브 값이므로 "225 vs 236" 비교의 기준값으로는 쓸 수 없다.
+
+## P4a-9(상태기계 D-3)에서 발견
+
+- **GitHub 기반 실제 vault 재수집 이월**: `corpus.sync`/`search.reindex`(`ingest_job` 상태기계)는
+  이번 세션에서 GitHub PAT 없이 가능한 "DB 내부 실작업"으로만 연결했다 —
+  `corpus.sync`는 `connected_source.unit_count`/`last_sync_at` 재계산(`syncConnectedSourceStats`,
+  `web/lib/db/corpus.ts`), `search.reindex`는 `knowledge_unit` 중 `search_doc`에 없는 항목만
+  upsert(`reindexMissingSearchDocs`, `web/lib/db/search.ts`). 원본 Swift가 하던 실제 obsidian/notes/
+  files 재수집(vault 파일을 GitHub에서 읽어 `knowledge_unit`/`knowledge_chunk` 갱신)은 하지 않는다.
+  `VAULT_GITHUB_TOKEN`(`docs/ENV_VARS.md`) 발급 후 별도 세션에서 두 워커를 GitHub Contents API 기반
+  실제 수집 로직으로 교체할 것. 이때 위 항목의 "P1에서 발견 — 마이그레이션 5건 갭"도 함께 해소된다.
+- **G4a-2(inbox.promote 실제 vault 커밋 왕복) 이월**: 같은 이유(PAT 미발급)로 미검증. `defaultVaultCommit`/
+  `defaultVaultPathChecker`(`web/lib/db/inbox.ts`)는 구현 완료 상태이고 토큰만 없으면 안전하게
+  `promote_failed`(error_code=`vault_token_missing`)로 떨어짐을 실 DB로 확인했다
+  (`tests/regression/state-machine.regression.test.ts`). 토큰 발급 후 `knowledge-vault` 레포에
+  실제로 커밋되는지, `10 📥 수집함/` 경로 한정이 지켜지는지만 확인하면 된다.
 
 ## P3에서 발견
 
