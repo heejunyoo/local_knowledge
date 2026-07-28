@@ -1,0 +1,17 @@
+.card {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  text-align: left;
+  background: var(--toss-white);
+  border-radius: var(--toss-radius-card);
+  box-shadow: var(--toss-card-shadow);
+}
+
+.padded {
+  padding: var(--toss-space-5);
+}
+
+.unpadded {
+  padding: 0 var(--toss-space-5);
+}

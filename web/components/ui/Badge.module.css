@@ -1,0 +1,22 @@
+.badge {
+  display: inline-block;
+  font-size: var(--toss-font-caption-size);
+  font-weight: 600;
+  padding: 4px var(--toss-space-2);
+  border-radius: var(--toss-radius-badge);
+}
+
+.info {
+  color: var(--toss-blue-500);
+  background: var(--toss-blue-50);
+}
+
+.danger {
+  color: var(--toss-red-500);
+  background: var(--toss-red-50);
+}
+
+.neutral {
+  color: var(--toss-grey-700);
+  background: var(--toss-grey-100);
+}

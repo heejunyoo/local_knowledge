@@ -1,4 +1,6 @@
+import "./theme.css";
 import "./globals.css";
+import { AppShell } from "@/components/AppShell";
 
 export const metadata = {
   title: "Knowledge",
@@ -11,7 +13,9 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="ko">
-      <body>{children}</body>
+      <body>
+        <AppShell>{children}</AppShell>
+      </body>
     </html>
   );
 }

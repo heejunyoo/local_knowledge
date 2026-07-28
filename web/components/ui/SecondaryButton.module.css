@@ -1,0 +1,17 @@
+.button {
+  width: 100%;
+  height: 52px;
+  border: none;
+  border-radius: var(--toss-radius-button);
+  font-family: var(--toss-font-family);
+  font-size: var(--toss-font-button-size);
+  font-weight: var(--toss-font-button-weight);
+  color: var(--toss-grey-900);
+  background: var(--toss-grey-100);
+  cursor: pointer;
+}
+
+.button:disabled {
+  color: var(--toss-grey-500);
+  cursor: default;
+}

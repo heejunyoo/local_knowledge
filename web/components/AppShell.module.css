@@ -1,0 +1,12 @@
+.main {
+  max-width: 480px;
+  margin: 0 auto;
+  padding: var(--toss-space-5) var(--toss-space-5) 0;
+  min-height: 100dvh;
+  box-sizing: border-box;
+  background: var(--toss-grey-50);
+}
+
+.mainWithNav {
+  padding-bottom: calc(64px + env(safe-area-inset-bottom, 0));
+}
