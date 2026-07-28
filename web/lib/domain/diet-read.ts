@@ -428,6 +428,22 @@ export function recommendedProteinG(p: Profile): number {
   return Math.round(p.weightKg * 1.6);
 }
 
+const RECOMMENDED_WEEKLY_WORKOUTS: Record<Activity, number> = {
+  sedentary: 3, light: 3, moderate: 4, active: 5,
+};
+
+const RECOMMENDED_WORKOUT_MINUTES_PER_DAY: Record<Activity, number> = {
+  sedentary: 20, light: 30, moderate: 40, active: 45,
+};
+
+export function recommendedWeeklyWorkouts(activity: Activity): number {
+  return RECOMMENDED_WEEKLY_WORKOUTS[activity];
+}
+
+export function recommendedWorkoutMinutesPerDay(activity: Activity): number {
+  return RECOMMENDED_WORKOUT_MINUTES_PER_DAY[activity];
+}
+
 /** diet.profile.get — Mifflin–St Jeor BMR/TDEE만 포함(플랜 투영은 diet.dashboard 몫, 별도 세션). */
 export function profileDict(p: Profile) {
   return {
