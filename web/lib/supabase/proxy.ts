@@ -43,6 +43,13 @@ export async function updateSession(request: NextRequest) {
   );
 
   if (!data?.claims && !isPublicPath) {
+    // API routes are called by fetch/curl clients, not browsers following a
+    // redirect chain — a 307 to /login would just hand back an HTML page as
+    // the "response" to a JSON caller. G4a-5 requires 401 here.
+    if (request.nextUrl.pathname.startsWith("/api/")) {
+      return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+    }
+
     const url = request.nextUrl.clone();
     // A magic link lands on whatever URL Supabase allows (by default the Site
     // URL root, not the callback route), carrying either a one-time PKCE
