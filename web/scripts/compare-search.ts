@@ -6,28 +6,57 @@
 
 import path from "node:path";
 import fs from "node:fs";
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import dotenv from "dotenv";
 
-const SUPABASE_URL = "https://gppklwzcmfuuhsefdeik.supabase.co";
-const ANON_KEY =
-  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdwcGtsd3pjbWZ1dWhzZWZkZWlrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUxMzcyNTcsImV4cCI6MjEwMDcxMzI1N30.pQ9gmWSZdMfIqkbunwffgEj-cOTUZKBalq7KIW8smjA";
+dotenv.config({ path: path.join(__dirname, "..", ".env.local") });
+
+// 004_rls.sql(P3)로 search_doc에 owner_all RLS가 걸리면서 anon 키 단독 호출은
+// auth.uid() 없이 전부 필터링돼 빈 배열만 돌아온다(200 OK라 조용히 통과) —
+// tests/regression/test-client.ts와 같은 admin.generateLink+verifyOtp로 실 세션을
+// 발급해 호출해야 골든 대비 비교가 의미를 가진다.
+const OWNER_EMAIL = "naheejun87@gmail.com";
 
 const GOLDEN_DIR = path.resolve(__dirname, "../tests/golden/search");
 const queries = JSON.parse(fs.readFileSync(path.join(GOLDEN_DIR, "queries.json"), "utf8")) as {
   id: string; category: string; q: string;
 }[];
 
-async function searchDocs(q: string, mode: string): Promise<string[]> {
-  const res = await fetch(`${SUPABASE_URL}/rest/v1/rpc/search_docs`, {
-    method: "POST",
-    headers: {
-      apikey: ANON_KEY,
-      Authorization: `Bearer ${ANON_KEY}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ q, search_mode: mode, match_limit: 20 }),
+function requireEnv(name: string): string {
+  const v = process.env[name];
+  if (!v) throw new Error(`missing env ${name} (check web/.env.local)`);
+  return v;
+}
+
+async function authenticate(): Promise<SupabaseClient> {
+  const url = requireEnv("NEXT_PUBLIC_SUPABASE_URL");
+  const anonKey = requireEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY");
+  const serviceKey = requireEnv("SUPABASE_SERVICE_ROLE_KEY");
+
+  const admin = createClient(url, serviceKey);
+  const { data: linkData, error: linkError } = await admin.auth.admin.generateLink({
+    type: "magiclink",
+    email: OWNER_EMAIL,
   });
-  if (!res.ok) throw new Error(`search_docs(${mode}) failed: ${res.status} ${await res.text()}`);
-  const rows = (await res.json()) as { doc_id: string; rank: number }[];
+  if (linkError || !linkData.properties?.hashed_token) {
+    throw new Error(`generateLink failed: ${linkError?.message ?? "no hashed_token"}`);
+  }
+
+  const anon = createClient(url, anonKey);
+  const { data: verified, error: verifyError } = await anon.auth.verifyOtp({
+    type: "magiclink",
+    token_hash: linkData.properties.hashed_token,
+  });
+  if (verifyError || !verified.session) {
+    throw new Error(`verifyOtp failed: ${verifyError?.message ?? "no session"}`);
+  }
+  return anon;
+}
+
+async function searchDocs(client: SupabaseClient, q: string, mode: string): Promise<string[]> {
+  const { data, error } = await client.rpc("search_docs", { q, search_mode: mode, match_limit: 20 });
+  if (error) throw new Error(`search_docs(${mode}) failed: ${error.message}`);
+  const rows = data as { doc_id: string; rank: number }[];
   return rows.map((r) => r.doc_id);
 }
 
@@ -41,6 +70,8 @@ function recallPrecision(golden: string[], candidate: string[]) {
 }
 
 async function main() {
+  const client = await authenticate();
+
   const rows: string[] = [];
   rows.push("| id | category | q | golden# | tsvector recall | tsvector missed | trgm# | hybrid# |");
   rows.push("|---|---|---|---|---|---|---|---|");
@@ -54,9 +85,9 @@ async function main() {
     const goldenIds = golden.doc_ids ?? [];
 
     const [tsv, trgm, hybrid] = await Promise.all([
-      searchDocs(query.q, "tsvector"),
-      searchDocs(query.q, "trgm"),
-      searchDocs(query.q, "hybrid"),
+      searchDocs(client, query.q, "tsvector"),
+      searchDocs(client, query.q, "trgm"),
+      searchDocs(client, query.q, "hybrid"),
     ]);
 
     const { recall, missed } = recallPrecision(goldenIds, tsv);

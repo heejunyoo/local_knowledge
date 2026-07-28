@@ -10,6 +10,18 @@
 
 - **마이그레이션 5건 갭**: P0-8 드리프트로 생긴 unit 1건 + 원래 미인덱스였던 vault 파일 4건(`docs/DATA_INVENTORY_2026-07-27.md` §2 미인덱스 목록)은 백업 SQLite에 존재하지 않아 `migrate-from-sqlite.ts`로 이관하지 못했다. knowledge_unit 236/knowledge_chunk 590/source_pointer 236/search_doc 236까지만 이관됨(SQL 이관 가능한 전량). P4a 인제스트 구현 시 이 5건을 vault 파일에서 직접 읽어 추가한다.
 - **search_doc.tsv URL 토큰화 차이 1건**: Postgres 기본 파서가 URL을 `host`/`url_path` 복합 토큰으로 묶어, URL 안에 포함된 단어(예: `.../standard-payments/api`의 "api")가 독립 검색어로 안 잡히는 경우가 있다(`docs/FTS_COMPARISON_2026-07.md` 실측 발견 2, q14 1건). D-4에 따라 튜닝하지 않고 accept. P5 실사용 중 반복되면 재평가.
+- **[2026-07-28, G4a-6 재실행] 고빈도어 2건(결제/API)에서 bm25↔ts_rank 랭킹 경계 이탈**: `compare-search.ts`는
+  anon 키만 써서 004_rls.sql(P3) 이후 RLS에 전량 차단돼 항상 빈 배열을 반환하는 상태였음(200 OK라
+  조용히 통과) — `tests/regression/test-client.ts`와 동일한 admin.generateLink+verifyOtp 인증을
+  추가해 수정(코드 변경, `web/scripts/compare-search.ts`). 실제 인증 세션으로 재실행한 결과 30개 중
+  28개는 recall 100%, q01(결제, golden 20/실매치 28)·q14(API, golden 20/실매치 34)만 각각 65%/35%로
+  하락. 원인은 corpus 드리프트나 유실이 아니라(golden doc_id 전부 `search_doc`에 존재하고 tsv 매치도
+  됨을 확인) SQLite bm25와 Postgres ts_rank의 랭킹 알고리즘 차이 — 총 매치가 20건(match_limit)을
+  넘는 고빈도어에서만 원래 top-20이던 문서 일부가 20건 윈도 밖으로 밀려남(결제 7건, API 13건이 각각
+  idx 20~33 사이로 이동, API는 1건만 진짜 비매치). D-4가 이미 "튜닝 금지, 동등성만 확인" 원칙을
+  정해뒀으므로 임의로 고치지 않았음 — 이 현상을 accept할지, 세컨더리 정렬 등으로 완화할지는 오너
+  판단 필요(§P5 실사용 중 "결제"/"API" 같은 고빈도어 검색 시 스크롤 없이 안 보이는 결과가 있을 수
+  있음이 실제 사용자 영향).
 
 ## P2에서 발견
 
@@ -22,21 +34,22 @@
 
 ## P4a에서 발견
 
-- **corpus.status 실측 카운트가 골든과 어긋난다(원인 미확인)**: 골든(P0, 2026-07-27) 기준
-  `total_units=244`(notes 19 + obsidian 225), 현재 라이브 `knowledge_unit` 조회는
-  `total_units=236`(obsidian 217). notes/meetings는 일치. `obsidian` 8건 갭은 §P1 백로그
-  "마이그레이션 5건 갭"(위 항목, 5건)과 갯수가 안 맞아 같은 원인이 아닐 가능성이 있다.
-  `connected_source.unit_count` 캐시값(225, obsidian-default·folder 둘 다)은 골든과 일치하므로
-  캐시 자체는 P1 이관 시점 스냅샷을 보존하고 있고, 어긋난 쪽은 `knowledge_unit` 라이브 카운트다.
-  두 obsidian 커넥터가 같은 물리 vault를 가리켜 `unit_id` 충돌로 8건이 어느 한쪽에서 덮어써졌을
-  가능성이 유력하지만 미검증. G4a-1 회귀 스위트(`tests/regression/golden.test.ts`)는 corpus.status를
-  구조 검증(키 존재·타입)만 하고 값 diff-0 대상에서 제외했다 — P4b 이전에 원인 확인 필요.
-  **주의(P4a-9, task 9 검증 중 발생)**: `corpus.sync`(`syncConnectedSourceStats`, `lib/db/corpus.ts`)를
-  G4a-4 실 DB 검증 목적으로 1회 실행하면서 `connected_source.unit_count`가 217(라이브 `knowledge_unit`
-  집계)로 갱신돼 위 문단이 근거로 든 "225 스냅샷 보존" 상태가 더 이상 아니다(2026-07-28). `knowledge_unit`
-  원본 데이터는 이 작업으로 건드리지 않았으므로 8건 갭 자체의 근본 원인 조사(두 obsidian 커넥터의
-  `unit_id` 충돌 여부)는 여전히 `knowledge_unit`을 직접 조회해 진행 가능하다 — 다만 앞으로
-  `connected_source.unit_count`는 상시 라이브 값이므로 "225 vs 236" 비교의 기준값으로는 쓸 수 없다.
+- **[해결 2026-07-28] corpus.status obsidian 8건 갭 원인 확인 — unit_id 충돌 아님**: 골든(P0,
+  2026-07-27) 기준 `obsidian=225`, 라이브 `knowledge_unit` 조회는 `obsidian=217`(8건 갭). 이전
+  기록은 "§P1 마이그레이션 5건 갭과 갯수가 안 맞아 두 obsidian 커넥터의 `unit_id` 충돌 가능성"을
+  미검증 상태로 남겼으나, 라이브 DB 직접 조회로 완전히 재구성됨: `sot_ref like 'Meetings/%'`인
+  obsidian 행이 라이브에 **0건**(migrate-from-sqlite.ts가 F-1 결정에 따라 정확히 7건을 의도적으로
+  제외 — `where sot_ref not like 'Meetings/%'`), `CyberSourceKey` 참조 노트(P0-8 드리프트로 SQLite가
+  224→225가 된 그 1건)도 라이브에 **부재**(백업 SQLite 시점에 없어 이관 대상 자체가 아니었음, 위
+  "마이그레이션 5건 갭" 항목의 구성요소 중 하나). 즉 `225 = 217(라이브) + 7(Meetings, F-1 의도적
+  제외) + 1(드리프트 unit, 마이그레이션 5건 갭에 이미 포함)` — 정확히 8로 정합. `unit_id` 충돌은
+  없었고 유실된 데이터도 없다. `connected_source.unit_count`가 두 obsidian 커넥터(`obsidian-default`/
+  `folder:ca0da96e`) 모두 같은 값을 보이는 것도 버그가 아니라 `syncConnectedSourceStats`/원본 Swift
+  둘 다 `source_type` 단위로만 집계하기 때문(골든 자체에도 두 항목이 똑같이 225로 찍혀 있어 원본
+  동작을 충실히 재현한 것). 남은 실제 조치 대상은 이미 추적 중인 "마이그레이션 5건 갭"(드리프트
+  1건 + 미인덱스 4건, P4a 실 vault 재수집 시 처리, GitHub PAT 선행) 하나뿐이며 corpus.status
+  자체의 정합성 문제는 없다. G4a-1이 corpus.status를 구조 검증만 하는 것도 계속 타당(값은 F-1
+  스코프 조정으로 골든과 의도적으로 다름).
 
 ## P4a-9(상태기계 D-3)에서 발견
 
