@@ -6,6 +6,12 @@
 // 이 모듈은 그 함수를 호출하는 얇은 래퍼다 — 품질 튜닝은 여기서 하지 않는다.
 //
 // 비교 리포트: docs/FTS_COMPARISON_2026-07.md (게이트 아님, P5 판단 근거).
+//
+// P4a: RLS가 켜진 뒤(004_rls.sql)라 P1 당시의 anon key + 하드코드 owner_id
+// REST 직접 호출은 더 이상 동작하지 않는다. 세션 클라이언트 + settings 캐시로
+// 교체했다.
+import { createClient } from "@/lib/supabase/server";
+import { getSetting } from "@/lib/settings";
 
 export type SearchMode = "tsvector" | "trgm" | "hybrid";
 
@@ -14,44 +20,25 @@ export interface SearchHit {
   rank: number;
 }
 
-const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-
-const DEFAULT_OWNER_ID = "00000000-0000-0000-0000-000000000001";
-
 /** settings['search.mode']를 읽는다. 없으면 D-4 기본값(tsvector). */
-export async function getSearchMode(ownerId: string = DEFAULT_OWNER_ID): Promise<SearchMode> {
-  const url = `${SUPABASE_URL}/rest/v1/settings?owner_id=eq.${ownerId}&key=eq.search.mode&select=value`;
-  const res = await fetch(url, {
-    headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}` },
-  });
-  if (!res.ok) return "tsvector";
-  const rows = (await res.json()) as { value: SearchMode }[];
-  return rows[0]?.value ?? "tsvector";
+export async function getSearchMode(): Promise<SearchMode> {
+  return (await getSetting<SearchMode>("search.mode")) ?? "tsvector";
 }
 
 /**
  * search_docs() RPC 호출. mode를 명시하지 않으면 settings['search.mode']를 조회한다.
- * P1에서는 tsvector가 게이트 대상이고 trgm/hybrid는 대기 경로이므로,
- * settings 기본값도 tsvector로 고정되어 있다 (migrate-from-sqlite.ts).
  */
 export async function searchDocs(
   query: string,
-  opts: { mode?: SearchMode; limit?: number; ownerId?: string } = {}
+  opts: { mode?: SearchMode; limit?: number } = {},
 ): Promise<SearchHit[]> {
-  const mode = opts.mode ?? (await getSearchMode(opts.ownerId));
-  const res = await fetch(`${SUPABASE_URL}/rest/v1/rpc/search_docs`, {
-    method: "POST",
-    headers: {
-      apikey: SUPABASE_ANON_KEY,
-      Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ q: query, search_mode: mode, match_limit: opts.limit ?? 20 }),
+  const mode = opts.mode ?? (await getSearchMode());
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("search_docs", {
+    q: query,
+    search_mode: mode,
+    match_limit: opts.limit ?? 20,
   });
-  if (!res.ok) {
-    throw new Error(`searchDocs failed: ${res.status} ${await res.text()}`);
-  }
-  const rows = (await res.json()) as { doc_id: string; rank: number }[];
-  return rows.map((r) => ({ docId: r.doc_id, rank: r.rank }));
+  if (error) throw error;
+  return ((data ?? []) as { doc_id: string; rank: number }[]).map((r) => ({ docId: r.doc_id, rank: r.rank }));
 }

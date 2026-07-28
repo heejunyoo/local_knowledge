@@ -7,7 +7,9 @@
 import { createClient } from "@/lib/supabase/server";
 import * as dietRead from "@/lib/domain/diet-read";
 import { fetchDietGoals, fetchDietProfile, fetchRecentDietSnapshots } from "@/lib/db/diet";
-import { fetchInboxOpenCount } from "@/lib/db/inbox";
+import { fetchInboxOpenCount, fetchInboxList, insertInboxItem } from "@/lib/db/inbox";
+import { fetchCorpusStatus } from "@/lib/db/corpus";
+import { searchDocs } from "@/lib/db/search";
 
 export async function core_ping() {
   return { pong: true };
@@ -18,20 +20,25 @@ export async function core_services() {
 }
 
 /**
- * 원본 골든(core.health)의 core/gateway/knowledge.{db_path,vault_path,
- * asr_engine,llama_ready,llm_engine,whisper_ready,recording_count,
- * review_needed_count}는 전부 Mac 로컬 데몬 상태다. 액션플랜 §8이 이 필드들의
- * 제거를 명시하고, G4a-1 diff-0는 이 메서드에 한해 문서화된 예외로 처리하기로
- * 오너가 결정했다(REFACTOR_STATUS.md). knowledge는 DB 도달성만 반영한다.
+ * 원본 골든(knowledge.health, core.health의 내장 "knowledge" 키 — 같은
+ * RPCMethod.health 핸들러)의 db_path/vault_path/asr_engine/llama_ready/
+ * llm_engine/whisper_ready/recording_count/review_needed_count는 전부 Mac
+ * 로컬 데몬 상태다. 액션플랜 §8이 core.health에 대해 이 필드들의 제거를
+ * 명시하고, G4a-1 diff-0는 두 메서드 모두 문서화된 예외로 처리하기로 오너가
+ * 결정했다(REFACTOR_STATUS.md). DB 도달성만 반영한다.
  */
-export async function core_health() {
+export async function knowledge_health() {
   const supabase = await createClient();
   const { error } = await supabase.from("settings").select("key").limit(1);
+  return { ok: !error };
+}
+
+export async function core_health() {
   const [today] = await fetchRecentDietSnapshots(0);
   return {
     ok: true,
     services: { knowledge: true, diet: true, assistant: true, inbox: true, health: true },
-    knowledge: { ok: !error },
+    knowledge: await knowledge_health(),
     diet: dietRead.daySummaryDict(today),
   };
 }
@@ -144,4 +151,59 @@ export async function diet_profile_get() {
 
 export async function diet_ping() {
   return { ok: true, enabled: true, engine: "diet-inproc/v1" };
+}
+
+export async function corpus_status() {
+  return fetchCorpusStatus();
+}
+
+/**
+ * Swift 원본(handleSearch)의 `{q, hits:[{doc_id,source_type,title,snippet}]}`
+ * 형태를 유지한다. search_docs() RPC(doc_id,rank만 반환)에 search_doc 테이블을
+ * 조인해 title/snippet을 채운다. 골든 회귀(G4a-1) 대상이 아니다 — 검색은
+ * G4a-6(compare-search.ts, 30개 쿼리 recall 비교)이 별도로 검증한다.
+ */
+export async function knowledge_search(params: unknown) {
+  const p = (params ?? {}) as { q?: string; query?: string; limit?: number };
+  const q = (p.q ?? p.query ?? "").trim();
+  if (!q) return { hits: [], q };
+
+  const limit = Math.max(1, Math.min(50, Math.trunc(p.limit ?? 20)));
+  const hits = await searchDocs(q, { limit });
+  if (hits.length === 0) return { hits: [], q };
+
+  const supabase = await createClient();
+  const { data: docs, error } = await supabase
+    .from("search_doc")
+    .select("doc_id,source_type,title,body")
+    .in(
+      "doc_id",
+      hits.map((h) => h.docId),
+    );
+  if (error) throw error;
+  const byId = new Map((docs ?? []).map((d) => [d.doc_id, d]));
+
+  return {
+    q,
+    hits: hits.map((h) => {
+      const doc = byId.get(h.docId);
+      return {
+        doc_id: h.docId,
+        source_type: doc?.source_type ?? null,
+        title: doc?.title ?? null,
+        snippet: doc?.body ? doc.body.slice(0, 160) : null,
+      };
+    }),
+  };
+}
+
+export async function inbox_list(params: unknown) {
+  const p = (params ?? {}) as { include_promoted?: boolean };
+  const items = await fetchInboxList(Boolean(p.include_promoted));
+  return { items, open_count: await fetchInboxOpenCount() };
+}
+
+export async function inbox_create(params: unknown) {
+  const p = (params ?? {}) as { text?: string; message?: string };
+  return insertInboxItem(p.text ?? p.message ?? "");
 }

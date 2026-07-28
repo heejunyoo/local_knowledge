@@ -18,6 +18,11 @@ const REGISTRY: Record<string, Handler> = {
   "diet.goals.get": h.diet_goals,
   "diet.profile.get": h.diet_profile_get,
   "diet.ping": h.diet_ping,
+  "knowledge.health": h.knowledge_health,
+  "knowledge.search": h.knowledge_search,
+  "corpus.status": h.corpus_status,
+  "inbox.list": h.inbox_list,
+  "inbox.create": h.inbox_create,
 };
 
 export interface RpcError {
