@@ -8,7 +8,8 @@
     "start": "next start",
     "migrate": "tsx scripts/migrate-from-sqlite.ts",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "test:regression": "vitest run --config vitest.regression.config.ts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.3",

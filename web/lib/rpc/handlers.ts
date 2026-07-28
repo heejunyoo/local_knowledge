@@ -39,6 +39,10 @@ export async function core_health() {
     ok: true,
     services: { knowledge: true, diet: true, assistant: true, inbox: true, health: true },
     knowledge: await knowledge_health(),
+    // 골든의 core.health.diet.totals는 전부 false다(0.0 → NSNumber(bool:false)로
+    // 잘못 브리징된 Swift 원본의 버그로 보임 — diet.day_summary 골든은 같은
+    // daySummaryDict()를 정상적으로 0으로 캡처했다). 버그를 재현하지 않고 정확한
+    // 값을 반환한다 — tests/regression/golden.test.ts가 이 필드는 diff-0 대상에서 뺐다.
     diet: dietRead.daySummaryDict(today),
   };
 }

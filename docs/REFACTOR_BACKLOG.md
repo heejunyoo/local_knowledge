@@ -20,6 +20,18 @@
 - **[해결] RESTORE.md 절차가 틀렸음**: "docker postgres:16에 psql로 부어라"라고 썼으나, `supabase db dump` 산출물은 `auth` 스키마·`anon`/`service_role` role·`vector` 타입을 전제해 순정 Postgres에서는 **테이블이 0개 생성된다**(실측 725 에러). 복원 대상별 분기 + 순정 Postgres용 prelude SQL + "에러 수백 건은 정상, 판정은 행수 대조"를 실측 기반으로 재작성했다.
 - **Obsidian Git 플러그인 미설치**: vault에 커뮤니티 플러그인 `obsidian-git`이 설치되어 있지 않음(GUI 전용 설치라 자동화 불가). G2-1/G2-2는 git 레벨 왕복(별도 clone과의 push/pull)으로 대체 검증했으나, 실제 Obsidian 앱에서의 자동 커밋/pull 동작은 오너가 플러그인 설치 후 재확인 필요(`COMMIT_PROTOCOL.md` 설정값 안내 참조).
 
+## P4a에서 발견
+
+- **corpus.status 실측 카운트가 골든과 어긋난다(원인 미확인)**: 골든(P0, 2026-07-27) 기준
+  `total_units=244`(notes 19 + obsidian 225), 현재 라이브 `knowledge_unit` 조회는
+  `total_units=236`(obsidian 217). notes/meetings는 일치. `obsidian` 8건 갭은 §P1 백로그
+  "마이그레이션 5건 갭"(위 항목, 5건)과 갯수가 안 맞아 같은 원인이 아닐 가능성이 있다.
+  `connected_source.unit_count` 캐시값(225, obsidian-default·folder 둘 다)은 골든과 일치하므로
+  캐시 자체는 P1 이관 시점 스냅샷을 보존하고 있고, 어긋난 쪽은 `knowledge_unit` 라이브 카운트다.
+  두 obsidian 커넥터가 같은 물리 vault를 가리켜 `unit_id` 충돌로 8건이 어느 한쪽에서 덮어써졌을
+  가능성이 유력하지만 미검증. G4a-1 회귀 스위트(`tests/regression/golden.test.ts`)는 corpus.status를
+  구조 검증(키 존재·타입)만 하고 값 diff-0 대상에서 제외했다 — P4b 이전에 원인 확인 필요.
+
 ## P3에서 발견
 
 - **RLS 무관 보안 경고 3건 (P3 이전부터 존재, 004_rls.sql 적용 후에도 남음)**: `get_advisors(security)` 기준
