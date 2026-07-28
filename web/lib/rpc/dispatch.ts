@@ -18,6 +18,7 @@ const REGISTRY: Record<string, Handler> = {
   "diet.goals.get": h.diet_goals,
   "diet.profile.get": h.diet_profile_get,
   "diet.ping": h.diet_ping,
+  "diet.estimate_nutrition": h.diet_estimate_nutrition,
   "knowledge.health": h.knowledge_health,
   "knowledge.search": h.knowledge_search,
   "corpus.status": h.corpus_status,

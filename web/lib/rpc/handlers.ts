@@ -7,6 +7,7 @@
 // 쓰기(inbox.promote/corpus.sync/search.reindex)는 P4a-9(task 9).
 import { createClient } from "@/lib/supabase/server";
 import * as dietRead from "@/lib/domain/diet-read";
+import * as nutritionCalc from "@/lib/domain/diet-nutrition-calc";
 import { fetchDietGoals, fetchDietProfile, fetchRecentDietSnapshots } from "@/lib/db/diet";
 import {
   fetchInboxOpenCount,
@@ -163,6 +164,28 @@ export async function diet_profile_get() {
 
 export async function diet_ping() {
   return { ok: true, enabled: true, engine: "diet-inproc/v1" };
+}
+
+/**
+ * 원본(MobileHTTPServer.swift `case "diet.estimate_nutrition"`)과 동일한
+ * 파라미터 우선순위: text가 있고 amount<=0이면 자유 텍스트 파싱, 아니면
+ * food/amount/unit으로 직접 추정. LLM 미사용 — 규칙 기반 카탈로그만
+ * 동작(§P4b: estimate_nutrition은 P6까지 규칙 기반 fallback만).
+ */
+export async function diet_estimate_nutrition(params: unknown) {
+  const p = (params ?? {}) as {
+    food?: string; q?: string; text?: string; amount?: number; unit?: string;
+  };
+  const food = p.food ?? p.q ?? p.text ?? "";
+  const amount = Number(p.amount ?? 0) || 0;
+  const unit: nutritionCalc.NutritionUnit = (p.unit ?? "g").toLowerCase() === "ml" ? "ml" : "g";
+
+  if (p.text !== undefined && amount <= 0) {
+    const e = nutritionCalc.parse(p.text);
+    return e ? nutritionCalc.estimateAsDict(e) : { matched: false };
+  }
+  const e = nutritionCalc.estimate(food, amount, unit);
+  return e ? nutritionCalc.estimateAsDict(e) : { matched: false };
 }
 
 export async function corpus_status() {
