@@ -1,0 +1,112 @@
+.title {
+  font-size: var(--toss-font-title-size);
+  font-weight: var(--toss-font-title-weight);
+  color: var(--toss-grey-900);
+  margin: var(--toss-space-6) 0 var(--toss-space-2);
+}
+
+.subtitle {
+  font-size: 17px;
+  color: var(--toss-grey-700);
+  margin: 0 0 var(--toss-space-5);
+  line-height: 1.4;
+}
+
+.addRow {
+  display: flex;
+  gap: var(--toss-space-3);
+  margin-bottom: var(--toss-space-6);
+}
+
+.addInput {
+  flex: 1;
+  min-width: 0;
+  padding: 12px;
+  border: none;
+  border-radius: 12px;
+  background: var(--toss-white);
+  font-size: 15px;
+  font-family: var(--toss-font-family);
+  color: var(--toss-grey-900);
+}
+
+.addButton {
+  flex: none;
+  border: none;
+  border-radius: 12px;
+  padding: 0 16px;
+  background: var(--toss-blue-500);
+  color: var(--toss-on-primary);
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.addButton:disabled {
+  background: var(--toss-grey-200);
+  color: var(--toss-grey-500);
+  cursor: default;
+}
+
+.sectionLabel {
+  font-size: var(--toss-font-caption-size);
+  font-weight: 600;
+  color: var(--toss-grey-500);
+  margin: 0 0 var(--toss-space-3) var(--toss-space-1);
+}
+
+.section {
+  margin-bottom: var(--toss-space-6);
+}
+
+.itemCard {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--toss-space-3);
+  padding: var(--toss-space-4);
+}
+
+.itemCard + .itemCard {
+  border-top: 1px solid var(--toss-grey-100);
+}
+
+.itemText {
+  flex: 1;
+  min-width: 0;
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--toss-grey-900);
+  margin: 0 0 4px;
+}
+
+.itemMeta {
+  font-size: 12px;
+  color: var(--toss-grey-500);
+  margin: 0;
+}
+
+.itemAction {
+  flex: none;
+  border: none;
+  border-radius: 10px;
+  padding: 8px 12px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.promote {
+  background: var(--toss-blue-50);
+  color: var(--toss-blue-500);
+}
+
+.promote:disabled {
+  background: var(--toss-grey-100);
+  color: var(--toss-grey-500);
+  cursor: default;
+}
+
+.retry {
+  background: var(--toss-red-50);
+  color: var(--toss-red-500);
+}
