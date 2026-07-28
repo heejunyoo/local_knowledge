@@ -23,11 +23,12 @@
 ## P4a 진행 상황 (2026-07-28)
 
 완료: 인증 401 분기, vitest 도입, `lib/settings.ts`(P-1), `lib/redaction.ts`,
-`lib/domain/diet-read.ts`, `/api/rpc` 디스패처 + core/assistant/timeline/diet
-읽기 라우트 12종 + REST 별칭. 매직링크 실 세션으로 전부 curl 검증 완료
-(커밋 로그에 실측값 포함). 남은 것: knowledge/corpus/inbox 읽기(P4a-6),
-G4a-1 자동 회귀 테스트, D-3 상태기계(inbox_item·ingest_job), cron
-keepalive, health.ingest.
+`lib/domain/diet-read.ts`, `/api/rpc` 디스패처 + core/assistant/timeline/
+diet/knowledge/corpus/inbox 읽기 라우트 17종 + REST 별칭, **G4a-1 골든 회귀
+테스트 자동화**(`npm run test:regression` — 15 passed, 3 skipped[미구현
+사유 명시]). 남은 것: D-3 상태기계(inbox_item·ingest_job, G4a-3·G4a-4),
+cron keepalive, health.ingest(G4a-5는 이미 통과), diet.dashboard·
+diet.fasting.status(별도 세션).
 
 ### ★ 이번 세션에서 드러난 스코프 조정 2건 (오너 승인 완료)
 
