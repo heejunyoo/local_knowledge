@@ -102,7 +102,7 @@ describe("latestSleepHours / sleepCoachHint", () => {
 
   it("finds the most recent day with a sleep metric", () => {
     const withSleep = diet.buildDaySnapshot("d", [], [], [
-      { id: "hk-1", ts: "t", weightKg: null, sleepH: 5.2 },
+      { id: "hk-1", ts: "t", weightKg: null, sleepH: 5.2, context: null },
     ]);
     expect(diet.latestSleepHours([EMPTY_DAY, withSleep])).toBe(5.2);
     expect(diet.sleepCoachHint(5.2)).toContain("칼로리·운동 목표를 조금 낮춰도");

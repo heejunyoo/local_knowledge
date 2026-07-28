@@ -25,6 +25,7 @@ interface MetricRow {
   ts: string;
   weight_kg: number | null;
   sleep_h: number | null;
+  context: string | null;
 }
 
 function toMeal(r: MealRow): dietRead.Meal {
@@ -36,14 +37,14 @@ function toWorkout(r: WorkoutRow): dietRead.Workout {
 }
 
 function toMetric(r: MetricRow): dietRead.Metric {
-  return { id: r.id, ts: r.ts, weightKg: r.weight_kg, sleepH: r.sleep_h };
+  return { id: r.id, ts: r.ts, weightKg: r.weight_kg, sleepH: r.sleep_h, context: r.context };
 }
 
 async function fetchWindow(supabase: SupabaseClient, sinceISO: string) {
   const [mealsRes, workoutsRes, metricsRes] = await Promise.all([
     supabase.from("diet_meal").select("id,ts,items,kcal,protein_g,note").gte("ts", sinceISO).order("ts"),
     supabase.from("diet_workout").select("id,ts,kind,minutes,intensity").gte("ts", sinceISO).order("ts"),
-    supabase.from("diet_metric").select("id,ts,weight_kg,sleep_h").gte("ts", sinceISO).order("ts"),
+    supabase.from("diet_metric").select("id,ts,weight_kg,sleep_h,context").gte("ts", sinceISO).order("ts"),
   ]);
   if (mealsRes.error) throw mealsRes.error;
   if (workoutsRes.error) throw workoutsRes.error;
