@@ -23,10 +23,12 @@
 | `SUPABASE_DB_URL` | Postgres 접속 문자열 | 로컬 스크립트 · GitHub Actions 백업 | 채움. **direct(`db.<ref>...:5432`)는 IPv6 전용이라 대부분의 CI/로컬에서 불가 → Session Pooler를 쓸 것.** 아래 §Postgres 직결 참고 |
 | `INGEST_API_TOKEN` | Shortcuts `health.ingest` 인그레스 전용 Bearer 토큰(≥32바이트 랜덤) | `/api/health/ingest` 라우트(P4a/P4b에서 라우트 본체 구현 시 사용) | **미채움 — 라우트가 아직 없어 값 발급 보류.** 값은 Shortcuts 앱에만 저장, 문서에 기록 금지 |
 | `VAULT_GITHUB_TOKEN` | `knowledge-vault` 레포 Contents API 쓰기 권한 PAT | `web/lib/db/inbox.ts`의 `defaultVaultCommit`/`defaultVaultPathChecker`(inbox.promote, P4a-9) | **미채움 — GitHub PAT 미발급.** 토큰 없이는 `inbox.promote`가 `promote_failed`(error_code=`vault_token_missing`)로 안전하게 실패한다(G4a-2는 발급 후 별도 세션에서 검증). 값은 Vercel 환경변수에만 저장, 문서에 기록 금지 |
+| `CRON_SECRET` | Vercel Cron 인그레스 전용 Bearer 토큰(≥32바이트 랜덤) | `/api/cron/keepalive`(`web/lib/cron.ts`의 `isCronAuthorized`, task 10). Vercel이 이 환경변수가 설정돼 있으면 Cron 호출 시 자동으로 `Authorization: Bearer $CRON_SECRET`을 붙인다 | **미채움 — Vercel 프로젝트 환경변수로 오너가 직접 발급/등록.** 값은 Vercel 환경변수에만 저장, 문서에 기록 금지 |
 
 ### P3 인증 도입 완료 (2026-07-27)
 - `web/supabase/migrations/004_rls.sql` 적용됨 — 14개 테이블 전부 RLS 활성화 + `owner_all`(owner_id = auth.uid()) 정책.
-- `/api/health/ingest`, `/api/cron/*`, `/login`은 `web/lib/supabase/proxy.ts`의 세션 리다이렉트 제외 경로로 지정됨(라우트 본체는 아직 미구현).
+- `/api/health/ingest`, `/api/cron/*`, `/login`은 `web/lib/supabase/proxy.ts`의 세션 리다이렉트 제외 경로로 지정됨.
+  `/api/cron/keepalive`는 task 10에서 구현 완료(`CRON_SECRET` Bearer 검증). `/api/health/ingest`는 아직 라우트 본체 없음(task 11).
 
 ### owner_id placeholder → 실제 오너로 교체 완료 (2026-07-27, P3)
 `web/scripts/create-owner-user.ts`로 `naheejun87@gmail.com` 계정을 생성(`auth.uid() = 47e5b22d-a1f1-4266-b4e5-cd2524b0a37f`)한 뒤,

@@ -3,8 +3,8 @@
 | Field | Value |
 |-------|-------|
 | 최종 갱신 | 2026-07-28 |
-| 현재 위치 | task 9(상태기계 D-3) 완료 → **다음: task 10 `/api/cron/keepalive`** |
-| 다음 세션 읽기 순서 | ① 이 파일 ② 액션플랜 §P4a "작업 단계 5"(task 10~11)만 ③ 막히면 `REFACTOR_BACKLOG.md` |
+| 현재 위치 | task 10(`/api/cron/keepalive`) 완료 → **다음: task 11 `/api/health/ingest`** |
+| 다음 세션 읽기 순서 | ① 이 파일 ② 액션플랜 §P4a "작업 단계 5"(task 11)만 ③ 막히면 `REFACTOR_BACKLOG.md` |
 | 결정 근거 | `docs/REFACTOR_DIRECTION_WEB_2026-07.md` (D-3 정의 §2.2) |
 | 미해결 이슈 | `docs/REFACTOR_BACKLOG.md` |
 | 작업 브랜치 | `refactor/web-p0` |
@@ -17,7 +17,7 @@
 | P1 스키마+이관 | ✅ | `web/supabase/migrations/`, `migrate-from-sqlite.ts` |
 | P2 Vault→Git | ✅ | 레포 2개 신규(아래) |
 | P3 인증 | ✅ | Next 스캐폴드 + `004_rls.sql` + `proxy.ts` |
-| **P4a 읽기 API** | 🟡 10/12 | 아래 |
+| **P4a 읽기 API** | 🟡 11/12 | 아래 |
 | P4b~P7 | ⬜ | — |
 
 ## P4a 게이트 현황
@@ -49,9 +49,18 @@ GitHub 기반 실제 vault 재수집은 이월(`REFACTOR_BACKLOG.md` "P4a-9에�
 상태가 발생 — `vitest.regression.config.ts`에 `fileParallelism: false` 추가로
 해결(연속 2회 실행으로 재현 확인).
 
+**task 10(`/api/cron/keepalive`)**: `web/lib/cron.ts`(`isCronAuthorized`, `CRON_SECRET`
+Bearer 검증 — 미설정 시 기본값 차단) + `app/api/cron/keepalive/route.ts`(anon key로
+`settings` 1행 select, RLS로 걸러져도 DB 왕복 자체가 무활동 방지 목적) + `web/vercel.json`
+(`crons: [{path, schedule: "0 0 * * *"}]`, 일 1회). 유닛 테스트 4종(`tests/domain/cron.test.ts`)
+작성 중 첫 구현의 실제 결함을 발견 — `Bearer ${process.env.CRON_SECRET}` 템플릿 리터럴이
+`CRON_SECRET` 미설정 시 문자열 `"Bearer undefined"`가 돼, 그 리터럴 헤더값이 우연히
+통과하는 구멍이 있었다. `secret` 미설정을 먼저 명시적으로 걷어내도록 수정 후 재검증 통과.
+dev 서버로 3분기(헤더 없음/오답/정답) 실행 확인: 401/401/`{"ok":true}`+200.
+`CRON_SECRET` 값은 Vercel 프로젝트 환경변수로 오너가 직접 발급/등록 필요(`docs/ENV_VARS.md`).
+
 ## 다음 작업
 
-10. `/api/cron/keepalive` + `vercel.json` Cron 등록.
 11. `/api/health/ingest`(Bearer `INGEST_API_TOKEN`) + `health.sync_status`.
     토큰 값은 직접 생성하지 말고 오너가 발급하도록 안내.
 12. (별도 세션) `diet.dashboard`·`diet.fasting.status` — `DietPlanProjection`·
