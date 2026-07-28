@@ -239,3 +239,15 @@ export async function inbox_promote(params: unknown) {
   if (!p.id) throw new Error("inbox.promote: missing id");
   return promoteInboxItem(p.id);
 }
+
+/**
+ * 원본(`MobileHTTPServer.swift`의 `health.sync_status`)은 상태와 무관한
+ * 고정값을 반환한다 — Sensor SoT는 기기의 Apple Health이고 Core는 ingest로
+ * 미러링만 한다는 사실 자체가 응답이다. `health.ingest`(원본에서 이 핸들러와
+ * 같은 switch에 있던 짝)는 diet.log_workout/diet.log_metric에 의존하는
+ * 도메인 로직 본체라 P4b로 이관됐다(액션플랜 §8, 2026-07-28 정정) — 이 함수는
+ * 그 이관과 무관하게 그대로 P4a에 남는다.
+ */
+export async function health_sync_status() {
+  return { ok: true, mirror: "diet", pull_mode: "app_open", mac_healthkit: false };
+}

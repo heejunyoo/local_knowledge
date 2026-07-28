@@ -19,7 +19,6 @@ const METHODS = fs.readdirSync(GOLDEN_DIR).map((f) => f.replace(/\.json$/, ""));
 const NOT_YET_IMPLEMENTED = new Set([
   "diet.dashboard", // P4a-12(별도 세션): Mifflin 플랜 투영·HealthKit 참고값·요일상대 문구
   "diet.fasting.status", // P4a-12(별도 세션): 위와 동일 엔진 의존
-  "health.sync_status", // P4a-11
 ]);
 
 // 문서화된 diff-0 예외 — REFACTOR_STATUS.md "P4a 진행 상황" §1 참고.

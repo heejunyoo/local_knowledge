@@ -933,8 +933,17 @@ G3-5  service_role 키가 클라이언트 번들에 없음:
    `/api/*` 경로는 리다이렉트 대신 `401`(JSON)을 반환하도록 분기해야 한다.
    제외 경로(`/api/cron/*`, `/api/health/ingest`)는 각자의 인증을 쓰므로 별도 처리.
 3. `/`는 현재 P3 검증용 5줄짜리 플레이스홀더다(`web/app/page.tsx`). P5에서 Hub로 대체된다.
-4. `/api/health/ingest`의 Bearer 토큰(`INGEST_API_TOKEN`) 검증 로직은 **아직 없다.**
-   P3에서는 제외 경로 지정과 환경변수 이름만 정해뒀다 — 라우트 본체를 만들 때 함께 구현할 것.
+4. **`health.ingest`는 P4a가 아니라 P4b다(2026-07-28 정정).** 원본 Swift
+   (`MobileHTTPServer.swift`의 `health.ingest` 핸들러)는 `DietStore.swift`의
+   `ingestHealthSamples(_:)`를 호출하고, 그 안에서 이 표의 `diet.log_workout`/
+   `diet.log_metric`(P4b, §8)에 해당하는 `logWorkout`/`logMetric`을 직접
+   호출한다. `logMetric`은 추가로 활성 단식 중이면 `morning_fasted` 태그를
+   붙이는 로직이 있어 P4b의 `FastingPrefs`(task 12)도 참조한다. 라우트 본체는
+   P4b에서 diet 쓰기 메서드들과 함께 구현한다(§P4b 작업 단계 4). `/api/health/ingest`의
+   Bearer 토큰(`INGEST_API_TOKEN`) 검증 자체는 이때 함께 만든다 — 제외 경로
+   지정(`proxy.ts`)과 환경변수 이름만 P3에서 먼저 정해뒀다.
+   `health.sync_status`는 원본이 상태와 무관한 정적값을 반환하므로 이 문제가
+   없다 — P4a에 그대로 남는다.
 
 #### 작업 단계
 1. `lib/settings.ts` — 방향성 §6.5.4 **P-1 패턴**: DB `settings` 로드 → 모듈 스코프 캐시 → TTL. 서버리스에서 인스턴스별 캐시임을 주석으로 명시하고, 설정 변경 시 무효화 경로(`?refresh=1`)를 둡니다.
@@ -1030,6 +1039,10 @@ G4a-6 검색: settings['search.mode']='tsvector' 상태에서 골든 검색 결�
 4. 나머지 diet 메서드 구현: `log_meal/log_workout/log_metric`, `delete_*`, `estimate_nutrition`, `suggest`, `coach`, `plan`, `fasting.*`, `goals.set`, `profile.set`, `diet.json`(디버그 전용으로 축소)
    - `diet.estimate_nutrition`은 LLM 의존 → **P6까지는 규칙 기반 fallback만** 동작시키고 TODO 표기.
    - `diet.fasting.*`은 분 단위 스케줄 필요 → `pg_cron` 사용(방향성 §5.2.2). Vercel Cron으로 시도하지 마세요.
+   - **`health.ingest`(§8, 2026-07-28 P4a→P4b 재분류)도 여기서 함께 구현**: `POST /api/health/ingest`,
+     `INGEST_API_TOKEN` Bearer 검증(P3에서 제외 경로만 지정됨), 원본 `ingestHealthSamples(_:)`를
+     1:1 이식 — `log_workout`/`log_metric` 코드를 그대로 재사용하고 `logMetric`의
+     `morning_fasted` 자동 태그는 `fasting.*`(같은 단계) 이식 이후에 연결할 것.
 
 #### 게이트
 ```
@@ -1267,7 +1280,7 @@ R=읽기(골든 채취 대상) · W=쓰기 · D=폐기
 | `diet.suggest` / `.coach` / `.plan` | R | P4b | `GET /api/diet/{suggest,coach,plan}` | 도메인 로직 의존 |
 | `diet.estimate_nutrition` | W | P4b→P6 | `POST /api/diet/estimate` | LLM 의존 → P6까지 규칙 fallback |
 | `diet.fasting.start` / `.end` / `.preview` | W | P4b | `POST /api/diet/fasting/*` | 리마인더는 `pg_cron` |
-| `health.ingest` | W | P4a | `POST /api/health/ingest` | **Bearer 토큰 인증**(P3-4) |
+| `health.ingest` | W | **P4b**(2026-07-28 정정, 원래 P4a로 오분류) | `POST /api/health/ingest` | **Bearer 토큰 인증**(P3-4). `diet.log_workout`/`diet.log_metric`(아래) 의존 |
 | `health.sync_status` | R | P4a | `GET /api/health/sync` | |
 | `knowledge.ask` / `.ask.fast` | R | **P6** | `POST /api/ask` | 생성 경로 |
 | `meeting.*` (13개) | **D** | — | — | F-1 |

@@ -3,8 +3,8 @@
 | Field | Value |
 |-------|-------|
 | 최종 갱신 | 2026-07-28 |
-| 현재 위치 | task 10(`/api/cron/keepalive`) 완료 → **다음: task 11 `/api/health/ingest`** |
-| 다음 세션 읽기 순서 | ① 이 파일 ② 액션플랜 §P4a "작업 단계 5"(task 11)만 ③ 막히면 `REFACTOR_BACKLOG.md` |
+| 현재 위치 | task 11(`health.sync_status`) 완료 → P4a 구현 종료(게이트 2건 잔여). **다음: P4b 착수**(diet 쓰기 도메인 + `health.ingest`, 아래 "다음 작업" 참고) |
+| 다음 세션 읽기 순서 | ① 이 파일 ② 액션플랜 §P4b 전체 ③ 막히면 `REFACTOR_BACKLOG.md` |
 | 결정 근거 | `docs/REFACTOR_DIRECTION_WEB_2026-07.md` (D-3 정의 §2.2) |
 | 미해결 이슈 | `docs/REFACTOR_BACKLOG.md` |
 | 작업 브랜치 | `refactor/web-p0` |
@@ -17,21 +17,21 @@
 | P1 스키마+이관 | ✅ | `web/supabase/migrations/`, `migrate-from-sqlite.ts` |
 | P2 Vault→Git | ✅ | 레포 2개 신규(아래) |
 | P3 인증 | ✅ | Next 스캐폴드 + `004_rls.sql` + `proxy.ts` |
-| **P4a 읽기 API** | 🟡 11/12 | 아래 |
+| **P4a 읽기 API** | 🟡 구현 11/11 완료, 게이트 2건 잔여 | 아래 |
 | P4b~P7 | ⬜ | — |
 
 ## P4a 게이트 현황
 
 | 게이트 | 상태 |
 |---|---|
-| G4a-1 골든 diff 0 | ✅ 15/18 (`npm run test:regression`), 3건 skip(미구현: dashboard·fasting.status·health.sync_status) |
+| G4a-1 골든 diff 0 | ✅ 19/21 (`npm run test:regression`), 2건 skip(미구현: diet.dashboard·diet.fasting.status — P4b에서 이식) |
 | G4a-2 inbox 왕복 | ⬜ GitHub PAT 미발급 — 코드는 준비됨(`defaultVaultCommit`), 토큰 발급 후 별도 세션 |
 | G4a-3 상태기계 default-deny | ✅ `tests/domain/state-machine.test.ts`(23종 거부) |
 | G4a-4 ingest_job 고아 회수 | ✅ 유닛 테스트 + 실 DB 검증(`tests/regression/state-machine.regression.test.ts`) |
 | G4a-5 미인증 401 | ✅ |
 | G4a-6 검색 골든 30건 | ⬜ `compare-search.ts` 변경 없음, 재실행만 필요 |
 
-## 완료 (task 1~9, 커밋 9개+ — 상세는 `git log`의 "P4a-" 커밋)
+## 완료 (task 1~11, 커밋 11개+ — 상세는 `git log`의 "P4a-" 커밋)
 
 401 분기, vitest(+회귀용 별도 config), `lib/settings.ts`(P-1), `lib/redaction.ts`,
 `lib/domain/diet-read.ts`, `/api/rpc` + core/assistant/timeline/diet/knowledge/
@@ -59,15 +59,30 @@ Bearer 검증 — 미설정 시 기본값 차단) + `app/api/cron/keepalive/rout
 dev 서버로 3분기(헤더 없음/오답/정답) 실행 확인: 401/401/`{"ok":true}`+200.
 `CRON_SECRET` 값은 Vercel 프로젝트 환경변수로 오너가 직접 발급/등록 필요(`docs/ENV_VARS.md`).
 
+**task 11(`health.sync_status`)**: 착수 전 원본 확인 중 `health.ingest`가
+액션플랜 §8에서 P4a로 오분류돼 있음을 발견(아래 "이번 세션 스코프 조정" 참고)
+— 오너 결정으로 액션플랜부터 정정한 뒤, P4a에 실제로 속하는 `health.sync_status`만
+구현. 원본(`MobileHTTPServer.swift`)이 상태와 무관한 고정값을 반환하므로
+`lib/rpc/handlers.ts`의 `health_sync_status()`는 그 값을 그대로 반환 —
+`lib/rpc/dispatch.ts` 등록 + REST 별칭 `GET /api/health/sync`(세션 보호,
+`/api/health/ingest`와 달리 Bearer 예외 아님). `tests/domain/health.test.ts` 1종 +
+`golden.test.ts`의 `NOT_YET_IMPLEMENTED`에서 제거해 G4a-1 diff-0 대상 편입.
+
 ## 다음 작업
 
-11. `/api/health/ingest`(Bearer `INGEST_API_TOKEN`) + `health.sync_status`.
-    토큰 값은 직접 생성하지 말고 오너가 발급하도록 안내.
-12. (별도 세션) `diet.dashboard`·`diet.fasting.status` — `DietPlanProjection`·
-    `FastingPrefs` 전체 이식 필요. 착수 전 골든 2개 + `DietStore.swift`의
-    `dashboard()`/`fastingStatus()`/`planProjection()` 대조.
-13. (급하지 않음) `corpus.status` obsidian 카운트 골든(225) vs 라이브(217) 8건
-    갭 원인 미확인 — `REFACTOR_BACKLOG.md` "P4a에서 발견" 참고.
+- **P4b 착수**: diet 쓰기 도메인 전체(§P4b 작업 단계 1~4) + 그 안에 포함된
+  `health.ingest`(Bearer `INGEST_API_TOKEN` — 토큰 값은 직접 생성하지 말고
+  오너가 발급하도록 안내, `diet.log_workout`/`diet.log_metric` 의존).
+  액션플랜 §P4b 전체를 먼저 읽을 것 — 단일 최대 덩어리(C-3, 약 2,000 LOC).
+  `diet.dashboard`·`diet.fasting.status`(`DietPlanProjection`·`FastingPrefs`
+  전체 이식)도 이 안에서 자연스럽게 같이 처리 가능 — 착수 전 골든 2개 +
+  `DietStore.swift`의 `dashboard()`/`fastingStatus()`/`planProjection()` 대조.
+- (P4b와 독립적으로 아무 때나) G4a-2(inbox 왕복): GitHub PAT 발급 후 vault
+  레포 실제 커밋 왕복 검증.
+- (P4b와 독립적으로 아무 때나) G4a-6(검색 골든 30건): `compare-search.ts`
+  재실행만 필요.
+- (급하지 않음) `corpus.status` obsidian 카운트 골든(225) vs 라이브(217) 8건
+  갭 원인 미확인 — `REFACTOR_BACKLOG.md` "P4a에서 발견" 참고.
 
 ## 이번 세션 스코프 조정 (오너 승인 완료, 상세는 커밋 메시지)
 
@@ -81,6 +96,14 @@ dev 서버로 3분기(헤더 없음/오답/정답) 실행 확인: 401/401/`{"ok"
   실제 obsidian/notes/files 재수집을 재현할 수 없어 DB 내부 실작업(connected_source
   통계 재계산 / search_doc 누락분 upsert)으로 축소. 상세·후속 task는
   `REFACTOR_BACKLOG.md` "P4a-9에서 발견" 참고.
+- **`health.ingest`(task 11 착수 전 발견, 2026-07-28)**: 액션플랜 §8이 P4a로
+  분류했으나 실측 오류. 원본 핸들러가 `DietStore.swift`의 `ingestHealthSamples`→
+  `logWorkout`/`logMetric`을 직접 호출하는데, 이 둘은 같은 §8 표에서 이미
+  `diet.log_workout`/`diet.log_metric`으로 **P4b**로 분류돼 있었다(위 세 항목과
+  동일한 C-3류 오분류 패턴). `logMetric`은 추가로 활성 단식 중 `morning_fasted`
+  태그를 위해 task 12의 `FastingPrefs` 상태도 참조한다. 오너 결정으로 액션플랜
+  §8/§P4a/§P4b를 먼저 정정(P4b 작업 단계 4에 편입)한 뒤, P4a에 실제로 속하는
+  `health.sync_status`(원본이 상태 무관 고정값이라 문제 없음)만 이번 세션에 구현.
 
 ## 레포 3개
 
