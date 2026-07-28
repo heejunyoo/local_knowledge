@@ -1,0 +1,112 @@
+.greeting {
+  padding: var(--toss-space-8) 0 var(--toss-space-6);
+}
+
+.greetingTitle {
+  font-size: 32px;
+  font-weight: 700;
+  color: var(--toss-grey-900);
+  margin: 0 0 var(--toss-space-3);
+}
+
+.greetingBody {
+  font-size: 17px;
+  color: var(--toss-grey-700);
+  margin: 0;
+  line-height: 1.4;
+}
+
+.sectionLabel {
+  font-size: var(--toss-font-caption-size);
+  font-weight: 600;
+  color: var(--toss-grey-500);
+  margin: 0 0 var(--toss-space-3) var(--toss-space-1);
+}
+
+.section {
+  margin-bottom: var(--toss-space-6);
+}
+
+.briefingLine {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--toss-space-3);
+}
+
+.briefingLine + .briefingLine {
+  margin-top: var(--toss-space-4);
+}
+
+.briefingLabel {
+  flex: none;
+  width: 36px;
+  font-size: var(--toss-font-caption-size);
+  font-weight: 700;
+  color: var(--toss-blue-500);
+}
+
+.briefingText {
+  font-size: 16px;
+  font-weight: 500;
+  color: var(--toss-grey-900);
+}
+
+.briefingSub {
+  margin: var(--toss-space-1) 0 0 44px;
+  font-size: 12px;
+  color: var(--toss-grey-500);
+}
+
+.streak {
+  margin: var(--toss-space-1) 0 0 44px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--toss-blue-500);
+}
+
+.divider {
+  height: 1px;
+  background: var(--toss-grey-200);
+  margin: var(--toss-space-4) 0;
+}
+
+.gapRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: var(--toss-space-2) 0;
+  background: none;
+  border: none;
+  text-align: left;
+  cursor: pointer;
+  font-family: var(--toss-font-family);
+  color: var(--toss-grey-900);
+  font-size: 15px;
+  font-weight: 500;
+}
+
+.gapRow + .gapRow {
+  border-top: 1px solid var(--toss-grey-100);
+}
+
+.primaryLinkButton {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  height: 52px;
+  line-height: 52px;
+  text-align: center;
+  text-decoration: none;
+  border-radius: var(--toss-radius-button);
+  font-size: var(--toss-font-button-size);
+  font-weight: var(--toss-font-button-weight);
+  color: var(--toss-on-primary);
+  background: var(--toss-blue-500);
+}
+
+.menuList {
+  display: flex;
+  flex-direction: column;
+  padding: 0 var(--toss-space-4);
+}

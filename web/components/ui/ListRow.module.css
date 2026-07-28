@@ -7,6 +7,8 @@
   background: none;
   border: none;
   text-align: left;
+  text-decoration: none;
+  color: inherit;
   cursor: pointer;
   font-family: var(--toss-font-family);
 }
