@@ -1,0 +1,645 @@
+.header {
+  display: flex;
+  align-items: flex-start;
+  padding: var(--toss-space-6) 0 var(--toss-space-4);
+  gap: var(--toss-space-3);
+}
+
+.headerTexts {
+  flex: 1;
+}
+
+.headerTitle {
+  font-size: var(--toss-font-title-size);
+  font-weight: var(--toss-font-title-weight);
+  color: var(--toss-grey-900);
+  margin: 0 0 4px;
+}
+
+.headerSubtitle {
+  font-size: var(--toss-font-body-size);
+  color: var(--toss-grey-500);
+  margin: 0;
+}
+
+.headerLink {
+  flex: none;
+  background: none;
+  border: none;
+  font-size: var(--toss-font-body-size);
+  font-weight: 600;
+  color: var(--toss-blue-500);
+  cursor: pointer;
+}
+
+.section {
+  margin-bottom: var(--toss-space-5);
+}
+
+.sectionLabel {
+  font-size: var(--toss-font-caption-size);
+  font-weight: 600;
+  color: var(--toss-grey-500);
+  margin: 0 0 var(--toss-space-3) var(--toss-space-1);
+}
+
+/* Plan / suggest CTA card (no profile yet) */
+.ctaCard {
+  display: flex;
+  align-items: center;
+  gap: var(--toss-space-3);
+  width: 100%;
+  padding: var(--toss-space-5);
+  background: var(--toss-white);
+  border: none;
+  border-radius: var(--toss-radius-card);
+  text-align: left;
+  cursor: pointer;
+}
+
+.ctaIcon {
+  flex: none;
+  font-size: 28px;
+}
+
+.ctaTitle {
+  font-size: 17px;
+  font-weight: 600;
+  color: var(--toss-grey-900);
+  margin: 0 0 4px;
+}
+
+.ctaBody {
+  font-size: var(--toss-font-caption-size);
+  color: var(--toss-grey-500);
+  margin: 0;
+}
+
+.chevron {
+  flex: none;
+  color: var(--toss-grey-200);
+}
+
+/* Plan result */
+.planEta {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--toss-grey-900);
+  margin: 0 0 var(--toss-space-2);
+}
+
+.planMeta,
+.planNote {
+  font-size: var(--toss-font-caption-size);
+  color: var(--toss-grey-500);
+  margin: 0 0 4px;
+}
+
+.planPace {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--toss-blue-500);
+  margin: 0 0 4px;
+}
+
+/* Fasting card */
+.fastingLabel {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--toss-grey-900);
+  margin: var(--toss-space-1) 0;
+}
+
+.fastingPreview {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--toss-blue-500);
+  margin: 0 0 var(--toss-space-2);
+}
+
+.fastingHint {
+  font-size: var(--toss-font-caption-size);
+  color: var(--toss-grey-500);
+  margin: var(--toss-space-2) 0;
+}
+
+.chipRow {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin: var(--toss-space-2) 0;
+}
+
+.chip {
+  border: none;
+  border-radius: 999px;
+  padding: 6px 12px;
+  font-size: 13px;
+  font-weight: 600;
+  background: var(--toss-blue-50);
+  color: var(--toss-blue-500);
+  cursor: pointer;
+}
+
+.chipActive {
+  background: var(--toss-blue-500);
+  color: var(--toss-on-primary);
+}
+
+.progressTrack {
+  height: 6px;
+  border-radius: 999px;
+  background: var(--toss-grey-200);
+  overflow: hidden;
+  margin: var(--toss-space-2) 0;
+}
+
+.progressFill {
+  height: 100%;
+  background: var(--toss-blue-500);
+}
+
+.refLines {
+  margin-top: var(--toss-space-2);
+}
+
+.refLine {
+  font-size: 11px;
+  color: var(--toss-grey-700);
+  margin: 2px 0;
+}
+
+.linkAction {
+  background: none;
+  border: none;
+  padding: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--toss-blue-500);
+  cursor: pointer;
+  margin-top: var(--toss-space-2);
+}
+
+.smallNote {
+  font-size: 11px;
+  color: var(--toss-grey-500);
+  margin: var(--toss-space-2) 0 0;
+}
+
+/* Morning weight */
+.inlineRow {
+  display: flex;
+  gap: var(--toss-space-3);
+  align-items: center;
+  margin-top: var(--toss-space-2);
+}
+
+.weightInput {
+  width: 100px;
+  height: 40px;
+  padding: 0 10px;
+  border: 1px solid var(--toss-grey-200);
+  border-radius: 10px;
+  font-size: 15px;
+  font-family: var(--toss-font-family);
+}
+
+/* Rings */
+.ringRow {
+  display: flex;
+  gap: var(--toss-space-3);
+}
+
+.ringWrap {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.ringSvgWrap {
+  position: relative;
+  width: 76px;
+  height: 76px;
+}
+
+.ringValue {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.ringValueNum {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--toss-grey-900);
+}
+
+.ringValueUnit {
+  font-size: 9px;
+  color: var(--toss-grey-500);
+}
+
+.ringTitle {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--toss-grey-700);
+}
+
+.ringGoal {
+  font-size: 10px;
+  color: var(--toss-grey-500);
+}
+
+.ringPercent {
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.weeklyRow {
+  display: flex;
+  justify-content: space-between;
+  font-size: var(--toss-font-caption-size);
+  color: var(--toss-grey-700);
+  margin-top: var(--toss-space-4);
+}
+
+.weeklyMeta {
+  color: var(--toss-grey-500);
+}
+
+/* Quick NL */
+.nlRow {
+  display: flex;
+  gap: var(--toss-space-3);
+}
+
+.nlInput {
+  flex: 1;
+  min-width: 0;
+  padding: 12px;
+  border: none;
+  border-radius: 12px;
+  background: var(--toss-grey-100);
+  font-size: 15px;
+  font-family: var(--toss-font-family);
+  color: var(--toss-grey-900);
+}
+
+.nlSubmit {
+  flex: none;
+  border: none;
+  background: none;
+  font-size: var(--toss-font-body-size);
+  font-weight: 600;
+  color: var(--toss-blue-500);
+  cursor: pointer;
+}
+
+.nlSubmit:disabled {
+  color: var(--toss-grey-200);
+  cursor: default;
+}
+
+/* Preset chips */
+.presetScroll {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+}
+
+.presetChip {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  border: none;
+  border-radius: 12px;
+  padding: 8px 12px;
+  background: var(--toss-blue-50);
+  color: var(--toss-blue-500);
+  cursor: pointer;
+}
+
+.presetChipTitle {
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.presetChipSub {
+  font-size: 10px;
+  opacity: 0.85;
+}
+
+.workoutChip {
+  flex: none;
+  border: none;
+  border-radius: 999px;
+  padding: 8px 12px;
+  background: var(--toss-white);
+  color: var(--toss-grey-900);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.presetSub {
+  font-size: 11px;
+  color: var(--toss-grey-500);
+  margin: 2px 0 var(--toss-space-2);
+}
+
+/* Insight */
+.insightCard {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--toss-space-3);
+  padding: var(--toss-space-4);
+  background: var(--toss-blue-50);
+  border-radius: var(--toss-radius-card);
+  margin-bottom: var(--toss-space-3);
+}
+
+.insightText {
+  font-size: 15px;
+  color: var(--toss-grey-900);
+}
+
+/* Today list */
+.entryRow {
+  display: flex;
+  align-items: center;
+  gap: var(--toss-space-3);
+  padding: var(--toss-space-3) var(--toss-space-4);
+}
+
+.entryRow + .entryRow {
+  border-top: 1px solid var(--toss-grey-100);
+}
+
+.entryIcon {
+  flex: none;
+  width: 24px;
+  text-align: center;
+}
+
+.entryTexts {
+  flex: 1;
+  min-width: 0;
+}
+
+.entryTitle {
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--toss-grey-900);
+  margin: 0;
+}
+
+.entrySub {
+  font-size: var(--toss-font-caption-size);
+  color: var(--toss-grey-500);
+  margin: 2px 0 0;
+}
+
+.deleteButton {
+  flex: none;
+  border: none;
+  background: none;
+  color: var(--toss-grey-500);
+  font-size: 13px;
+  cursor: pointer;
+  padding: 6px;
+}
+
+/* Secondary actions */
+.secondaryRow {
+  display: flex;
+  gap: var(--toss-space-3);
+}
+
+.secondaryButton {
+  flex: 1;
+  height: 48px;
+  border: none;
+  border-radius: var(--toss-radius-button);
+  background: var(--toss-white);
+  color: var(--toss-grey-900);
+  font-size: var(--toss-font-button-size);
+  font-weight: var(--toss-font-button-weight);
+  cursor: pointer;
+}
+
+/* Week bars */
+.weekBars {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  height: 140px;
+  padding: var(--toss-space-4) 0;
+}
+
+.weekBarCol {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  height: 100%;
+  justify-content: flex-end;
+}
+
+.weekBarKcal {
+  font-size: 10px;
+  color: var(--toss-grey-500);
+}
+
+.weekBarFill {
+  width: 100%;
+  border-radius: 6px;
+  background: var(--toss-blue-50);
+}
+
+.weekBarFillToday {
+  background: var(--toss-blue-500);
+}
+
+.weekBarLabel {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--toss-grey-700);
+}
+
+.weekLine {
+  font-size: var(--toss-font-body-size);
+  color: var(--toss-grey-900);
+  margin: 6px 0;
+}
+
+/* Toast */
+.toast {
+  position: fixed;
+  top: var(--toss-space-4);
+  left: var(--toss-space-5);
+  right: var(--toss-space-5);
+  max-width: 480px;
+  margin: 0 auto;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 14px;
+  background: var(--toss-white);
+  border-radius: 14px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+  z-index: 30;
+}
+
+.toastText {
+  flex: 1;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--toss-grey-900);
+}
+
+.toastClose {
+  flex: none;
+  border: none;
+  background: none;
+  color: var(--toss-grey-500);
+  cursor: pointer;
+}
+
+/* Panel (bottom sheet) */
+.backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  z-index: 40;
+}
+
+.panel {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  max-width: 480px;
+  margin: 0 auto;
+  max-height: 86vh;
+  overflow-y: auto;
+  background: var(--toss-white);
+  border-radius: 20px 20px 0 0;
+  padding: var(--toss-space-5) var(--toss-space-5) calc(var(--toss-space-6) + env(safe-area-inset-bottom, 0));
+  z-index: 41;
+}
+
+.panelHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--toss-space-4);
+}
+
+.panelTitle {
+  font-size: 19px;
+  font-weight: 700;
+  color: var(--toss-grey-900);
+  margin: 0;
+}
+
+.panelClose {
+  border: none;
+  background: none;
+  font-size: var(--toss-font-body-size);
+  font-weight: 600;
+  color: var(--toss-blue-500);
+  cursor: pointer;
+}
+
+.formSection {
+  margin-bottom: var(--toss-space-5);
+}
+
+.formSectionTitle {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--toss-grey-700);
+  margin: 0 0 var(--toss-space-2);
+}
+
+.formRow {
+  margin-bottom: var(--toss-space-3);
+}
+
+.formLabel {
+  display: block;
+  font-size: 12px;
+  color: var(--toss-grey-500);
+  margin-bottom: 4px;
+}
+
+.formInput {
+  width: 100%;
+  box-sizing: border-box;
+  height: 44px;
+  padding: 0 12px;
+  border: 1px solid var(--toss-grey-200);
+  border-radius: 10px;
+  font-size: 15px;
+  font-family: var(--toss-font-family);
+  color: var(--toss-grey-900);
+  background: var(--toss-white);
+}
+
+.segmented {
+  display: flex;
+  gap: 6px;
+}
+
+.segmentedButton {
+  flex: 1;
+  height: 40px;
+  border: none;
+  border-radius: 10px;
+  background: var(--toss-grey-100);
+  color: var(--toss-grey-900);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.segmentedButtonActive {
+  background: var(--toss-blue-500);
+  color: var(--toss-on-primary);
+}
+
+.formNote {
+  font-size: 12px;
+  color: var(--toss-grey-500);
+  margin: 4px 0 0;
+}
+
+.formSubmit {
+  width: 100%;
+  height: 48px;
+  border: none;
+  border-radius: var(--toss-radius-button);
+  background: var(--toss-blue-500);
+  color: var(--toss-on-primary);
+  font-size: var(--toss-font-button-size);
+  font-weight: var(--toss-font-button-weight);
+  cursor: pointer;
+  margin-top: var(--toss-space-2);
+}
+
+.formSubmit:disabled {
+  background: var(--toss-grey-200);
+  color: var(--toss-grey-500);
+  cursor: default;
+}
