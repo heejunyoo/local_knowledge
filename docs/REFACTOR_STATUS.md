@@ -3,8 +3,8 @@
 | Field | Value |
 |-------|-------|
 | 최종 갱신 | 2026-07-28 |
-| 현재 위치 | task 11(`health.sync_status`) 완료 → P4a 구현 종료(게이트 2건 잔여). **다음: P4b 착수**(diet 쓰기 도메인 + `health.ingest`, 아래 "다음 작업" 참고) |
-| 다음 세션 읽기 순서 | ① 이 파일 ② 액션플랜 §P4b 전체 ③ 막히면 `REFACTOR_BACKLOG.md` |
+| 현재 위치 | **P4b 완료**(diet 쓰기 도메인 + `health.ingest`, 게이트 G4b-1~G4b-3 통과 · G4b-4 이월). **다음: P5(웹 UI) 착수 여부 결정** 또는 P4b/P4a 잔여 게이트(G4a-2/G4a-6/corpus.status 갭) 우선 처리, 아래 "다음 작업" 참고 |
+| 다음 세션 읽기 순서 | ① 이 파일 ② 착수할 phase에 맞춰 액션플랜 §P5 또는 잔여 게이트 항목 ③ 막히면 `REFACTOR_BACKLOG.md` |
 | 결정 근거 | `docs/REFACTOR_DIRECTION_WEB_2026-07.md` (D-3 정의 §2.2) |
 | 미해결 이슈 | `docs/REFACTOR_BACKLOG.md` |
 | 작업 브랜치 | `refactor/web-p0` |
@@ -17,19 +17,29 @@
 | P1 스키마+이관 | ✅ | `web/supabase/migrations/`, `migrate-from-sqlite.ts` |
 | P2 Vault→Git | ✅ | 레포 2개 신규(아래) |
 | P3 인증 | ✅ | Next 스캐폴드 + `004_rls.sql` + `proxy.ts` |
-| **P4a 읽기 API** | 🟡 구현 11/11 완료, 게이트 2건 잔여 | 아래 |
-| P4b~P7 | ⬜ | — |
+| P4a 읽기 API | ✅ 구현 11/11, 게이트 G4a-1/3/4/5 통과. G4a-2/G4a-6은 외부 의존(PAT/재실행)이라 이월 유지 | 아래 |
+| **P4b diet 쓰기 + health.ingest** | ✅ 게이트 G4b-1~G4b-3 통과, G4b-4 이월(발화 채널 미결정) | 아래 |
+| P5~P7 | ⬜ | — |
 
 ## P4a 게이트 현황
 
 | 게이트 | 상태 |
 |---|---|
-| G4a-1 골든 diff 0 | ✅ 19/21 (`npm run test:regression`), 2건 skip(미구현: diet.dashboard·diet.fasting.status — P4b에서 이식) |
+| G4a-1 골든 diff 0 | ✅ **21/21**(`npm run test:regression`) — P4b에서 diet.dashboard·diet.fasting.status 이식 완료로 스킵 0건 |
 | G4a-2 inbox 왕복 | ⬜ GitHub PAT 미발급 — 코드는 준비됨(`defaultVaultCommit`), 토큰 발급 후 별도 세션 |
 | G4a-3 상태기계 default-deny | ✅ `tests/domain/state-machine.test.ts`(23종 거부) |
 | G4a-4 ingest_job 고아 회수 | ✅ 유닛 테스트 + 실 DB 검증(`tests/regression/state-machine.regression.test.ts`) |
 | G4a-5 미인증 401 | ✅ |
 | G4a-6 검색 골든 30건 | ⬜ `compare-search.ts` 변경 없음, 재실행만 필요 |
+
+## P4b 게이트 현황
+
+| 게이트 | 상태 |
+|---|---|
+| G4b-1 도메인 유닛 테스트 전부 통과 | ✅ `tests/domain/*.test.ts` 전체(116개) — diet-presets/diet-nutrition-calc/diet-dashboard(26개, planSummary·weightForPlan·fastingStatus·healthReference·dashboard)·ingest-auth/health-ingest 신규 |
+| G4b-2 골든 회귀: diet 계열 diff 0 | ✅ diet.dashboard·diet.fasting.status 포함 실제 Supabase 대상 21/21 diff-0(G4a-1과 통합) |
+| G4b-3 쓰기 왕복 | ✅ `tests/regression/diet-write.regression.test.ts` — log_meal→day_summary 반영→delete_meal→원복 |
+| G4b-4 단식 리마인더 실제 발화 | ⬜ **이월** — 발화 채널(이메일/Web Push 등) 미결정, 액션플랜 §P4b 각주 참고 |
 
 ## 완료 (task 1~11, 커밋 11개+ — 상세는 `git log`의 "P4a-" 커밋)
 
@@ -68,21 +78,51 @@ dev 서버로 3분기(헤더 없음/오답/정답) 실행 확인: 401/401/`{"ok"
 `/api/health/ingest`와 달리 Bearer 예외 아님). `tests/domain/health.test.ts` 1종 +
 `golden.test.ts`의 `NOT_YET_IMPLEMENTED`에서 제거해 G4a-1 diff-0 대상 편입.
 
+## P4b (diet 쓰기 도메인 + health.ingest, 커밋 8개 — `git log`의 "P4b-" 커밋)
+
+착수 전 `diet_metric.context` 컬럼 누락(001_init.sql이 놓침 — `weightForPlanLocked()`
+우선순위 판정에 필수)을 발견해 `005_diet_metric_context.sql`로 선행 추가.
+번역 순서: `diet-presets.ts`(식사 10종/운동 5종) → `diet-nutrition-calc.ts`
+(Food 카탈로그 30종, `estimate`/`matchFood`/`parse` — matchFood는 카탈로그
+배열 순서상 "과일"의 별칭이 전용 "사과"/"바나나" 항목보다 먼저 매칭되는
+원본 그대로의 특성을 재현) → `diet-read.ts` 확장(`planSummary`·
+`weightForPlan`·`healthReference`·`fastingStatus`·`localDayTimeLabels`
+Seoul 고정·`dashboard`) → `lib/db/diet.ts` 쓰기 함수(insert/delete
+meal·workout·metric, `FastingPrefs`는 `settings['diet.fasting']`에 저장
+— goals/profile과 동일 패턴, 별도 테이블 없음) → RPC 배선 → `health.ingest`.
+
+번역 중 발견한 원본의 죽은 분기: `planSummary`의 "정체"(daily_deficit<=50)
+가지는 delta>0.3일 때의 대체식이 항상 100 이상을 강제해 실질적으로 도달
+불가능 — "고치지" 않고 그대로 옮기고 테스트로 근거를 남김.
+
+`health.ingest`는 세션 없는 정적 Bearer 인증이라 RLS를 통과할 수 없어,
+오너 승인으로 `web/lib/health-ingest.ts` 1곳에서만 `SUPABASE_SERVICE_ROLE_KEY`
+예외 사용 + owner_id 코드 고정(`docs/ENV_VARS.md` 참고) — dev 서버 +
+실제 DB로 401/401/200, dedup, `morning_fasted` 자동 태깅, 프로필 체중
+동기화까지 검증 후 테스트 데이터 정리 완료.
+
+과정에서 `tests/regression/normalize.ts`의 숨은 버그 발견·수정: 골든
+JSON(이미 정규화된 값)을 테스트가 다시 `normalize()`에 통과시킬 때 문자열
+분기가 volatile 키를 내용과 무관하게 무조건 `<TS>`로 덮어써 숫자 volatile
+키(`hours_since_last_meal`)의 정규화 결과(`<N>`)를 망가뜨리고 있었다 —
+이 키가 volatile 키 중 처음으로 숫자값을 가져 지금까지 드러나지 않았음.
+
+G4b-4(단식 리마인더 실제 발화)는 이월 — 위 "P4b 게이트 현황" 및 액션플랜
+§P4b 각주 참고.
+
 ## 다음 작업
 
-- **P4b 착수**: diet 쓰기 도메인 전체(§P4b 작업 단계 1~4) + 그 안에 포함된
-  `health.ingest`(Bearer `INGEST_API_TOKEN` — 토큰 값은 직접 생성하지 말고
-  오너가 발급하도록 안내, `diet.log_workout`/`diet.log_metric` 의존).
-  액션플랜 §P4b 전체를 먼저 읽을 것 — 단일 최대 덩어리(C-3, 약 2,000 LOC).
-  `diet.dashboard`·`diet.fasting.status`(`DietPlanProjection`·`FastingPrefs`
-  전체 이식)도 이 안에서 자연스럽게 같이 처리 가능 — 착수 전 골든 2개 +
-  `DietStore.swift`의 `dashboard()`/`fastingStatus()`/`planProjection()` 대조.
-- (P4b와 독립적으로 아무 때나) G4a-2(inbox 왕복): GitHub PAT 발급 후 vault
-  레포 실제 커밋 왕복 검증.
-- (P4b와 독립적으로 아무 때나) G4a-6(검색 골든 30건): `compare-search.ts`
-  재실행만 필요.
+- **P5(웹 UI) 착수 여부 결정** — 액션플랜 §P5 참고. 착수 시 D-4 후속 판단
+  (검색 모드 확정)도 §P5 범위에 포함됨.
+- **G4b-4(단식 리마인더 실제 발화) 후속** — 실제 알림 채널(이메일/Web Push
+  예외 허용/기타) 결정은 오너 몫. 결정 후 pg_cron 스케줄 등록 + 별도 phase로.
+- (아무 때나) G4a-2(inbox 왕복): GitHub PAT 발급 후 vault 레포 실제 커밋
+  왕복 검증.
+- (아무 때나) G4a-6(검색 골든 30건): `compare-search.ts` 재실행만 필요.
 - (급하지 않음) `corpus.status` obsidian 카운트 골든(225) vs 라이브(217) 8건
   갭 원인 미확인 — `REFACTOR_BACKLOG.md` "P4a에서 발견" 참고.
+- (급하지 않음) `INGEST_API_TOKEN` 값을 오너가 Vercel 환경변수로 발급/등록
+  (라우트는 구현 완료, 로컬 임시 토큰으로 curl 검증 마침).
 
 ## 이번 세션 스코프 조정 (오너 승인 완료, 상세는 커밋 메시지)
 
@@ -104,6 +144,15 @@ dev 서버로 3분기(헤더 없음/오답/정답) 실행 확인: 401/401/`{"ok"
   태그를 위해 task 12의 `FastingPrefs` 상태도 참조한다. 오너 결정으로 액션플랜
   §8/§P4a/§P4b를 먼저 정정(P4b 작업 단계 4에 편입)한 뒤, P4a에 실제로 속하는
   `health.sync_status`(원본이 상태 무관 고정값이라 문제 없음)만 이번 세션에 구현.
+- **G4b-4(단식 리마인더 실제 발화) 이월(2026-07-28, P4b)**: Swift 원본에도
+  실제 알림 스케줄링 코드가 없고(순수 폴링), 방향성 문서가 가정한 Web Push는
+  액션플랜 §P5가 명시적으로 금지 — 실제 알림 채널이 미결정이라 새 외부
+  서비스 도입(CLAUDE.md 안전 바닥 대상) 없이 이번 세션은 이월. 상세는
+  액션플랜 §P4b 각주.
+- **`health.ingest` service role 예외(2026-07-28, P4b)**: `SUPABASE_SERVICE_ROLE_KEY`는
+  "`web/app`·`web/lib` import 금지" 원칙이었으나, 세션 없는 정적 Bearer
+  인증인 `health.ingest`는 RLS를 통과할 방법이 없어 `web/lib/health-ingest.ts`
+  1곳에 한해 예외 허용(owner_id는 코드에서 고정값 명시). 다른 파일로 확대 금지.
 
 ## 레포 3개
 
@@ -117,8 +166,10 @@ dev 서버로 3분기(헤더 없음/오답/정답) 실행 확인: 401/401/`{"ok"
 
 1. **`create-next-app` 재실행 금지.** `package.json`/`tsconfig.json` 덮어써
    `npm run migrate` 깨짐.
-2. **Mac 앱 쓰기 동결(P0-8) 유지 중.** `frozenWriteMethods` 살아있음 — P4b
-   완료까지 기본값.
+2. **Mac 앱 쓰기 동결(P0-8) 유지 중.** `frozenWriteMethods`/`DietStore.frozenForMigration`
+   살아있음 — **P4b가 이번에 완료됐으니 동결 해제 여부는 오너 결정 필요**
+   (골든 재검증·G0-4 재확인 없이 임의로 풀지 말 것, Swift 쪽 변경이라 이
+   세션 스코프 밖).
 3. **Postgres 직결은 Session Pooler만.** direct(`:5432` IPv6)는 로컬·CI 모두
    실패. 확정값은 `docs/ENV_VARS.md` §Postgres 직결 — 추측 조립 금지.
 4. **DB·Auth 작업 시 Supabase 스킬(`.claude/skills/supabase`) 먼저 호출.**
