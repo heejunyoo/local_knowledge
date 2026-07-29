@@ -20,6 +20,8 @@ import {
 import { fetchCorpusStatus } from "@/lib/db/corpus";
 import { searchDocs } from "@/lib/db/search";
 import { runIngestJob, reclaimStaleIngestJobs } from "@/lib/db/ingest";
+import * as rag from "@/lib/rag/ask";
+import * as chatDomain from "@/lib/domain/chat";
 
 export async function core_ping() {
   return { pong: true };
@@ -242,6 +244,182 @@ export async function knowledge_search(params: unknown) {
       };
     }),
   };
+}
+
+interface KnowledgeAskResult {
+  question: string;
+  answer: string;
+  engine: string;
+  citations: {
+    unit_id: string;
+    title: string;
+    source_type: string;
+    snippet: string;
+    score: number;
+  }[];
+}
+
+/** 원본 MobileHTTPServer `case "knowledge.ask"|"knowledge.ask.fast"` 응답 계약과 동일한 필드명. */
+function toKnowledgeAskResult(r: Awaited<ReturnType<typeof rag.ask>>): KnowledgeAskResult {
+  return {
+    question: r.question,
+    answer: r.answer,
+    engine: r.engine,
+    citations: r.citations.slice(0, 8).map((c) => ({
+      unit_id: c.unitId,
+      title: c.title,
+      source_type: c.sourceType,
+      snippet: c.snippet,
+      score: c.score,
+    })),
+  };
+}
+
+/** 원본: knowledge.ask — 검색(P1 확정 방식) → LLM(캐스케이드) → 실패 시 extractive(1급 경로, G6-3). */
+export async function knowledge_ask(params: unknown) {
+  const p = (params ?? {}) as { q?: string; question?: string; limit?: number; use_llama?: boolean };
+  const q = p.q ?? p.question ?? "";
+  const limit = Math.max(1, Math.min(20, Math.trunc(p.limit ?? 8)));
+  const useLlm = p.use_llama ?? true;
+  return toKnowledgeAskResult(await rag.ask(q, { topK: limit, useLlm }));
+}
+
+/** 원본: knowledge.ask.fast — 검색+extractive만(LLM 스킵, UI 즉시 응답용). */
+export async function knowledge_ask_fast(params: unknown) {
+  const p = (params ?? {}) as { q?: string; question?: string; limit?: number };
+  const q = p.q ?? p.question ?? "";
+  const limit = Math.max(1, Math.min(20, Math.trunc(p.limit ?? 8)));
+  return toKnowledgeAskResult(await rag.askFast(q, { topK: limit }));
+}
+
+interface ChatSource {
+  service: string;
+  title: string;
+  snippet: string;
+  unit_id?: string;
+}
+
+/** 원본 handleChat의 knowledge 분기: askFast → refine 시도, 실패 시 fast 그대로. */
+async function handleKnowledgeChat(message: string) {
+  const fast = await rag.askFast(message, { topK: 8 });
+  const answer = (await rag.refine(message, fast.citations)) ?? fast;
+  const sources: ChatSource[] = answer.citations.slice(0, 6).map((c) => ({
+    service: "knowledge",
+    title: c.title,
+    snippet: c.snippet,
+    unit_id: c.unitId,
+  }));
+  return {
+    answer: answer.answer,
+    engine: answer.engine,
+    sources,
+    trace: ["intent:knowledge", "knowledge.ask"],
+    intent: "knowledge",
+  };
+}
+
+/** 원본 handleMixedChat — diet 컨텍스트를 먼저 모으고 knowledge 검색을 이어붙인다(W2). */
+async function handleMixedChat(message: string) {
+  const trace = ["intent:mixed"];
+  const coach = (await diet_coach({ message })) as { answer: string; engine: string };
+  trace.push("diet.coach");
+  const dayLine = ((await diet_day_summary()) as { summary_text?: string }).summary_text ?? "";
+  const ctx = await fetchDietGatewayContext();
+  const sleepHint = dietRead.sleepCoachHint(dietRead.latestSleepHours(ctx.sevenDay.slice(0, 3))) ?? "";
+  const weekLine = ((await diet_week_review()) as { summary_text?: string }).summary_text ?? "";
+
+  const fast = await rag.askFast(message, { topK: 6 });
+  const knowledge = (await rag.refine(message, fast.citations)) ?? fast;
+  trace.push("knowledge.ask");
+
+  const parts: string[] = ["【몸】"];
+  if (coach.answer) parts.push(coach.answer);
+  if (dayLine) parts.push(dayLine);
+  if (weekLine) parts.push(weekLine);
+  if (sleepHint) parts.push(sleepHint);
+  parts.push("");
+  parts.push("【지식】");
+  parts.push(knowledge.answer);
+
+  const sources: ChatSource[] = [{ service: "diet", title: "오늘·주간", snippet: dayLine }];
+  for (const c of knowledge.citations.slice(0, 4)) {
+    sources.push({ service: "knowledge", title: c.title, snippet: c.snippet, unit_id: c.unitId });
+  }
+
+  return {
+    answer: parts.join("\n"),
+    engine: `mixed/${knowledge.engine}`,
+    sources,
+    trace,
+    intent: "mixed",
+  };
+}
+
+/** 원본 handleDietChat — 운동/식사 휴리스틱 기록 후 diet.coach로 폴백. */
+async function handleDietChat(message: string) {
+  const trace = ["intent:diet"];
+
+  if (message.includes("운동") || message.toLowerCase().includes("workout")) {
+    const minutes = chatDomain.firstInt(message) ?? 20;
+    let kind = message.replace(/운동/g, "").replace(/workout/gi, "");
+    kind = kind.replace(/\d+\s*분/g, "").trim();
+    const w = await dietDb.insertWorkout({
+      kind: kind ? kind.slice(0, 40) : "workout",
+      minutes,
+      intensity: null,
+    });
+    trace.push("diet.log_workout");
+    const day = ((await diet_day_summary()) as { summary_text?: string }).summary_text ?? "";
+    return {
+      answer: `운동 기록했어요: ${w.kind} ${w.minutes}분.\n${day}`,
+      engine: "diet-rules/v1",
+      sources: [{ service: "diet", title: "workout", snippet: `${w.kind} ${w.minutes}m` }] as ChatSource[],
+      trace,
+    };
+  }
+
+  if (
+    message.includes("kcal") ||
+    message.includes("칼로리") ||
+    message.includes("먹") ||
+    message.includes("식사") ||
+    message.includes("점심") ||
+    message.includes("저녁") ||
+    message.includes("아침")
+  ) {
+    const kcal = chatDomain.firstDouble(message);
+    const meal = await dietDb.insertMeal({ items: [message], kcal, proteinG: null, note: message });
+    trace.push("diet.log_meal");
+    const day = ((await diet_day_summary()) as { summary_text?: string }).summary_text ?? "";
+    return {
+      answer: `식사 기록했어요${kcal != null ? ` (${Math.trunc(kcal)} kcal)` : ""}.\n${day}`,
+      engine: "diet-rules/v1",
+      sources: [{ service: "diet", title: "meal", snippet: meal.items.join(", ") }] as ChatSource[],
+      trace,
+    };
+  }
+
+  const coach = (await diet_coach({ message })) as { answer: string; engine: string };
+  trace.push("diet.coach");
+  const dayLine = ((await diet_day_summary()) as { summary_text?: string }).summary_text ?? "";
+  return {
+    answer: coach.answer,
+    engine: coach.engine,
+    sources: [{ service: "diet", title: "오늘", snippet: dayLine }] as ChatSource[],
+    trace,
+  };
+}
+
+/** 원본 MobileHTTPServer.handleChat — REST 전용(POST /v1/chat 대응, POST /api/chat). */
+export async function chat_send(params: unknown) {
+  const p = (params ?? {}) as { message?: string; mode?: string };
+  const message = p.message ?? "";
+  const mode = (p.mode ?? "auto").toLowerCase();
+  const intent = chatDomain.classifyIntent(message, mode);
+
+  if (intent === "diet") return handleDietChat(message);
+  if (intent === "mixed") return handleMixedChat(message);
+  return handleKnowledgeChat(message);
 }
 
 export async function inbox_list(params: unknown) {

@@ -6,6 +6,7 @@ import styles from "./BottomNav.module.css";
 
 const TABS = [
   { href: "/", label: "홈", icon: "🏠" },
+  { href: "/chat", label: "채팅", icon: "💬" },
   { href: "/search", label: "검색", icon: "🔍" },
   { href: "/diet", label: "식단", icon: "🍽️" },
   { href: "/inbox", label: "인박스", icon: "📥" },
