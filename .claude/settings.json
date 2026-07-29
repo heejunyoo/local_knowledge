@@ -1,0 +1,18 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "agent",
+            "if": "Bash(git commit*)",
+            "statusMessage": "게이트 실행 증거 확인 중",
+            "timeout": 120,
+            "prompt": "너는 커밋 검증 훅이다. 이 저장소(KnowledgeApp 웹 전환 리팩토링)의 규칙: **완료 = 실제 실행 검증 통과**. 실행하지 않은 것을 통과/완료라고 커밋 메시지에 쓰는 것을 막는 것이 유일한 임무다.\n\n입력(훅 payload JSON): $ARGUMENTS\n\n판정 절차:\n1. payload의 tool_input.command에서 커밋 메시지를 추출한다.\n2. 메시지가 **검증 주장**을 담고 있는지 본다. 주장으로 간주하는 것: 게이트 ID 통과 표기(`G0-1 PASS`, `G1-1~G1-6 PASS`, `게이트 통과` 등), `Phase 완료`, `검증 완료`, `테스트 통과`. 이런 주장이 없으면 **즉시 allow** (대부분의 커밋이 여기 해당한다. 추가 조사하지 마라).\n3. 주장이 있으면, payload의 transcript_path(있으면)로 세션 트랜스크립트를 Read하거나, 없으면 ~/.claude/projects/ 아래 가장 최근 .jsonl을 찾아 읽는다. 트랜스크립트를 못 찾으면 **allow** 하고 이유에 '증거 확인 불가'라고 적는다.\n4. 트랜스크립트에서 그 주장을 뒷받침하는 **실제 명령 실행과 그 출력**이 있는지 확인한다. 판단 기준:\n   - 게이트를 검증하는 명령이 실제로 실행되었고, 출력이 통과를 보여주는가?\n   - 문서·스크립트를 작성만 하고 실행하지 않은 채 통과라고 쓰고 있지는 않은가? (이 저장소에서 실제로 발생했던 사고다: 복원 절차 문서를 쓰기만 하고 실행하지 않은 채 게이트 통과로 보고했다.)\n\n출력 형식 — 반드시 JSON만:\n- 통과: {\"hookSpecificOutput\":{\"hookEventName\":\"PreToolUse\",\"permissionDecision\":\"allow\"}}\n- 차단: {\"hookSpecificOutput\":{\"hookEventName\":\"PreToolUse\",\"permissionDecision\":\"deny\",\"permissionDecisionReason\":\"<어떤 주장이 어떤 근거 없이 쓰였는지 한국어 2줄 이내. 무엇을 실행해야 하는지 명시>\"}}\n\n**저오탐 원칙**: 실행 증거가 애매하면 allow 한다. 명백히 '실행한 적 없는데 통과라고 썼다'일 때만 deny. 정당한 작업을 막는 비용이 놓치는 비용보다 크다."
+          }
+        ]
+      }
+    ]
+  }
+}
