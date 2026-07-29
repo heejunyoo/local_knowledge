@@ -3,7 +3,7 @@
 | Field | Value |
 |-------|-------|
 | 최종 갱신 | 2026-07-29 |
-| 현재 위치 | **C2 완전 완료** + **P6 1~7단계 완료** + **Vercel 프로덕션 배포 완료(2026-07-29)**. `web/` 프로덕션 URL `https://web-rho-lovat-34.vercel.app`(Vercel 프로젝트 `luckyhyun/knowledge-web`, Root Directory=`web`). 필수 환경변수 6종(Supabase 4종+`INGEST_API_TOKEN`+`CRON_SECRET`) 등록 완료, 실 로그인으로 6라우트+`/api/ask` 스모크 확인. C2의 Vault 시크릿 2종 등록 + `cron.schedule('fasting-reminder', '*/5 * * * *', ...)` 등록까지 완료 — 함수 수동 실행으로 에러 없음 확인. P6은 LLM 캐시/라우팅(캐스케이드)/RAG(ask·askFast)/RPC/`/chat`까지 전부 구현·테스트(도메인 167개, regression 33개 전부 통과) — 단, `diet.estimate_nutrition` LLM 보강은 One Thing 원칙상 스코프 제외(별도 후속). P6·C2 작업물은 2026-07-29 커밋 완료(`P6-1`/`P6-2`/`C2`/`chore`/`docs` 5개 — 직전 세션이 구현·검증만 하고 커밋 전에 중단돼 있었음). **다음: B1(GitHub PAT)·`RESEND_API_KEY`/`GEMINI_API_KEY`/`OPENROUTER_API_KEY` 오너 발급(계정 인증 필요해 대행 불가), 또는 diet.estimate_nutrition LLM 보강 착수 여부 판단** |
+| 현재 위치 | **C2 완전 완료** + **P6 1~7단계 완료** + **Vercel 프로덕션 배포 완료(2026-07-29)**. `web/` 프로덕션 URL `https://web-rho-lovat-34.vercel.app`(Vercel 프로젝트 `luckyhyun/knowledge-web`, Root Directory=`web`). 필수 환경변수 6종(Supabase 4종+`INGEST_API_TOKEN`+`CRON_SECRET`) 등록 완료, 실 로그인으로 6라우트+`/api/ask` 스모크 확인. C2는 **이메일 채널 폐기 → 앱 내 표시로 종결**(2026-07-29, 마이그레이션 007로 cron·함수·Vault 되돌림). P6은 LLM 캐시/라우팅(캐스케이드)/RAG(ask·askFast)/RPC/`/chat`까지 전부 구현·테스트(도메인 167개, regression 33개 전부 통과) — 단, `diet.estimate_nutrition` LLM 보강은 One Thing 원칙상 스코프 제외(별도 후속). P6·C2 작업물은 2026-07-29 커밋 완료(`P6-1`/`P6-2`/`C2`/`chore`/`docs` 5개 — 직전 세션이 구현·검증만 하고 커밋 전에 중단돼 있었음). **다음: Google 로그인 도입 진행 중(오너의 Google Cloud OAuth 클라이언트 발급 대기) · B1(GitHub PAT)·`GEMINI_API_KEY`/`OPENROUTER_API_KEY` 오너 발급, 또는 diet.estimate_nutrition LLM 보강** |
 | 다음 세션 읽기 순서 | ① 이 파일 ② "다음 작업 — MECE 분류" §B부터 ③ 막히면 `REFACTOR_BACKLOG.md`("P6에서 발견" 최신 포함) |
 | 결정 근거 | `docs/REFACTOR_DIRECTION_WEB_2026-07.md` (D-3 정의 §2.2) |
 | 미해결 이슈 | `docs/REFACTOR_BACKLOG.md` |
@@ -21,7 +21,7 @@
 | **P4b diet 쓰기 + health.ingest** | ✅ 게이트 G4b-1~G4b-3 통과, G4b-4 이월(발화 채널 미결정) | 아래 |
 | **P5 웹 UI** | ✅ 구현 완료(chat 제외 5라우트), G5-1~G5-5 전부 통과 | 아래 |
 | **P6 생성 경로 이식** | ✅ 캐시/라우팅/RAG/RPC/`/chat` 전부 구현, G6-1~G6-5 통과. `diet.estimate_nutrition` LLM 보강은 스코프 제외(별도 후속) | 아래 |
-| **C2 단식 리마인더 이메일** | ✅ 인프라+자동 발화 등록 전부 완료(cron 함수·`/api/cron/fasting-reminder`·Vault 시크릿·`cron.schedule`). `RESEND_API_KEY`만 미발급 — 발급 전까지는 발송 라우트가 매 5분 조용히 스킵(에러 아님) | 아래 |
+| **C2 단식 리마인더** | ✅ **이메일 채널 폐기, 앱 내 표시로 종결(2026-07-29 오너 결정)** — 마이그레이션 007로 cron·함수·Vault 되돌림, Resend 코드 전부 삭제. `RESEND_API_KEY` 불필요 | 아래 |
 | P7 | ⬜ | — |
 
 ## P5 게이트 현황
@@ -73,7 +73,25 @@
 불필요했음. 상세 설계·판단 근거는 `docs/REFACTOR_BACKLOG.md` "P6에서 발견" 참고(Turbopack 프로젝트
 루트 버그 등).
 
-## C2 상세 (단식 리마인더 이메일 발화, 2026-07-29)
+## C2 종결 (단식 리마인더 — 이메일 폐기 → 앱 내 표시, 2026-07-29)
+
+**최종 상태**: 이메일 채널을 전면 폐기했다. 판단 근거는 리마인더의 알맹이가 이미 도메인
+계층에 있었다는 점이다 — `fastingStatus()`가 `goal_met`을 계산해 `label`("목표 14h 달성 ·
+공복 14.2h")과 `hint`("목표 공복을 채웠어요")를 만들고 `/diet`가 이미 렌더링하고 있었다.
+이메일이 담당한 건 "앱을 열지 않아도 알려주는" 푸시 성격뿐이었고, 개인용 서비스 하나를 위해
+외부 서비스 계정·API 키·5분 주기 pg_cron·pg_net 아웃바운드를 유지할 가치가 없다고 판단했다.
+
+제거: `web/lib/email/`, `/api/cron/fasting-reminder`, `FastingSession.reminderSentAt`,
+`markFastingReminderSent()`, 관련 테스트 2파일. DB는
+`007_drop_fasting_reminder_cron.sql`로 `cron.unschedule` + 함수 drop + Vault 시크릿 2종 삭제
+(적용 후 `cron.job` 0건·함수 0건·시크릿 0건 확인). `private` 스키마와 `pg_net`은 남겼다.
+추가: `goal_met`일 때 `/diet` 단식 카드에 "✓ 목표 달성" 배지 + 초록 진행바. 배지 글자색은
+green-500이 아니라 grey-900 — `#03b26c`는 green-50 배경 대비 2.5:1로 WCAG AA 미달이라
+P5의 blue-500 접근성 감점을 반복하지 않기 위함.
+
+아래는 폐기 전 구현 기록(히스토리).
+
+### (폐기됨) 구현 상세
 
 `FastingSession`에 `reminderSentAt` 필드 추가(웹 신규, 원본에 없음) → `web/lib/email/resend.ts`
 (Resend REST, `RESEND_API_KEY` 미설정 시 스킵) → `web/app/api/cron/fasting-reminder/route.ts`
@@ -241,7 +259,8 @@ Urgency가 동률을 깬다.
 |---|---|---|---|---|
 | **B1. G4a-2** GitHub PAT 발급 → inbox 왕복(vault 실제 커밋) 검증 | 4 | 2 | 3 | 검증 자체는 가벼우나, 여기 딸린 **후속 구현**(`corpus.sync`/`search.reindex`를 DB 내부 계산에서 GitHub Contents API 기반 실제 재수집으로 교체, `REFACTOR_BACKLOG.md` "P4a-9에서 발견")은 Effort 4~5의 별도 작업 — PAT 발급이 그 전체 체인의 진짜 병목 |
 | ~~**B2. INGEST_API_TOKEN** Vercel 환경변수 정식 발급/등록~~ | — | — | — | **완료(2026-07-29)** — B3에 통합, 랜덤 토큰 생성+Vercel Production 등록 완료 |
-| **B3. 신규 API 키 3종 발급** (2026-07-29 신규, Vercel 배포 완료로 범위 축소) | 4 | 1 | 3 | ~~Vercel 배포~~·~~INGEST_API_TOKEN~~·~~CRON_SECRET~~ **완료(2026-07-29)** — `luckyhyun/knowledge-web`, `https://web-rho-lovat-34.vercel.app`. 남은 건 계정 인증이 필요해 대행 불가한 키 3종뿐: ① `RESEND_API_KEY`(resend.com 가입, 단식 리마인더 실발송 — cron job은 이미 등록되어 있어 키만 넣으면 즉시 전환), ② `GEMINI_API_KEY`(aistudio.google.com/apikey), ③ `OPENROUTER_API_KEY`(openrouter.ai/keys) — 둘 다 P6 캐스케이드 2·3순위(`GROQ_API_KEY`만으로도 골격은 동작하지만 groq 실패 시 폴백 없음). 값 발급 후 `vercel env add <KEY> production`으로 등록만 하면 됨(제가 대행 가능) |
+| **B3. LLM API 키 2종 발급** (2026-07-29, RESEND 폐기로 3종→2종) | 3 | 1 | 2 | ~~Vercel 배포~~·~~INGEST_API_TOKEN~~·~~CRON_SECRET~~ **완료(2026-07-29)**. ~~`RESEND_API_KEY`~~ **불필요해짐**(이메일 채널 폐기). 남은 건 ① `GEMINI_API_KEY`(aistudio.google.com/apikey), ② `OPENROUTER_API_KEY`(openrouter.ai/keys) — P6 캐스케이드 2·3순위(`GROQ_API_KEY`만으로도 골격은 동작하지만 groq 실패 시 폴백 없이 extractive로 떨어짐). 발급 후 `vercel env add <KEY> production` 대행 가능 |
+| **B4. Google OAuth 클라이언트 발급** (2026-07-29 신규, 최우선) | 5 | 1 | 4 | 로그인 진입 마찰 해소. 오너가 console.cloud.google.com에서 OAuth 클라이언트(웹) 생성 → 승인된 리디렉션 URI에 `https://gppklwzcmfuuhsefdeik.supabase.co/auth/v1/callback` 등록 → client ID/secret을 Supabase 대시보드 Authentication→Providers→Google에 입력. 코드 쪽(`/login` Google 버튼·스타일링)은 선행 완료. **리스크**: `disable_signup: true`라 최초 Google 로그인이 신규가입으로 막힐 수 있음 — 이론상 이메일 확인된 기존 계정과 자동 identity 연결되어 통과해야 하나 실측 필요. 막히면 가입을 잠깐 열고 연결 후 재차단(uid는 어느 쪽이든 보존) |
 
 **추천 순서**: B3(배포+키 3종)가 이번에 완성된 P6/C2를 "실사용"으로 전환하는 유일한 남은 단계라 최우선.
 B1(GitHub PAT)은 P4a-9 이월 전체를 해소하는 별개 열쇠. B2는 언제든 병행 가능
@@ -264,10 +283,12 @@ B1(GitHub PAT)은 P4a-9 이월 전체를 해소하는 별개 열쇠. B2는 언�
    `luckyhyun/knowledge-web` 프로덕션 배포+환경변수 등록+C2 cron.schedule까지 완결
 3-1. ~~P6/C2 커밋~~ — **완료(2026-07-29)**. 재검증 후 5개 커밋으로 정리:
    `npm run test` 167개 / `npm run test:regression` 33개 전부 통과, `next build` 성공
-4. (오너에게 요청, 최우선) B3 나머지 API 키 3종(RESEND/GEMINI/OPENROUTER) 발급 —
+3-2. ~~C2 이메일 채널 폐기 → 앱 내 표시~~ — **완료(2026-07-29)**, 마이그레이션 007
+4. (오너에게 요청, 최우선) **B4 Google OAuth 클라이언트 발급** — 로그인 진입 마찰의 유일한 병목
+5. (오너에게 요청) B3 LLM 키 2종(GEMINI/OPENROUTER) 발급 —
    대행 불가(제3자 계정 인증), 발급 후 등록은 제가 `vercel env add`로 대행 가능
-5. (오너에게 요청) B1 GitHub PAT 발급 — 별개 체인(P4a-9 이월 해소)
-6. (아무 때나) C3 diet.estimate_nutrition LLM 보강 착수 —
+6. (오너에게 요청) B1 GitHub PAT 발급 — 별개 체인(P4a-9 이월 해소)
+7. (아무 때나) C3 diet.estimate_nutrition LLM 보강 착수 —
    A1이 남긴 검색 랭킹 경계는 이미 accept로 종결(`REFACTOR_BACKLOG.md`)
 
 ## 이번 세션 스코프 조정 (오너 승인 완료, 상세는 커밋 메시지)

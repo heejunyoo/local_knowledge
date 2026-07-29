@@ -159,6 +159,27 @@
   background: var(--toss-blue-500);
 }
 
+/* 단식 목표 달성 표시. 이메일 리마인더를 폐기하고 앱 내 표시로 대체한 자리
+   (2026-07-29) — 문구 자체는 이전부터 fastingStatus()의 label/hint로 나오고
+   있었고, 여기서는 눈에 띄게만 만든다.
+   배지 글자색은 green-500이 아니라 grey-900이다: #03b26c는 green-50 배경에서
+   대비비가 2.5:1로 WCAG AA(4.5:1)에 못 미친다(P5에서 blue-500 텍스트로 접근성
+   감점을 받은 것과 같은 함정). 초록은 텍스트가 아닌 요소에만 쓴다. */
+.fastingGoalBadge {
+  display: inline-block;
+  font-size: var(--toss-font-caption-size);
+  font-weight: 600;
+  color: var(--toss-grey-900);
+  background: var(--toss-green-50);
+  border-radius: var(--toss-radius-badge);
+  padding: var(--toss-space-1) var(--toss-space-2);
+  margin: var(--toss-space-1) 0 0;
+}
+
+.progressFillGoalMet {
+  background: var(--toss-green-500);
+}
+
 .refLines {
   margin-top: var(--toss-space-2);
 }

@@ -31,24 +31,21 @@
 | gemini | `gemini_api_key` | `GEMINI_API_KEY` | Vercel env `GEMINI_API_KEY` (P6, 신규 발급 필요) |
 | openrouter | `openrouter_api_key` | `OPENROUTER_API_KEY` | Vercel env `OPENROUTER_API_KEY` (P6, 신규 발급 필요) |
 
-## C2(단식 리마인더 이메일 발화, 2026-07-29) 신규 키
-| 이름 | 용도 | 사용처 | 상태 |
-|---|---|---|---|
-| `RESEND_API_KEY` | 단식 목표 달성 리마인더 이메일 발송(Resend REST API) | `web/lib/email/resend.ts::sendFastingReminderEmail` — 미설정 시 발송을 조용히 스킵(에러 아님, 코드는 완결) | **미채움 — 오너가 Resend 가입 후 Vercel 환경변수로 직접 발급/등록.** 값은 문서에 기록 금지 |
+## C2(단식 리마인더) — 이메일 채널 폐기됨(2026-07-29), 신규 키 없음
 
-### C2 Supabase Vault 시크릿 (env var 아님, `vault.create_secret()`으로 DB 내부에 저장) — 등록 완료(2026-07-29)
-`web/supabase/migrations/006_fasting_reminder_cron.sql`의 `private.trigger_fasting_reminder()`가
-`vault.decrypted_secrets`에서 읽는다.
+`RESEND_API_KEY`는 **더 이상 필요하지 않다.** 오너 결정으로 이메일 채널을 전면 폐기하고
+"앱 내 표시"로 대체했다 — 리마인더 문구는 이미 `diet-read.ts`의 `fastingStatus()`가
+`goal_met`으로 계산해 `label`/`hint`에 담고 있었고 `/diet` 화면이 그걸 렌더링하고 있었다.
+이메일이 담당하던 몫은 "앱을 열지 않아도 알려주는" 푸시 성격뿐이라, 그것만을 위해 외부
+서비스 계정·API 키·5분 주기 pg_cron·pg_net 아웃바운드를 유지할 가치가 없다고 판단했다.
 
-| 이름 | 용도 | 상태 |
-|---|---|---|
-| `fasting_reminder_target_url` | `POST /api/cron/fasting-reminder`의 프로덕션 URL | **등록 완료** — 위 "Vercel 프로덕션 배포" URL로 등록됨 |
-| `cron_secret` | 위 라우트 인증용 `CRON_SECRET`과 동일 값(Bearer 헤더) | **등록 완료** |
+되돌린 것(`web/supabase/migrations/007_drop_fasting_reminder_cron.sql`): `cron.unschedule`,
+`private.trigger_fasting_reminder()` drop, Vault 시크릿 2종(`fasting_reminder_target_url`,
+`cron_secret`) 삭제. 코드 쪽은 `web/lib/email/`, `/api/cron/fasting-reminder`,
+`FastingSession.reminderSentAt`까지 전부 제거. `private` 스키마와 `pg_net` 확장은 남겼다.
 
-`cron.schedule('fasting-reminder', '*/5 * * * *', 'select private.trigger_fasting_reminder();')`도
-등록 완료(job id=1). 함수 수동 실행(`select private.trigger_fasting_reminder();`)으로 에러 없음 확인.
-`RESEND_API_KEY`만 미발급이라 조건 충족 시에도 이메일 발송은 조용히 스킵된다(에러 아님) — 키 발급 후
-재배포 없이 다음 5분 주기부터 바로 실발송 전환.
+**주의**: Vercel 환경변수 `CRON_SECRET`은 지운 것이 아니다 — `/api/cron/keepalive`가
+계속 쓴다. 삭제된 것은 Vault에 복제해 뒀던 사본뿐이다.
 
 ## Supabase (P1 완료 — 프로젝트 생성됨: `gppklwzcmfuuhsefdeik`)
 | 이름 | 용도 | 사용처 | 상태 |
@@ -59,8 +56,8 @@
 | `SUPABASE_DB_URL` | Postgres 접속 문자열 | 로컬 스크립트 · GitHub Actions 백업 | 채움 (`web/.env.local` + Vercel Production). **direct(`db.<ref>...:5432`)는 IPv6 전용이라 대부분의 CI/로컬에서 불가 → Session Pooler를 쓸 것.** 아래 §Postgres 직결 참고 |
 | `INGEST_API_TOKEN` | Shortcuts `health.ingest` 인그레스 전용 Bearer 토큰(≥32바이트 랜덤) | `/api/health/ingest` 라우트(`web/lib/ingest-auth.ts`의 `isIngestAuthorized`, P4b에서 라우트 본체 구현 완료) | **채움(2026-07-29)** — `openssl rand -hex 32`로 생성해 Vercel Production 환경변수로 등록 완료. 값은 iOS Shortcuts 앱에도 등록 필요(오너가 직접, 값은 문서에 기록 안 함) |
 | `VAULT_GITHUB_TOKEN` | `knowledge-vault` 레포 Contents API 쓰기 권한 PAT | `web/lib/db/inbox.ts`의 `defaultVaultCommit`/`defaultVaultPathChecker`(inbox.promote, P4a-9) | **미채움 — GitHub PAT 미발급.** 토큰 없이는 `inbox.promote`가 `promote_failed`(error_code=`vault_token_missing`)로 안전하게 실패한다(G4a-2는 발급 후 별도 세션에서 검증). fine-grained PAT(레포 `knowledge-vault` 한정, Contents: Read/write)로 발급 권장 — `gh` CLI의 기존 로그인 토큰(`repo` 전체 스코프)은 과도한 권한이라 재사용하지 않음. 값은 Vercel 환경변수에만 저장, 문서에 기록 금지 |
-| `CRON_SECRET` | Vercel Cron 인그레스 전용 Bearer 토큰(≥32바이트 랜덤) | `/api/cron/keepalive`(`web/lib/cron.ts`의 `isCronAuthorized`, task 10) + `/api/cron/fasting-reminder`(C2, pg_cron이 호출) | **채움(2026-07-29)** — `openssl rand -hex 32`로 생성해 Vercel Production 환경변수 및 Supabase Vault(`cron_secret`, C2 §참고)에 동일 값으로 등록 완료 |
-| `RESEND_API_KEY`/`GEMINI_API_KEY`/`OPENROUTER_API_KEY` | 위 §"C2 신규 키"·"`llm_providers.json`" 참고 | — | **미채움 — 오너 계정 인증이 필요해 대행 불가.** 발급처는 각 섹션 참고, 발급 후 값만 알려주면 `vercel env add`로 등록 대행 가능 |
+| `CRON_SECRET` | Vercel Cron 인그레스 전용 Bearer 토큰(≥32바이트 랜덤) | `/api/cron/keepalive`(`web/lib/cron.ts`의 `isCronAuthorized`, task 10). ~~`/api/cron/fasting-reminder`~~는 C2 이메일 폐기로 삭제됨 | **채움(2026-07-29)** — Vercel Production 환경변수로 등록 완료. Vault 사본(`cron_secret`)은 007에서 삭제 |
+| `GEMINI_API_KEY`/`OPENROUTER_API_KEY` | 위 §"`llm_providers.json`" 참고 | — | **미채움 — 오너 계정 인증이 필요해 대행 불가.** 발급 후 값만 알려주면 `vercel env add`로 등록 대행 가능. (`RESEND_API_KEY`는 2026-07-29 이메일 채널 폐기로 **불필요해짐**) |
 
 ### P3 인증 도입 완료 (2026-07-27)
 - `web/supabase/migrations/004_rls.sql` 적용됨 — 14개 테이블 전부 RLS 활성화 + `owner_all`(owner_id = auth.uid()) 정책.

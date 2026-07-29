@@ -14,6 +14,9 @@
   --toss-white: #ffffff;
   --toss-blue-50: #e8f3ff;
   --toss-red-50: #ffeeee;
+  /* 원본 TossTheme.swift엔 없는 추가 토큰 — 단식 목표 달성 배지용.
+     blue-50/red-50과 동일한 규칙(500 계열의 옅은 배경)으로 맞췄다. */
+  --toss-green-50: #e8f8f1;
   --toss-grey-900: #191f28;
   --toss-grey-700: #4e5968;
   --toss-grey-500: #8b95a1;
@@ -57,6 +60,7 @@
     --toss-white: #2c2c2e;
     --toss-blue-50: #1a2740;
     --toss-red-50: #3a1f1f;
+    --toss-green-50: #14301f;
     --toss-grey-900: #f2f4f6;
     --toss-grey-700: #c4c8ce;
     --toss-grey-500: #8e959e;

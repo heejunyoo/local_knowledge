@@ -42,6 +42,7 @@ interface ProfileDict {
 }
 interface FastingDict {
   active: boolean;
+  goal_met?: boolean;
   label: string;
   hint?: string;
   preview_line?: string;
@@ -257,6 +258,7 @@ export default function DietPage() {
       <div className={styles.section}>
         <Card>
           <p className={styles.sectionLabel}>간헐적 단식</p>
+          {fasting.goal_met ? <p className={styles.fastingGoalBadge}>✓ 목표 달성</p> : null}
           <p className={styles.fastingLabel}>{fasting.label}</p>
           {fasting.preview_line ? <p className={styles.fastingPreview}>{fasting.preview_line}</p> : null}
           {!fasting.active ? (
@@ -279,7 +281,10 @@ export default function DietPage() {
           {fasting.hint ? <p className={styles.fastingHint}>{fasting.hint}</p> : null}
           {fasting.active && typeof fasting.progress === "number" ? (
             <div className={styles.progressTrack}>
-              <div className={styles.progressFill} style={{ width: `${Math.min(1, Math.max(0, fasting.progress)) * 100}%` }} />
+              <div
+                className={`${styles.progressFill} ${fasting.goal_met ? styles.progressFillGoalMet : ""}`}
+                style={{ width: `${Math.min(1, Math.max(0, fasting.progress)) * 100}%` }}
+              />
             </div>
           ) : null}
           <div className={styles.refLines}>
