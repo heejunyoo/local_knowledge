@@ -188,7 +188,7 @@ describe("fastingStatus — 대기/활성 두 분기", () => {
     const startedAt = new Date("2026-07-27T05:00:00Z").toISOString(); // 7시간 전
     const prefs: diet.FastingPrefs = {
       ...diet.DEFAULT_FASTING_PREFS,
-      active: { id: "s1", startedAt, targetHours: 14, endedAt: null, endReason: null },
+      active: { id: "s1", startedAt, targetHours: 14, endedAt: null, endReason: null, reminderSentAt: null },
     };
     const result = diet.fastingStatus({
       now,
@@ -208,7 +208,7 @@ describe("fastingStatus — 대기/활성 두 분기", () => {
     const startedAt = new Date("2026-07-27T05:00:00Z").toISOString(); // 15시간 전, 목표 14h
     const prefs: diet.FastingPrefs = {
       ...diet.DEFAULT_FASTING_PREFS,
-      active: { id: "s1", startedAt, targetHours: 14, endedAt: null, endReason: null },
+      active: { id: "s1", startedAt, targetHours: 14, endedAt: null, endReason: null, reminderSentAt: null },
     };
     const result = diet.fastingStatus({
       now,
@@ -298,7 +298,7 @@ describe("dashboard — 분석 라인 조립과 plan 임베딩", () => {
   it("단식이 활성 상태면 plan.eta_text에 진행 중 접미사가 붙는다(대시보드는 이 접미사만 조건부 적용)", () => {
     const today = emptyDay("2026-07-27");
     const active: diet.FastingSession = {
-      id: "s1", startedAt: "2026-07-27T00:00:00Z", targetHours: 14, endedAt: null, endReason: null,
+      id: "s1", startedAt: "2026-07-27T00:00:00Z", targetHours: 14, endedAt: null, endReason: null, reminderSentAt: null,
     };
     const result = diet.dashboard({
       goals: GOALS,

@@ -625,6 +625,8 @@ export interface FastingSession {
   targetHours: number;
   endedAt: string | null;
   endReason: string | null;
+  /** 목표 시간 도달(goal_met) 리마인더 이메일 발송 시각. 웹 이관 시 신규 추가(원본엔 없음) — 중복 발송 방지용. */
+  reminderSentAt: string | null;
 }
 
 export interface FastingPrefs {

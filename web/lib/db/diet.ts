@@ -154,6 +154,7 @@ interface StoredFastingSession {
   target_hours: number;
   ended_at: string | null;
   end_reason: string | null;
+  reminder_sent_at: string | null;
 }
 
 interface StoredFastingPrefs {
@@ -164,11 +165,25 @@ interface StoredFastingPrefs {
 }
 
 function toFastingSession(s: StoredFastingSession): dietRead.FastingSession {
-  return { id: s.id, startedAt: s.started_at, targetHours: s.target_hours, endedAt: s.ended_at, endReason: s.end_reason };
+  return {
+    id: s.id,
+    startedAt: s.started_at,
+    targetHours: s.target_hours,
+    endedAt: s.ended_at,
+    endReason: s.end_reason,
+    reminderSentAt: s.reminder_sent_at ?? null,
+  };
 }
 
 function fastingSessionRow(s: dietRead.FastingSession): StoredFastingSession {
-  return { id: s.id, started_at: s.startedAt, target_hours: s.targetHours, ended_at: s.endedAt, end_reason: s.endReason };
+  return {
+    id: s.id,
+    started_at: s.startedAt,
+    target_hours: s.targetHours,
+    ended_at: s.endedAt,
+    end_reason: s.endReason,
+    reminder_sent_at: s.reminderSentAt ?? null,
+  };
 }
 
 export async function fetchFastingPrefs(): Promise<dietRead.FastingPrefs> {
@@ -393,9 +408,17 @@ export async function startFast(targetHours: number | null, at: Date = new Date(
     targetHours: hours,
     endedAt: null,
     endReason: null,
+    reminderSentAt: null,
   };
   await setFastingPrefs({ ...prefs, targetHours: hours, active: session });
   return session;
+}
+
+/** fasting-reminder cron 전용: 활성 세션이 sessionId와 일치할 때만 reminderSentAt 기록(경합 시 조용히 스킵). */
+export async function markFastingReminderSent(sessionId: string, at: Date): Promise<void> {
+  const prefs = await fetchFastingPrefs();
+  if (!prefs.active || prefs.active.id !== sessionId || prefs.active.endedAt != null) return;
+  await setFastingPrefs({ ...prefs, active: { ...prefs.active, reminderSentAt: at.toISOString() } });
 }
 
 /** 원본 endActiveFastLocked(): elapsedH+0.05>=target이면 completedCount+1(약 3분 여유). */
