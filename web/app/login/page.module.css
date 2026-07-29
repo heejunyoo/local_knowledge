@@ -1,0 +1,133 @@
+/*
+ * P3에서 만든 로그인 폼은 스타일이 전혀 없었다. P5(웹 UI)가 스코프를 하단탭
+ * 5개 라우트로 한정했고 /login은 탭이 아니라 그 목록에 없었기 때문 — 의도적
+ * 결정이 아니라 단계 경계 사이로 빠진 누락이었다(2026-07-29 오너 지적).
+ */
+
+.wrap {
+  min-height: 100dvh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--toss-space-6);
+  background: var(--toss-grey-50);
+}
+
+.panel {
+  width: 100%;
+  max-width: 380px;
+}
+
+.brand {
+  font-size: var(--toss-font-title-size);
+  font-weight: var(--toss-font-title-weight);
+  color: var(--toss-grey-900);
+  margin: 0 0 var(--toss-space-2);
+  text-align: center;
+}
+
+.tagline {
+  font-size: var(--toss-font-body-size);
+  color: var(--toss-grey-500);
+  margin: 0 0 var(--toss-space-8);
+  text-align: center;
+}
+
+/* Google 버튼은 흰 배경 + 테두리(구글 브랜드 가이드의 라이트 테마에 준함).
+   --toss-white는 다크 모드에서 #2c2c2e로 바뀌므로 두 테마 모두 자연스럽다. */
+.googleButton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--toss-space-2);
+  background: var(--toss-white);
+  color: var(--toss-grey-900);
+  border: 1px solid var(--toss-grey-200);
+}
+
+.googleButton:disabled {
+  background: var(--toss-grey-100);
+  color: var(--toss-grey-500);
+}
+
+.googleMark {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+}
+
+/* 가운데 "또는"이 걸친 구분선 */
+.divider {
+  display: flex;
+  align-items: center;
+  gap: var(--toss-space-3);
+  margin: var(--toss-space-6) 0;
+}
+
+.divider::before,
+.divider::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--toss-grey-200);
+}
+
+.dividerText {
+  font-size: var(--toss-font-caption-size);
+  color: var(--toss-grey-500);
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--toss-space-2);
+}
+
+.label {
+  font-size: var(--toss-font-caption-size);
+  color: var(--toss-grey-700);
+}
+
+.input {
+  width: 100%;
+  height: 52px;
+  padding: 0 var(--toss-space-4);
+  border: 1px solid var(--toss-grey-200);
+  border-radius: var(--toss-radius-button);
+  background: var(--toss-white);
+  color: var(--toss-grey-900);
+  font-family: var(--toss-font-family);
+  font-size: var(--toss-font-body-size);
+}
+
+.input:focus {
+  outline: 2px solid var(--toss-blue-500);
+  outline-offset: -1px;
+}
+
+.note {
+  font-size: var(--toss-font-caption-size);
+  color: var(--toss-grey-500);
+  margin: var(--toss-space-4) 0 0;
+  text-align: center;
+  line-height: 1.5;
+}
+
+/* 에러는 red-500(#f04452)을 red-50 위에 올리지 않고 흰/카드 배경 위에 둔다 —
+   green 배지와 같은 이유로 대비비를 지키기 위함. */
+.error {
+  font-size: var(--toss-font-caption-size);
+  color: var(--toss-red-500);
+  background: var(--toss-red-50);
+  border-radius: var(--toss-radius-badge);
+  padding: var(--toss-space-3);
+  margin: var(--toss-space-4) 0 0;
+}
+
+.sentTitle {
+  font-size: var(--toss-font-section-size);
+  font-weight: var(--toss-font-section-weight);
+  color: var(--toss-grey-900);
+  margin: 0 0 var(--toss-space-2);
+  text-align: center;
+}
