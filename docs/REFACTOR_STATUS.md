@@ -2,9 +2,9 @@
 
 | Field | Value |
 |-------|-------|
-| 최종 갱신 | 2026-07-28 |
-| 현재 위치 | **P5 완료** + **A1/A2 완료(2026-07-28)**. 게이트 G5-1~G5-5 전부 통과. A1(검색 골든 재실행)·A2(corpus.status 갭 조사) 둘 다 완결 — 상세는 아래 "다음 작업" §A 결과 및 `REFACTOR_BACKLOG.md` "P4a에서 발견". **다음: B1(GitHub PAT 발급 요청) 또는 C1/C2(오너 판단 대기 질문 던지기)** |
-| 다음 세션 읽기 순서 | ① 이 파일 ② "다음 작업 — MECE 분류" §B/C부터(§A는 완료) ③ 막히면 `REFACTOR_BACKLOG.md` |
+| 최종 갱신 | 2026-07-29 |
+| 현재 위치 | **C2 완전 완료** + **P6 1~7단계 완료** + **Vercel 프로덕션 배포 완료(2026-07-29)**. `web/` 프로덕션 URL `https://web-rho-lovat-34.vercel.app`(Vercel 프로젝트 `luckyhyun/knowledge-web`, Root Directory=`web`). 필수 환경변수 6종(Supabase 4종+`INGEST_API_TOKEN`+`CRON_SECRET`) 등록 완료, 실 로그인으로 6라우트+`/api/ask` 스모크 확인. C2의 Vault 시크릿 2종 등록 + `cron.schedule('fasting-reminder', '*/5 * * * *', ...)` 등록까지 완료 — 함수 수동 실행으로 에러 없음 확인. P6은 LLM 캐시/라우팅(캐스케이드)/RAG(ask·askFast)/RPC/`/chat`까지 전부 구현·테스트(도메인 167개, regression 33개 전부 통과) — 단, `diet.estimate_nutrition` LLM 보강은 One Thing 원칙상 스코프 제외(별도 후속). P6·C2 작업물은 2026-07-29 커밋 완료(`P6-1`/`P6-2`/`C2`/`chore`/`docs` 5개 — 직전 세션이 구현·검증만 하고 커밋 전에 중단돼 있었음). **다음: B1(GitHub PAT)·`RESEND_API_KEY`/`GEMINI_API_KEY`/`OPENROUTER_API_KEY` 오너 발급(계정 인증 필요해 대행 불가), 또는 diet.estimate_nutrition LLM 보강 착수 여부 판단** |
+| 다음 세션 읽기 순서 | ① 이 파일 ② "다음 작업 — MECE 분류" §B부터 ③ 막히면 `REFACTOR_BACKLOG.md`("P6에서 발견" 최신 포함) |
 | 결정 근거 | `docs/REFACTOR_DIRECTION_WEB_2026-07.md` (D-3 정의 §2.2) |
 | 미해결 이슈 | `docs/REFACTOR_BACKLOG.md` |
 | 작업 브랜치 | `refactor/web-p0` |
@@ -20,7 +20,9 @@
 | P4a 읽기 API | ✅ 구현 11/11, 게이트 G4a-1/3/4/5 통과. G4a-2/G4a-6은 외부 의존(PAT/재실행)이라 이월 유지 | 아래 |
 | **P4b diet 쓰기 + health.ingest** | ✅ 게이트 G4b-1~G4b-3 통과, G4b-4 이월(발화 채널 미결정) | 아래 |
 | **P5 웹 UI** | ✅ 구현 완료(chat 제외 5라우트), G5-1~G5-5 전부 통과 | 아래 |
-| P6~P7 | ⬜ | — |
+| **P6 생성 경로 이식** | ✅ 캐시/라우팅/RAG/RPC/`/chat` 전부 구현, G6-1~G6-5 통과. `diet.estimate_nutrition` LLM 보강은 스코프 제외(별도 후속) | 아래 |
+| **C2 단식 리마인더 이메일** | ✅ 인프라+자동 발화 등록 전부 완료(cron 함수·`/api/cron/fasting-reminder`·Vault 시크릿·`cron.schedule`). `RESEND_API_KEY`만 미발급 — 발급 전까지는 발송 라우트가 매 5분 조용히 스킵(에러 아님) | 아래 |
+| P7 | ⬜ | — |
 
 ## P5 게이트 현황
 
@@ -50,7 +52,45 @@
 | G4b-1 도메인 유닛 테스트 전부 통과 | ✅ `tests/domain/*.test.ts` 전체(116개) — diet-presets/diet-nutrition-calc/diet-dashboard(26개, planSummary·weightForPlan·fastingStatus·healthReference·dashboard)·ingest-auth/health-ingest 신규 |
 | G4b-2 골든 회귀: diet 계열 diff 0 | ✅ diet.dashboard·diet.fasting.status 포함 실제 Supabase 대상 21/21 diff-0(G4a-1과 통합) |
 | G4b-3 쓰기 왕복 | ✅ `tests/regression/diet-write.regression.test.ts` — log_meal→day_summary 반영→delete_meal→원복 |
-| G4b-4 단식 리마인더 실제 발화 | ⬜ **이월** — 발화 채널(이메일/Web Push 등) 미결정, 액션플랜 §P4b 각주 참고 |
+| G4b-4 단식 리마인더 실제 발화 | 🟡 **채널 결정(이메일) + 인프라 완료(2026-07-29)**, 실제 자동 발화는 Vercel 배포 후 Vault 시크릿 등록+`cron.schedule()`로 이월(`docs/ENV_VARS.md` §C2) |
+
+## P6 게이트 현황 (2026-07-29, 커밋 `P6-1`/`P6-2`)
+
+| 게이트 | 상태 |
+|---|---|
+| G6-1 정상 응답 시 출처(unit_id) 포함 | ✅ `tests/regression/knowledge-ask-rpc.regression.test.ts` 실 DB 확인 |
+| G6-2 캐스케이드(첫 provider 무효/실패 → 다음 provider 전이) | ✅ `tests/domain/llm-router.test.ts` |
+| G6-3★ 전면 실패 시 extractive(에러 아님) | ✅ 클라우드 키 전부 없음/전부 실패 두 케이스 모두 `tests/domain/llm-router.test.ts` + 실 DB `tests/regression/rag-ask.regression.test.ts`(로컬에 클라우드 키가 없어 자연 발생하는 케이스로 재확인) |
+| G6-4 캐시(동일 prompt 2회차 provider 호출 0회) | ✅ `tests/domain/llm-router.test.ts` |
+| G6-5 redaction(민감 패턴 시 클라우드 요청 자체 미발생) | ✅ `tests/domain/llm-router.test.ts` |
+
+구현 범위: `web/lib/llm/{cache,db-cache-store,throttle,catalog,secrets,providers,router}.ts`,
+`web/lib/rag/{query-terms,synthesize,prompt,citations,ask}.ts`, `web/lib/domain/chat.ts`,
+`handlers.ts`의 `knowledge_ask`/`knowledge_ask_fast`/`chat_send`, `POST /api/ask`·`/api/chat`,
+`/chat` 페이지(+ BottomNav 6번째 탭). 로컬 7B 폴백 단계는 서버리스 환경상 이식 불가로 명시적
+스킵(클라우드 실패 시 바로 extractive) — 액션플랜이 허용한 throttle 재구현(DB/settings 기반)과
+동급의 유일한 재설계. `llm_answer_cache` 테이블은 P1(`001_init.sql`)에 이미 존재해 신규 마이그레이션
+불필요했음. 상세 설계·판단 근거는 `docs/REFACTOR_BACKLOG.md` "P6에서 발견" 참고(Turbopack 프로젝트
+루트 버그 등).
+
+## C2 상세 (단식 리마인더 이메일 발화, 2026-07-29)
+
+`FastingSession`에 `reminderSentAt` 필드 추가(웹 신규, 원본에 없음) → `web/lib/email/resend.ts`
+(Resend REST, `RESEND_API_KEY` 미설정 시 스킵) → `web/app/api/cron/fasting-reminder/route.ts`
+(DB 접근 없는 순수 발송기 — `health-ingest.ts` 1곳 한정 `SUPABASE_SERVICE_ROLE_KEY` 예외를 넓히지
+않기 위한 설계) → `web/supabase/migrations/006_fasting_reminder_cron.sql`의
+`private.trigger_fasting_reminder()`(SECURITY DEFINER, `pg_net.http_post`로 위 라우트 호출 후
+`reminder_sent_at` 기록, anon/authenticated EXECUTE 권한 revoke 확인 완료).
+`tests/domain/fasting-reminder.test.ts` + `tests/regression/fasting-reminder.regression.test.ts`
+전부 통과.
+
+**2026-07-29 후속(Vercel 배포 직후 완결)**: Vault 시크릿 2종
+(`fasting_reminder_target_url`=프로덕션 URL, `cron_secret`=`CRON_SECRET`과 동일 값) 등록 완료,
+`select private.trigger_fasting_reminder();` 수동 실행으로 에러 없음 확인 후
+`cron.schedule('fasting-reminder', '*/5 * * * *', 'select private.trigger_fasting_reminder();')`
+등록 완료(job id=1). `RESEND_API_KEY`가 아직 미발급이라 실제 이메일 발송은 조건 충족 시에도
+`web/lib/email/resend.ts`에서 조용히 스킵된다(에러 아님) — 키 발급만 하면 별도 배포 없이 다음
+5분 주기부터 바로 실발송 전환.
 
 ## 완료 (task 1~11, 커밋 11개+ — 상세는 `git log`의 "P4a-" 커밋)
 
@@ -173,7 +213,11 @@ Inbox 빈 상태(empty state) 렌더링까지 재확인.
 직접 조회로 완전히 재구성해 unit_id 충돌 가설을 기각. 상세는 `REFACTOR_BACKLOG.md`
 "P4a에서 발견" 최신 두 항목, 요약은 아래 §A 표.
 
-## 다음 작업 — MECE 분류 + 자체 스코어링 (2026-07-28)
+## 다음 작업 — MECE 분류 + 자체 스코어링 (2026-07-29 갱신)
+
+**2026-07-29 세션 요약**: C1(P6 착수)·C2(단식 리마인더 이메일) 둘 다 오너 승인 하에
+완료(위 "P6 게이트 현황"·"C2 상세" 참고). 아래 §B/§C는 그 결과로 새로 갱신됨 —
+이전 버전의 C1/C2 항목은 제거하고 B3(신규 API 키·배포)·C3(diet.estimate_nutrition)로 대체.
 
 분류 기준(차단 요인, 상호배타적): **A=블로커 없음(지금 바로 착수 가능)
 / B=오너의 외부 자격증명·값 발급이 선행조건 / C=오너의 정책·설계 결정
@@ -196,30 +240,35 @@ Urgency가 동률을 깬다.
 | 항목 | Impact | Effort | Urgency | 비고 |
 |---|---|---|---|---|
 | **B1. G4a-2** GitHub PAT 발급 → inbox 왕복(vault 실제 커밋) 검증 | 4 | 2 | 3 | 검증 자체는 가벼우나, 여기 딸린 **후속 구현**(`corpus.sync`/`search.reindex`를 DB 내부 계산에서 GitHub Contents API 기반 실제 재수집으로 교체, `REFACTOR_BACKLOG.md` "P4a-9에서 발견")은 Effort 4~5의 별도 작업 — PAT 발급이 그 전체 체인의 진짜 병목 |
-| **B2. INGEST_API_TOKEN** Vercel 환경변수 정식 발급/등록 | 2 | 1 | 2 | 라우트 구현·로컬 curl 검증은 이미 끝남. 오너가 값만 발급하면 즉시 실사용 전환 |
+| ~~**B2. INGEST_API_TOKEN** Vercel 환경변수 정식 발급/등록~~ | — | — | — | **완료(2026-07-29)** — B3에 통합, 랜덤 토큰 생성+Vercel Production 등록 완료 |
+| **B3. 신규 API 키 3종 발급** (2026-07-29 신규, Vercel 배포 완료로 범위 축소) | 4 | 1 | 3 | ~~Vercel 배포~~·~~INGEST_API_TOKEN~~·~~CRON_SECRET~~ **완료(2026-07-29)** — `luckyhyun/knowledge-web`, `https://web-rho-lovat-34.vercel.app`. 남은 건 계정 인증이 필요해 대행 불가한 키 3종뿐: ① `RESEND_API_KEY`(resend.com 가입, 단식 리마인더 실발송 — cron job은 이미 등록되어 있어 키만 넣으면 즉시 전환), ② `GEMINI_API_KEY`(aistudio.google.com/apikey), ③ `OPENROUTER_API_KEY`(openrouter.ai/keys) — 둘 다 P6 캐스케이드 2·3순위(`GROQ_API_KEY`만으로도 골격은 동작하지만 groq 실패 시 폴백 없음). 값 발급 후 `vercel env add <KEY> production`으로 등록만 하면 됨(제가 대행 가능) |
 
-**추천 순서**: 오너가 GitHub PAT부터 발급하는 편이 ROI 높음(B1이 P4a-9 이월 전체를 해소하는 열쇠) — B2는 언제든 병행 가능
+**추천 순서**: B3(배포+키 3종)가 이번에 완성된 P6/C2를 "실사용"으로 전환하는 유일한 남은 단계라 최우선.
+B1(GitHub PAT)은 P4a-9 이월 전체를 해소하는 별개 열쇠. B2는 언제든 병행 가능
 
 ### C. 오너의 정책·설계 결정 자체가 산출물 (결정 전엔 착수 불가)
 
 | 항목 | Impact | Effort | Urgency | 비고 |
 |---|---|---|---|---|
-| **C1. P6(생성 경로 이식) 착수 여부** — LLM 라우팅·extractive fallback·`/chat` 추가 | 5 | 5 | 3 | 임팩트 최대(제품 완결성의 핵심 남은 조각)이자 Effort도 최대. 신규 외부 API 키 3종(GROQ/GEMINI/OPENROUTER) 도입이 걸려 CLAUDE.md 안전 바닥(외부 API 신규) 대상 — "착수 여부"와 "우선순위"를 오너가 먼저 정해야 계획 착수 가능 |
-| **C2. G4b-4** 단식 리마인더 실제 발화 채널 결정 | 3 | 2 | 2 | 결정만 나면(이메일/Web Push 예외/기타) 구현(pg_cron 등록)은 가벼움. Web Push는 액션플랜 §P5가 명시적으로 금지해 오너의 예외 승인 없이는 착수 자체가 안 됨 |
+| **C3. diet.estimate_nutrition LLM 보강** — 신기능 착수 시점 (2026-07-29 신규) | 2 | 3 | 1 | 오너가 §이전 세션에서 "신기능으로 승인"했으나, P6(순수 포팅) 작업과 성격이 달라 One Thing 원칙상 이번 세션 스코프에서 제외(`REFACTOR_BACKLOG.md` "P6에서 발견"). 착수 자체는 이미 승인됐으니 "언제 할지"만 남음 — 다음 세션에 바로 시작해도 되고, B3 이후로 미뤄도 무방 |
 
-**판단 근거**: C1/C2 둘 다 "무엇을 할지"가 아니라 "해도 되는지"가 막혀
-있어 에이전트가 대신 고를 수 없음 — 다음 세션에서 오너에게 먼저 물어야
-할 항목.
+**판단 근거**: C3는 "해도 되는지"는 이미 정해졌고 "언제"만 남아 사실상 A에
+가깝지만, 오너가 세션 경계를 명시적으로 원할 수 있어 C로 유지.
 
 ### 종합 권장 순서
 
-1. ~~(지금 바로) A1 → A2~~ — **완료(2026-07-28)**, 결과는 위 §A 표 참고. A1은
-   완료 과정에서 새 오너 판단 대상(고빈도어 랭킹 경계 accept 여부)을 하나 남김
-2. (오너에게 요청) B1 GitHub PAT 발급 — 요청 즉시 가능, 이후 검증+후속
-   구현까지 이어짐
-3. (오너 판단 대기) C1/C2 + A1이 새로 남긴 랭킹 accept 여부 — 병렬로 질문만
-   던져두고, 답이 오면 그때 계획
-4. (아무 때나, 낮은 우선순위) B2 INGEST_API_TOKEN 등록
+1. ~~(지금 바로) A1 → A2~~ — **완료(2026-07-28)**
+2. ~~C1(P6 착수)·C2(단식 리마인더 채널)~~ — **완료(2026-07-29)**, 결과는 위
+   "P6 게이트 현황"·"C2 상세" 참고
+3. ~~Vercel 배포·INGEST_API_TOKEN·CRON_SECRET~~ — **완료(2026-07-29)**,
+   `luckyhyun/knowledge-web` 프로덕션 배포+환경변수 등록+C2 cron.schedule까지 완결
+3-1. ~~P6/C2 커밋~~ — **완료(2026-07-29)**. 재검증 후 5개 커밋으로 정리:
+   `npm run test` 167개 / `npm run test:regression` 33개 전부 통과, `next build` 성공
+4. (오너에게 요청, 최우선) B3 나머지 API 키 3종(RESEND/GEMINI/OPENROUTER) 발급 —
+   대행 불가(제3자 계정 인증), 발급 후 등록은 제가 `vercel env add`로 대행 가능
+5. (오너에게 요청) B1 GitHub PAT 발급 — 별개 체인(P4a-9 이월 해소)
+6. (아무 때나) C3 diet.estimate_nutrition LLM 보강 착수 —
+   A1이 남긴 검색 랭킹 경계는 이미 accept로 종결(`REFACTOR_BACKLOG.md`)
 
 ## 이번 세션 스코프 조정 (오너 승인 완료, 상세는 커밋 메시지)
 

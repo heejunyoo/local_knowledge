@@ -25,3 +25,7 @@ web/.env*.local
 web/.secrets-local/
 web/.migration-output.sql
 web/*.tsbuildinfo
+
+# Vercel CLI project link (리포 루트에서 배포 — P6, 2026-07-29)
+.vercel
+.env*

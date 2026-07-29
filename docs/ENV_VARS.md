@@ -3,6 +3,23 @@
 > `~/Knowledge/config/secrets.json`, `llm_providers.json`의 **키 이름만** 기록한다. 값은 절대 여기 쓰지 않는다.
 > 실제 값은 Vercel(웹) 환경변수·GitHub Actions Secrets(백업 워크플로)에만 저장한다 (P6, P2-4).
 
+## Vercel 프로덕션 배포 (2026-07-29)
+
+| 항목 | 값 |
+|---|---|
+| Vercel 프로젝트 | `luckyhyun/knowledge-web` (scope `luckyhyun` = 오너 개인 계정) |
+| Root Directory | `web` (API로 명시 설정, `sourceFilesOutsideRootDirectory: true`로 리포 루트의 `docs/`·`config/` 정적 import 포함) |
+| 프로덕션 URL | `https://web-rho-lovat-34.vercel.app`(alias) — 원 배포 URL은 `https://<deployment-id>-luckyhyun.vercel.app` 패턴 |
+| 로컬 CLI 링크 | 리포 루트(`KnowledgeApp/.vercel/`)에서 배포할 것 — `web/` 안에서 `vercel --prod`를 실행하면 리포 루트 밖(`docs/`, `config/`) 파일이 업로드에서 빠져 빌드가 깨진다(아래 "Turbopack/Vercel 배포 함정" 참고) |
+
+### ★ Turbopack/Vercel 배포 함정 — 리포 루트 정적 import는 반드시 리포 루트에서 배포할 것
+
+`web/lib/redaction.ts`·`web/lib/llm/catalog.ts`가 `web/` 밖의 `docs/`·`config/` JSON을 정적 import한다(SoT 중복 방지 의도). 두 가지 함정이 있었다:
+1. **로컬 dev 서버**: Turbopack이 프로젝트 루트를 `web/`으로 자동 추론해 그 밖 경로를 `Module not found`로 거부 → `web/next.config.ts`의 `turbopack.root: path.join(__dirname, "..")`로 해결(리포 루트 지정).
+2. **Vercel CLI 배포**: `web/` 디렉토리 안에서 `vercel --prod`를 실행하면 CLI가 현재 디렉토리(`web/`)만 업로드해 `docs/`·`config/` 자체가 서버에 존재하지 않아 빌드 실패. **리포 루트(`KnowledgeApp/`)에서 `vercel link`+`vercel --prod`를 실행**해 리포 전체를 업로드하고, 프로젝트의 `rootDirectory: "web"` 설정(Vercel API로 지정, `sourceFilesOutsideRootDirectory`는 기본 `true`)이 빌드 시 `web/`을 루트로 쓰되 상위 파일도 포함하도록 해서 해결.
+
+`.vercel/`은 리포 루트·`web/` 양쪽 `.gitignore`에 모두 등록됨.
+
 ## 현재 `secrets.json`에 존재하는 키
 | 로컬 키 이름 | 용도 | 웹 전환 시 목적지 |
 |---|---|---|
@@ -14,16 +31,36 @@
 | gemini | `gemini_api_key` | `GEMINI_API_KEY` | Vercel env `GEMINI_API_KEY` (P6, 신규 발급 필요) |
 | openrouter | `openrouter_api_key` | `OPENROUTER_API_KEY` | Vercel env `OPENROUTER_API_KEY` (P6, 신규 발급 필요) |
 
+## C2(단식 리마인더 이메일 발화, 2026-07-29) 신규 키
+| 이름 | 용도 | 사용처 | 상태 |
+|---|---|---|---|
+| `RESEND_API_KEY` | 단식 목표 달성 리마인더 이메일 발송(Resend REST API) | `web/lib/email/resend.ts::sendFastingReminderEmail` — 미설정 시 발송을 조용히 스킵(에러 아님, 코드는 완결) | **미채움 — 오너가 Resend 가입 후 Vercel 환경변수로 직접 발급/등록.** 값은 문서에 기록 금지 |
+
+### C2 Supabase Vault 시크릿 (env var 아님, `vault.create_secret()`으로 DB 내부에 저장) — 등록 완료(2026-07-29)
+`web/supabase/migrations/006_fasting_reminder_cron.sql`의 `private.trigger_fasting_reminder()`가
+`vault.decrypted_secrets`에서 읽는다.
+
+| 이름 | 용도 | 상태 |
+|---|---|---|
+| `fasting_reminder_target_url` | `POST /api/cron/fasting-reminder`의 프로덕션 URL | **등록 완료** — 위 "Vercel 프로덕션 배포" URL로 등록됨 |
+| `cron_secret` | 위 라우트 인증용 `CRON_SECRET`과 동일 값(Bearer 헤더) | **등록 완료** |
+
+`cron.schedule('fasting-reminder', '*/5 * * * *', 'select private.trigger_fasting_reminder();')`도
+등록 완료(job id=1). 함수 수동 실행(`select private.trigger_fasting_reminder();`)으로 에러 없음 확인.
+`RESEND_API_KEY`만 미발급이라 조건 충족 시에도 이메일 발송은 조용히 스킵된다(에러 아님) — 키 발급 후
+재배포 없이 다음 5분 주기부터 바로 실발송 전환.
+
 ## Supabase (P1 완료 — 프로젝트 생성됨: `gppklwzcmfuuhsefdeik`)
 | 이름 | 용도 | 사용처 | 상태 |
 |---|---|---|---|
-| `NEXT_PUBLIC_SUPABASE_URL` | Supabase 프로젝트 URL | 브라우저+서버 | 채움 (`web/.env.local`) |
-| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | RLS 적용 하 공개 가능 | 브라우저+서버 | 채움 |
-| `SUPABASE_SERVICE_ROLE_KEY` | RLS 우회 | **마이그레이션 스크립트 전용** 원칙 유지, `web/app`·`web/lib` import 금지 (P3) — **단, `web/lib/health-ingest.ts` 1곳만 예외**(P4b, 2026-07-28 오너 승인): `health.ingest`는 세션 없는 정적 Bearer 인증이라 RLS(`owner_id=auth.uid()`)를 통과할 수 없어 이 파일에서만 service role로 우회하고 owner_id를 코드에서 고정값으로 명시(아래 오너 UUID). 다른 파일로 이 예외를 넓히지 말 것 | 채움(P1부터 `web/.env.local`에 존재, 이번에 `health-ingest.ts`에서 처음 사용) |
-| `SUPABASE_DB_URL` | Postgres 접속 문자열 | 로컬 스크립트 · GitHub Actions 백업 | 채움. **direct(`db.<ref>...:5432`)는 IPv6 전용이라 대부분의 CI/로컬에서 불가 → Session Pooler를 쓸 것.** 아래 §Postgres 직결 참고 |
-| `INGEST_API_TOKEN` | Shortcuts `health.ingest` 인그레스 전용 Bearer 토큰(≥32바이트 랜덤) | `/api/health/ingest` 라우트(`web/lib/ingest-auth.ts`의 `isIngestAuthorized`, P4b에서 라우트 본체 구현 완료) | **미채움 — 라우트는 구현됐고 로컬 임시 토큰으로 curl 검증까지 마쳤으나, 실제 값은 오너가 Vercel 환경변수로 직접 발급/등록.** 값은 Shortcuts 앱에만 저장, 문서에 기록 금지 |
-| `VAULT_GITHUB_TOKEN` | `knowledge-vault` 레포 Contents API 쓰기 권한 PAT | `web/lib/db/inbox.ts`의 `defaultVaultCommit`/`defaultVaultPathChecker`(inbox.promote, P4a-9) | **미채움 — GitHub PAT 미발급.** 토큰 없이는 `inbox.promote`가 `promote_failed`(error_code=`vault_token_missing`)로 안전하게 실패한다(G4a-2는 발급 후 별도 세션에서 검증). 값은 Vercel 환경변수에만 저장, 문서에 기록 금지 |
-| `CRON_SECRET` | Vercel Cron 인그레스 전용 Bearer 토큰(≥32바이트 랜덤) | `/api/cron/keepalive`(`web/lib/cron.ts`의 `isCronAuthorized`, task 10). Vercel이 이 환경변수가 설정돼 있으면 Cron 호출 시 자동으로 `Authorization: Bearer $CRON_SECRET`을 붙인다 | **미채움 — Vercel 프로젝트 환경변수로 오너가 직접 발급/등록.** 값은 Vercel 환경변수에만 저장, 문서에 기록 금지 |
+| `NEXT_PUBLIC_SUPABASE_URL` | Supabase 프로젝트 URL | 브라우저+서버 | 채움 (`web/.env.local` + Vercel Production, 2026-07-29 등록) |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | RLS 적용 하 공개 가능 | 브라우저+서버 | 채움 (`web/.env.local` + Vercel Production) |
+| `SUPABASE_SERVICE_ROLE_KEY` | RLS 우회 | **마이그레이션 스크립트 전용** 원칙 유지, `web/app`·`web/lib` import 금지 (P3) — **단, `web/lib/health-ingest.ts` 1곳만 예외**(P4b, 2026-07-28 오너 승인): `health.ingest`는 세션 없는 정적 Bearer 인증이라 RLS(`owner_id=auth.uid()`)를 통과할 수 없어 이 파일에서만 service role로 우회하고 owner_id를 코드에서 고정값으로 명시(아래 오너 UUID). 다른 파일로 이 예외를 넓히지 말 것 | 채움(P1부터 `web/.env.local`에 존재, `health-ingest.ts`에서 사용, 2026-07-29 Vercel Production에도 등록) |
+| `SUPABASE_DB_URL` | Postgres 접속 문자열 | 로컬 스크립트 · GitHub Actions 백업 | 채움 (`web/.env.local` + Vercel Production). **direct(`db.<ref>...:5432`)는 IPv6 전용이라 대부분의 CI/로컬에서 불가 → Session Pooler를 쓸 것.** 아래 §Postgres 직결 참고 |
+| `INGEST_API_TOKEN` | Shortcuts `health.ingest` 인그레스 전용 Bearer 토큰(≥32바이트 랜덤) | `/api/health/ingest` 라우트(`web/lib/ingest-auth.ts`의 `isIngestAuthorized`, P4b에서 라우트 본체 구현 완료) | **채움(2026-07-29)** — `openssl rand -hex 32`로 생성해 Vercel Production 환경변수로 등록 완료. 값은 iOS Shortcuts 앱에도 등록 필요(오너가 직접, 값은 문서에 기록 안 함) |
+| `VAULT_GITHUB_TOKEN` | `knowledge-vault` 레포 Contents API 쓰기 권한 PAT | `web/lib/db/inbox.ts`의 `defaultVaultCommit`/`defaultVaultPathChecker`(inbox.promote, P4a-9) | **미채움 — GitHub PAT 미발급.** 토큰 없이는 `inbox.promote`가 `promote_failed`(error_code=`vault_token_missing`)로 안전하게 실패한다(G4a-2는 발급 후 별도 세션에서 검증). fine-grained PAT(레포 `knowledge-vault` 한정, Contents: Read/write)로 발급 권장 — `gh` CLI의 기존 로그인 토큰(`repo` 전체 스코프)은 과도한 권한이라 재사용하지 않음. 값은 Vercel 환경변수에만 저장, 문서에 기록 금지 |
+| `CRON_SECRET` | Vercel Cron 인그레스 전용 Bearer 토큰(≥32바이트 랜덤) | `/api/cron/keepalive`(`web/lib/cron.ts`의 `isCronAuthorized`, task 10) + `/api/cron/fasting-reminder`(C2, pg_cron이 호출) | **채움(2026-07-29)** — `openssl rand -hex 32`로 생성해 Vercel Production 환경변수 및 Supabase Vault(`cron_secret`, C2 §참고)에 동일 값으로 등록 완료 |
+| `RESEND_API_KEY`/`GEMINI_API_KEY`/`OPENROUTER_API_KEY` | 위 §"C2 신규 키"·"`llm_providers.json`" 참고 | — | **미채움 — 오너 계정 인증이 필요해 대행 불가.** 발급처는 각 섹션 참고, 발급 후 값만 알려주면 `vercel env add`로 등록 대행 가능 |
 
 ### P3 인증 도입 완료 (2026-07-27)
 - `web/supabase/migrations/004_rls.sql` 적용됨 — 14개 테이블 전부 RLS 활성화 + `owner_all`(owner_id = auth.uid()) 정책.

@@ -21,7 +21,10 @@
   idx 20~33 사이로 이동, API는 1건만 진짜 비매치). D-4가 이미 "튜닝 금지, 동등성만 확인" 원칙을
   정해뒀으므로 임의로 고치지 않았음 — 이 현상을 accept할지, 세컨더리 정렬 등으로 완화할지는 오너
   판단 필요(§P5 실사용 중 "결제"/"API" 같은 고빈도어 검색 시 스크롤 없이 안 보이는 결과가 있을 수
-  있음이 실제 사용자 영향).
+  있음이 실제 사용자 영향). `docs/FTS_COMPARISON_2026-07.md`의 q01/q14 100%/95%(top-500 기준)와
+  숫자가 달라 보이는 이유는 같은 문서 "실측 발견 3"에 정리함 — D-4 모드 선택 결론은 안 바뀜.
+  **[오너 결정 2026-07-29] Accept — 튜닝 안 함.** D-4 원칙 유지, match_limit·세컨더리 정렬 등
+  임의 변경 금지. 종결.
 
 ## P2에서 발견
 
@@ -72,3 +75,32 @@
 - **RLS 무관 보안 경고 3건 (P3 이전부터 존재, 004_rls.sql 적용 후에도 남음)**: `get_advisors(security)` 기준
   (1) `public.search_docs` 함수 `search_path` 미고정(WARN), (2)(3) `pg_trgm`/`vector` 익스텐션이 `public`
   스키마에 설치됨(WARN, 별도 스키마로 이동 권장). P3 스코프(RLS·인증) 밖이라 손대지 않음 — 필요 시 별도 이슈로 처리.
+  **[2026-07-29 갱신]** P6(C2)에서 `pg_net` 확장을 추가하며 같은 종류의 경고(`extension_in_public`)가
+  1건 더 늘었다(총 4건) — 동일 원칙으로 이번 세션도 손대지 않음.
+
+## P6에서 발견 (C2/P6, 2026-07-29)
+
+- **[해결] Turbopack이 프로젝트 루트(`web/`) 밖 정적 import를 "Module not found"로 거부**: `web/lib/redaction.ts`가
+  P4a부터 `../../docs/redaction_patterns.json`(리포 루트의 SoT JSON)을 정적 import해왔지만, 이 파일을
+  실제로 쓰는 코드가 이번 P6(LLM router의 클라우드 호출 직전 redaction preflight) 전까지 하나도 없어서
+  `vitest`(Vite 기반, 문제 없음) 테스트로만 검증됐고 Next.js 앱 런타임(Turbopack)에서는 한 번도 실행된 적이
+  없었다. 이번에 처음 실제 라우트 체인(`app/api/ask` 등)에 연결되며 dev 서버에서 `Module not found`로
+  드러났다 — 원인은 Turbopack이 프로젝트 루트를 `web/`으로 자동 추론해 그 밖의 경로(`../../docs/...`,
+  `../../../config/...`) 접근을 차단한 것. `web/next.config.ts`에 `turbopack.root: path.join(__dirname, "..")`
+  (리포 루트)를 명시해 해결, dev 서버로 기존 5라우트 + 신규 `/chat`·`/api/ask` 전부 재확인 완료. **`health.ingest`
+  등 이번 P6 이전 코드는 `redaction.ts`를 쓰지 않아 이 버그가 실제 프로덕션에 영향을 준 적은 없다** — 하지만
+  `web/lib/llm/catalog.ts`(`config/examples/llm_providers.json` 참조)도 같은 패턴이라 이 수정이 없었으면
+  P6 전체가 런타임에서 깨졌을 것. 향후 리포 루트 파일을 정적 import하는 신규 코드를 추가할 때 이 설정이
+  이미 있으니 별도 조치 불필요.
+- **[해결, 2026-07-29] Vercel CLI 배포도 같은 함정의 변주 — `web/` 안에서 `vercel --prod`를 실행하면
+  `docs/`·`config/`가 통째로 빠짐**: 위 Turbopack 수정 후 최초 프로덕션 배포 시도에서 같은
+  `Module not found`가 재현됐다. 원인은 dev 서버와 다르다 — Turbopack 설정 문제가 아니라, Vercel CLI가
+  현재 작업 디렉토리(`web/`)만 업로드 소스로 삼아 리포 루트 파일 자체가 서버에 존재하지 않았다.
+  리포 루트(`KnowledgeApp/`)에서 `vercel link`+`vercel --prod`를 실행하고, 프로젝트의
+  `rootDirectory: "web"`(Vercel API `PATCH /v9/projects/{id}`로 설정, `sourceFilesOutsideRootDirectory`는
+  기본 `true`라 별도 설정 불필요)을 지정해 해결 — 리포 전체가 업로드되고 Vercel이 `web/`을 빌드 루트로
+  쓰되 상위 파일도 포함한다. 상세 절차와 최종 배포 정보는 `docs/ENV_VARS.md` §Vercel 프로덕션 배포 참고.
+- **diet.estimate_nutrition LLM 보강**: 오너가 "신기능으로 승인"했으나(원본 Swift엔 이 기능 자체가 없음),
+  P6(포팅) 작업과 성격이 달라 One Thing 원칙에 따라 이번 세션 스코프에서 제외했다. 착수 시 별도 Phase/PR로
+  분리해서 진행할 것 — `web/lib/rpc/handlers.ts::diet_estimate_nutrition`의 기존 규칙 기반 로직
+  (`nutritionCalc.estimate`/`parse`)에 LLM 보강을 추가하는 형태가 될 것으로 예상.
