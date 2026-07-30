@@ -2,8 +2,8 @@
 
 | Field | Value |
 |-------|-------|
-| 최종 갱신 | 2026-07-29 |
-| 현재 위치 | **C2 완전 완료** + **P6 1~7단계 완료** + **Vercel 프로덕션 배포 완료(2026-07-29)**. `web/` 프로덕션 URL `https://web-rho-lovat-34.vercel.app`(Vercel 프로젝트 `luckyhyun/knowledge-web`, Root Directory=`web`). 필수 환경변수 6종(Supabase 4종+`INGEST_API_TOKEN`+`CRON_SECRET`) 등록 완료, 실 로그인으로 6라우트+`/api/ask` 스모크 확인. C2는 **이메일 채널 폐기 → 앱 내 표시로 종결**(2026-07-29, 마이그레이션 007로 cron·함수·Vault 되돌림). P6은 LLM 캐시/라우팅(캐스케이드)/RAG(ask·askFast)/RPC/`/chat`까지 전부 구현·테스트(도메인 167개, regression 33개 전부 통과) — 단, `diet.estimate_nutrition` LLM 보강은 One Thing 원칙상 스코프 제외(별도 후속). P6·C2 작업물은 2026-07-29 커밋 완료(`P6-1`/`P6-2`/`C2`/`chore`/`docs` 5개 — 직전 세션이 구현·검증만 하고 커밋 전에 중단돼 있었음). **다음: Google 로그인 도입 진행 중(오너의 Google Cloud OAuth 클라이언트 발급 대기) · B1(GitHub PAT)·`GEMINI_API_KEY`/`OPENROUTER_API_KEY` 오너 발급, 또는 diet.estimate_nutrition LLM 보강** |
+| 최종 갱신 | 2026-07-31 |
+| 현재 위치 | **C2 완전 완료** + **P6 1~7단계 완료** + **Vercel 프로덕션 배포 완료(2026-07-29)**. `web/` 프로덕션 URL `https://web-rho-lovat-34.vercel.app`(Vercel 프로젝트 `luckyhyun/knowledge-web`, Root Directory=`web`). 필수 환경변수 6종(Supabase 4종+`INGEST_API_TOKEN`+`CRON_SECRET`) 등록 완료, 실 로그인으로 6라우트+`/api/ask` 스모크 확인. C2는 **이메일 채널 폐기 → 앱 내 표시로 종결**(2026-07-29, 마이그레이션 007로 cron·함수·Vault 되돌림). P6은 LLM 캐시/라우팅(캐스케이드)/RAG(ask·askFast)/RPC/`/chat`까지 전부 구현·테스트 완료. P6·C2 작업물은 2026-07-29 커밋 완료(`P6-1`/`P6-2`/`C2`/`chore`/`docs` 5개 — 직전 세션이 구현·검증만 하고 커밋 전에 중단돼 있었음). **C3(`diet.estimate_nutrition` LLM 보강)은 2026-07-31 완료** — 도메인 186개·regression 35개 전부 통과, `next build` 성공. **다음 남은 것은 전부 오너의 외부 자격증명 발급 대기: B4(Google OAuth 클라이언트, 최우선) · B3(`GEMINI_API_KEY`/`OPENROUTER_API_KEY`) · B1(GitHub PAT)** |
 | 다음 세션 읽기 순서 | ① 이 파일 ② "다음 작업 — MECE 분류" §B부터 ③ 막히면 `REFACTOR_BACKLOG.md`("P6에서 발견" 최신 포함) |
 | 결정 근거 | `docs/REFACTOR_DIRECTION_WEB_2026-07.md` (D-3 정의 §2.2) |
 | 미해결 이슈 | `docs/REFACTOR_BACKLOG.md` |
@@ -20,7 +20,8 @@
 | P4a 읽기 API | ✅ 구현 11/11, 게이트 G4a-1/3/4/5 통과. G4a-2/G4a-6은 외부 의존(PAT/재실행)이라 이월 유지 | 아래 |
 | **P4b diet 쓰기 + health.ingest** | ✅ 게이트 G4b-1~G4b-3 통과, G4b-4 이월(발화 채널 미결정) | 아래 |
 | **P5 웹 UI** | ✅ 구현 완료(chat 제외 5라우트), G5-1~G5-5 전부 통과 | 아래 |
-| **P6 생성 경로 이식** | ✅ 캐시/라우팅/RAG/RPC/`/chat` 전부 구현, G6-1~G6-5 통과. `diet.estimate_nutrition` LLM 보강은 스코프 제외(별도 후속) | 아래 |
+| **P6 생성 경로 이식** | ✅ 캐시/라우팅/RAG/RPC/`/chat` 전부 구현, G6-1~G6-5 통과 | 아래 |
+| **C3 estimate_nutrition LLM 보강** | ✅ **완료(2026-07-31)** — 카탈로그 미매칭 음식만 LLM으로 보강. 실 provider 응답 형식만 미검증(B3 키 대기) | 아래 |
 | **C2 단식 리마인더** | ✅ **이메일 채널 폐기, 앱 내 표시로 종결(2026-07-29 오너 결정)** — 마이그레이션 007로 cron·함수·Vault 되돌림, Resend 코드 전부 삭제. `RESEND_API_KEY` 불필요 | 아래 |
 | P7 | ⬜ | — |
 
@@ -109,6 +110,39 @@ P5의 blue-500 접근성 감점을 반복하지 않기 위함.
 등록 완료(job id=1). `RESEND_API_KEY`가 아직 미발급이라 실제 이메일 발송은 조건 충족 시에도
 `web/lib/email/resend.ts`에서 조용히 스킵된다(에러 아님) — 키 발급만 하면 별도 배포 없이 다음
 5분 주기부터 바로 실발송 전환.
+
+## C3 (estimate_nutrition LLM 보강, 2026-07-31)
+
+카탈로그 30종(`diet-nutrition-calc.ts`)이 못 맞춘 음식만 LLM으로 메운다. 그 전까지 카탈로그 밖
+음식은 일반식 평균(150kcal/100g)으로 떨어지고 `/diet` 빠른입력이 그 값을 버려서, 사실상 열량
+기록이 안 되고 있었다.
+
+**설계 3줄**: ① LLM에는 **100g/100ml 기준값만** 묻고 분량 곱셈은 우리가 한다 — 프롬프트가
+음식명+단위에만 의존해 같은 음식이면 분량이 달라도 캐시가 적중한다(실측 확인). ② 카탈로그가
+맞춘 음식은 **LLM 호출 0회**. ③ 응답 계약은 가산만 — `matched`(카탈로그 수록 여부)는 그대로 두고
+`source`(`catalog`|`llm`|`generic`)를 추가, UI는 `matched || source==="llm"`에서 kcal을 저장한다.
+
+응답 검증은 형식·범위(kcal 0~900 / 단백질 0~100) + 물리 정합(`protein×4 ≤ kcal+20`). 키 없음·
+스로틀 차단·파싱 실패·범위 밖·라우터 예외는 **전부 규칙 기반 추정치로의 폴백**이고 에러가 아니다
+(G6-3과 같은 원칙).
+
+산출물: `web/lib/domain/diet-nutrition-llm.ts`(순수), `web/lib/diet/nutrition-enrich.ts`(배선),
+`handlers.ts::diet_estimate_nutrition`, `estimateAsDict`의 `source` 인자, `/diet` 빠른입력 조건,
+`tests/domain/diet-nutrition-llm.test.ts`(19종), `tests/regression/diet-estimate-nutrition.regression.test.ts`(4종).
+`lib/llm/*`는 변경 없이 재사용.
+
+**검증**: 도메인 186개 / regression 35개 전부 통과, `npx tsc --noEmit`·`next build` 성공.
+dev 서버 + 매직링크 세션으로 `/api/rpc` 실호출 3종(카탈로그 `source:catalog` / 미매칭
+`source:generic` 폴백 / 자유 텍스트) 확인 — 새 모듈이 `/api/rpc` 체인에 LLM 라우터를 처음
+끌어들이므로 리포 루트 JSON 정적 import(Turbopack 경계, 백로그 "P6에서 발견")가 실제로 로드되는지도
+같이 확인됐다.
+
+**미검증 1건**: 실 provider가 이 프롬프트에 어떤 형식으로 답하는지(B3 키 3종 전부 미발급).
+회귀 테스트는 fetch만 스텁하고 라우터·프로바이더 파싱·실 DB 캐시(`llm_answer_cache`, 테스트 후
+행 삭제 확인)·검증·스케일링은 실제 코드로 돌린다 — 키 발급 후 실호출 1회로 종결 가능.
+
+**비목표**: 분량 추론("된장찌개 한 그릇" → g). 오너 결정으로 제외 — 상세는
+`REFACTOR_BACKLOG.md` "P6에서 발견"의 C3 항목.
 
 ## 완료 (task 1~11, 커밋 11개+ — 상세는 `git log`의 "P4a-" 커밋)
 
@@ -259,20 +293,20 @@ Urgency가 동률을 깬다.
 |---|---|---|---|---|
 | **B1. G4a-2** GitHub PAT 발급 → inbox 왕복(vault 실제 커밋) 검증 | 4 | 2 | 3 | 검증 자체는 가벼우나, 여기 딸린 **후속 구현**(`corpus.sync`/`search.reindex`를 DB 내부 계산에서 GitHub Contents API 기반 실제 재수집으로 교체, `REFACTOR_BACKLOG.md` "P4a-9에서 발견")은 Effort 4~5의 별도 작업 — PAT 발급이 그 전체 체인의 진짜 병목 |
 | ~~**B2. INGEST_API_TOKEN** Vercel 환경변수 정식 발급/등록~~ | — | — | — | **완료(2026-07-29)** — B3에 통합, 랜덤 토큰 생성+Vercel Production 등록 완료 |
-| **B3. LLM API 키 2종 발급** (2026-07-29, RESEND 폐기로 3종→2종) | 3 | 1 | 2 | ~~Vercel 배포~~·~~INGEST_API_TOKEN~~·~~CRON_SECRET~~ **완료(2026-07-29)**. ~~`RESEND_API_KEY`~~ **불필요해짐**(이메일 채널 폐기). 남은 건 ① `GEMINI_API_KEY`(aistudio.google.com/apikey), ② `OPENROUTER_API_KEY`(openrouter.ai/keys) — P6 캐스케이드 2·3순위(`GROQ_API_KEY`만으로도 골격은 동작하지만 groq 실패 시 폴백 없이 extractive로 떨어짐). 발급 후 `vercel env add <KEY> production` 대행 가능 |
+| **B3. LLM API 키 발급·등록** (2026-07-31 갱신: 프로덕션에 키 0종) | 4 | 1 | 3 | ~~Vercel 배포~~·~~INGEST_API_TOKEN~~·~~CRON_SECRET~~ **완료(2026-07-29)**. ~~`RESEND_API_KEY`~~ **불필요해짐**(이메일 채널 폐기). 남은 건 ① `GEMINI_API_KEY`(aistudio.google.com/apikey), ② `OPENROUTER_API_KEY`(openrouter.ai/keys) — P6 캐스케이드 2·3순위(`GROQ_API_KEY`만으로도 골격은 동작하지만 groq 실패 시 폴백 없이 extractive로 떨어짐). 발급 후 `vercel env add <KEY> production` 대행 가능. **2026-07-31 갱신**: `vercel env ls production` 실측 결과 **프로덕션에 LLM 키가 하나도 없다**(등록된 6종은 Supabase 4종·`INGEST_API_TOKEN`·`CRON_SECRET`뿐 — `GROQ_API_KEY`조차 없음). 즉 `/chat`·`/api/ask`는 지금 항상 extractive로, C3(estimate_nutrition LLM 보강)는 항상 규칙 기반으로 떨어진다(둘 다 에러는 아님, 설계된 폴백). 키 1종만 등록해도 세 경로가 동시에 살아난다 — Impact를 3→4로 상향 |
 | **B4. Google OAuth 클라이언트 발급** (2026-07-29 신규, 최우선) | 5 | 1 | 4 | 로그인 진입 마찰 해소. 오너가 console.cloud.google.com에서 OAuth 클라이언트(웹) 생성 → 승인된 리디렉션 URI에 `https://gppklwzcmfuuhsefdeik.supabase.co/auth/v1/callback` 등록 → client ID/secret을 Supabase 대시보드 Authentication→Providers→Google에 입력. 코드 쪽(`/login` Google 버튼·스타일링)은 선행 완료. **리스크**: `disable_signup: true`라 최초 Google 로그인이 신규가입으로 막힐 수 있음 — 이론상 이메일 확인된 기존 계정과 자동 identity 연결되어 통과해야 하나 실측 필요. 막히면 가입을 잠깐 열고 연결 후 재차단(uid는 어느 쪽이든 보존) |
 
-**추천 순서**: B3(배포+키 3종)가 이번에 완성된 P6/C2를 "실사용"으로 전환하는 유일한 남은 단계라 최우선.
-B1(GitHub PAT)은 P4a-9 이월 전체를 해소하는 별개 열쇠. B2는 언제든 병행 가능
+**추천 순서(2026-07-31 갱신)**: B4(Google OAuth) → B3(LLM 키) → B1(GitHub PAT).
+B4는 로그인 진입 마찰의 유일한 병목이고, B3는 키 **1종만** 등록해도 `/chat`·`/api/ask`·C3
+세 경로가 한꺼번에 살아난다(지금 프로덕션 LLM 키 0종). B1은 P4a-9 이월 전체를 여는 별개 열쇠.
 
 ### C. 오너의 정책·설계 결정 자체가 산출물 (결정 전엔 착수 불가)
 
 | 항목 | Impact | Effort | Urgency | 비고 |
 |---|---|---|---|---|
-| **C3. diet.estimate_nutrition LLM 보강** — 신기능 착수 시점 (2026-07-29 신규) | 2 | 3 | 1 | 오너가 §이전 세션에서 "신기능으로 승인"했으나, P6(순수 포팅) 작업과 성격이 달라 One Thing 원칙상 이번 세션 스코프에서 제외(`REFACTOR_BACKLOG.md` "P6에서 발견"). 착수 자체는 이미 승인됐으니 "언제 할지"만 남음 — 다음 세션에 바로 시작해도 되고, B3 이후로 미뤄도 무방 |
+| ~~**C3. diet.estimate_nutrition LLM 보강**~~ | — | — | — | **완료(2026-07-31)** — 위 "C3" 절 참고. 실 provider 응답 형식만 B3 대기 |
 
-**판단 근거**: C3는 "해도 되는지"는 이미 정해졌고 "언제"만 남아 사실상 A에
-가깝지만, 오너가 세션 경계를 명시적으로 원할 수 있어 C로 유지.
+**§C는 현재 비어 있다** — 오너의 정책·설계 결정을 기다리는 항목이 없다. 남은 것은 전부 §B(자격증명 발급).
 
 ### 종합 권장 순서
 
@@ -288,8 +322,11 @@ B1(GitHub PAT)은 P4a-9 이월 전체를 해소하는 별개 열쇠. B2는 언�
 5. (오너에게 요청) B3 LLM 키 2종(GEMINI/OPENROUTER) 발급 —
    대행 불가(제3자 계정 인증), 발급 후 등록은 제가 `vercel env add`로 대행 가능
 6. (오너에게 요청) B1 GitHub PAT 발급 — 별개 체인(P4a-9 이월 해소)
-7. (아무 때나) C3 diet.estimate_nutrition LLM 보강 착수 —
+7. ~~C3 diet.estimate_nutrition LLM 보강~~ — **완료(2026-07-31)**, 위 "C3" 절 참고.
    A1이 남긴 검색 랭킹 경계는 이미 accept로 종결(`REFACTOR_BACKLOG.md`)
+
+**이 시점에서 블로커 없는 작업은 남아 있지 않다.** 4~6번(B4/B3/B1)은 전부 오너가 외부
+서비스에서 값을 발급해야 착수 가능하고, 발급 후 등록·검증은 대행 가능하다.
 
 ## 이번 세션 스코프 조정 (오너 승인 완료, 상세는 커밋 메시지)
 

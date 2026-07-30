@@ -100,7 +100,24 @@
   `rootDirectory: "web"`(Vercel API `PATCH /v9/projects/{id}`로 설정, `sourceFilesOutsideRootDirectory`는
   기본 `true`라 별도 설정 불필요)을 지정해 해결 — 리포 전체가 업로드되고 Vercel이 `web/`을 빌드 루트로
   쓰되 상위 파일도 포함한다. 상세 절차와 최종 배포 정보는 `docs/ENV_VARS.md` §Vercel 프로덕션 배포 참고.
-- **diet.estimate_nutrition LLM 보강**: 오너가 "신기능으로 승인"했으나(원본 Swift엔 이 기능 자체가 없음),
-  P6(포팅) 작업과 성격이 달라 One Thing 원칙에 따라 이번 세션 스코프에서 제외했다. 착수 시 별도 Phase/PR로
-  분리해서 진행할 것 — `web/lib/rpc/handlers.ts::diet_estimate_nutrition`의 기존 규칙 기반 로직
-  (`nutritionCalc.estimate`/`parse`)에 LLM 보강을 추가하는 형태가 될 것으로 예상.
+- **[완료, 2026-07-31] diet.estimate_nutrition LLM 보강(C3)**: 오너가 "신기능으로 승인"했으나(원본 Swift엔
+  이 기능 자체가 없음), P6(포팅) 작업과 성격이 달라 One Thing 원칙에 따라 P6 세션 스코프에서 제외했던 항목.
+  별도 세션에서 구현 완료 — `web/lib/domain/diet-nutrition-llm.ts`(순수: 프롬프트·응답 검증·스케일링) +
+  `web/lib/diet/nutrition-enrich.ts`(라우터·스토어 배선).
+  - **LLM에는 100g/100ml 기준값만 묻는다**. 분량 곱셈은 우리가 한다 — 프롬프트가 음식명+단위에만 의존해
+    "된장찌개 200g"과 "된장찌개 350g"이 같은 캐시 키를 쓰고(실측: 2회차 클라우드 호출 0회), 응답 검증이
+    숫자 두 개의 범위 체크로 끝난다.
+  - **카탈로그 매칭 시 LLM 호출 0회**. 미매칭일 때만 탄다.
+  - 응답 계약은 **가산만** — `matched`(카탈로그 수록 여부)의 의미를 바꾸지 않고 `source`
+    (`catalog`|`llm`|`generic`)를 추가했다. `/diet` 빠른입력은 `matched || source==="llm"`일 때 kcal까지
+    저장한다. `diet.estimate_nutrition`은 골든 대상이 아니라(골든 러너가 무인자 `dispatch(method, {})`로
+    호출) G4a-1 diff-0과 무관.
+  - 응답 검증은 형식·범위(kcal 0~900, 단백질 0~100) + **물리 정합**(`protein×4 ≤ kcal+20` — 카탈로그 30종
+    전부가 만족하는 부등식). 키 없음·스로틀 차단·파싱 실패·범위 밖·라우터 예외는 전부 규칙 기반
+    추정치로의 폴백이고 에러가 아니다(G6-3과 같은 원칙).
+  - **비목표(의도적 제외)**: 분량 추론. "된장찌개 한 그릇"처럼 숫자가 없는 문장의 g/ml을 LLM이 정하는 것은
+    오너 결정으로 범위에서 뺐다 — 검증 대상이 늘고 캐시가 문장 단위가 돼 적중률이 떨어진다. 이 경우는 지금도
+    `parse()`가 null을 반환해 UI가 원문만 저장하는 기존 동작 그대로다.
+  - **미검증 1건**: 실 provider가 이 프롬프트에 어떤 형식으로 답하는지는 확인 못 했다(GROQ/GEMINI/OPENROUTER
+    키 전부 미발급 — B3). 회귀 테스트는 fetch만 스텁하고 라우터·프로바이더 파싱·실 DB 캐시·검증·스케일링은
+    실제 코드로 돌린다. B3 발급 후 실호출 1회로 종결 가능.
