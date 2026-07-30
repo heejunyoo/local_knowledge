@@ -149,11 +149,17 @@ export default function DietPage() {
       return;
     }
     try {
-      const est = await callRpc<{ matched: boolean; item_line: string; kcal: number; protein_g: number; note: string }>(
-        "diet.estimate_nutrition",
-        { text: line },
-      );
-      if (est.matched) {
+      const est = await callRpc<{
+        matched: boolean;
+        source?: "catalog" | "llm" | "generic";
+        item_line: string;
+        kcal: number;
+        protein_g: number;
+        note: string;
+      }>("diet.estimate_nutrition", { text: line });
+      // 카탈로그 매칭분에 더해 LLM 보강분(C3)도 신뢰해 kcal까지 저장한다.
+      // source가 "generic"이면 일반식 평균이라 아래 폴백(원문만 저장)으로 넘긴다.
+      if (est.matched || est.source === "llm") {
         await runAction(`${est.item_line} · ~${Math.round(est.kcal)}kcal 저장됐어요`, () =>
           callRpc("diet.log_meal", {
             items: withSlotPrefix([est.item_line]),

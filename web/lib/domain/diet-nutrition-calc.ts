@@ -30,7 +30,13 @@ export function itemLine(e: Pick<Estimate, "foodName" | "amount" | "unit">): str
   return `${e.foodName} ${fmtAmount(e.amount)}${e.unit}`;
 }
 
-export function estimateAsDict(e: Estimate) {
+/** C3(웹 신규): 이 추정치의 출처. `matched`(카탈로그 수록 여부)와 의미가 다르다. */
+export type EstimateSource = "catalog" | "llm" | "generic";
+
+export function estimateAsDict(
+  e: Estimate,
+  source: EstimateSource = e.matchedCatalog ? "catalog" : "generic",
+) {
   return {
     food: e.foodName,
     amount: e.amount,
@@ -40,6 +46,7 @@ export function estimateAsDict(e: Estimate) {
     matched: e.matchedCatalog,
     note: e.note,
     item_line: itemLine(e),
+    source,
   };
 }
 

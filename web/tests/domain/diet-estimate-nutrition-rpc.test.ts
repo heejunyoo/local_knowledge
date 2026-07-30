@@ -9,6 +9,8 @@ describe("diet_estimate_nutrition RPC", () => {
     >;
     expect(result.matched).toBe(true);
     expect(result.food).toBe("닭가슴살");
+    // C3: 카탈로그가 맞춘 경로는 LLM을 타지 않는다.
+    expect(result.source).toBe("catalog");
   });
 
   it("text가 있고 amount<=0이면 자유 텍스트 파싱 경로를 탄다", async () => {
@@ -16,6 +18,7 @@ describe("diet_estimate_nutrition RPC", () => {
     expect(result.matched).toBe(true);
     expect(result.unit).toBe("ml");
     expect(result.amount).toBe(250);
+    expect(result.source).toBe("catalog");
   });
 
   it("매칭 실패 시 {matched:false}만 반환한다", async () => {

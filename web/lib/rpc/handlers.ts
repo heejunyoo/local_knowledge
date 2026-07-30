@@ -8,6 +8,7 @@
 import { createClient } from "@/lib/supabase/server";
 import * as dietRead from "@/lib/domain/diet-read";
 import * as nutritionCalc from "@/lib/domain/diet-nutrition-calc";
+import { enrichWithLlm } from "@/lib/diet/nutrition-enrich";
 import * as dietDb from "@/lib/db/diet";
 import { fetchDietGoals, fetchDietProfile, fetchRecentDietSnapshots } from "@/lib/db/diet";
 import {
@@ -172,8 +173,11 @@ export async function diet_ping() {
 /**
  * 원본(MobileHTTPServer.swift `case "diet.estimate_nutrition"`)과 동일한
  * 파라미터 우선순위: text가 있고 amount<=0이면 자유 텍스트 파싱, 아니면
- * food/amount/unit으로 직접 추정. LLM 미사용 — 규칙 기반 카탈로그만
- * 동작(§P4b: estimate_nutrition은 P6까지 규칙 기반 fallback만).
+ * food/amount/unit으로 직접 추정.
+ *
+ * C3(웹 신규): 규칙 기반 카탈로그가 못 맞춘 음식만 LLM으로 보강한다
+ * (`enrichWithLlm`). 카탈로그 매칭 시 LLM 호출은 0회이고, LLM이 없거나
+ * 실패하면 기존 일반식 평균 추정치가 그대로 나간다 — 에러 경로가 아니다.
  */
 export async function diet_estimate_nutrition(params: unknown) {
   const p = (params ?? {}) as {
@@ -183,12 +187,13 @@ export async function diet_estimate_nutrition(params: unknown) {
   const amount = Number(p.amount ?? 0) || 0;
   const unit: nutritionCalc.NutritionUnit = (p.unit ?? "g").toLowerCase() === "ml" ? "ml" : "g";
 
-  if (p.text !== undefined && amount <= 0) {
-    const e = nutritionCalc.parse(p.text);
-    return e ? nutritionCalc.estimateAsDict(e) : { matched: false };
-  }
-  const e = nutritionCalc.estimate(food, amount, unit);
-  return e ? nutritionCalc.estimateAsDict(e) : { matched: false };
+  const e = p.text !== undefined && amount <= 0
+    ? nutritionCalc.parse(p.text)
+    : nutritionCalc.estimate(food, amount, unit);
+  if (!e) return { matched: false };
+
+  const enriched = await enrichWithLlm(e);
+  return nutritionCalc.estimateAsDict(enriched.estimate, enriched.source);
 }
 
 export async function corpus_status() {
