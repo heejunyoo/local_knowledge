@@ -42,6 +42,20 @@ function askHidden(question: string): Promise<string> {
 }
 
 async function main() {
+  // 비밀번호를 가려 받으려면 진짜 터미널이 필요하다. Claude Code의 `!` 실행이나
+  // 파이프로 들어오면 stdin이 TTY가 아니라서 프롬프트가 빈 값으로 떨어진다 —
+  // 조용히 실패하지 않도록 먼저 걷어낸다.
+  if (!process.stdin.isTTY) {
+    console.error(
+      "이 스크립트는 터미널에서 직접 실행해야 합니다(비밀번호를 가려 받기 위함).\n" +
+        "  Terminal.app 등에서: cd " +
+        path.join(__dirname, "..", "..") +
+        " && npx tsx web/scripts/set-password.ts\n" +
+        "터미널을 쓰기 어렵다면 로그인 후 앱에서 설정 → 계정 → 비밀번호 저장을 쓰세요.",
+    );
+    process.exit(1);
+  }
+
   const email = process.argv[2] ?? DEFAULT_EMAIL;
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
