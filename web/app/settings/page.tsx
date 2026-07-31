@@ -1,7 +1,7 @@
 import { corpus_status } from "@/lib/rpc/handlers";
 import { getSearchMode } from "@/lib/db/search";
 import { Card } from "@/components/ui";
-import { SyncButton, SignOutButton } from "./SettingsActions";
+import { SyncButton, SignOutButton, PasswordForm } from "./SettingsActions";
 import styles from "./page.module.css";
 
 interface CorpusStatus {
@@ -73,6 +73,9 @@ export default async function SettingsPage() {
 
       <div className={styles.section}>
         <p className={styles.sectionLabel}>계정</p>
+        <Card>
+          <PasswordForm />
+        </Card>
         <SignOutButton />
       </div>
     </div>

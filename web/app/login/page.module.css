@@ -56,25 +56,34 @@
   flex-shrink: 0;
 }
 
-/* 가운데 "또는"이 걸친 구분선 */
-.divider {
+/* 보조 로그인 수단(Google·매직링크)은 기본으로 접어둔다 — 평소 경로는
+   비밀번호 하나뿐이어야 화면이 조용하다. */
+.alternatives {
   display: flex;
-  align-items: center;
-  gap: var(--toss-space-3);
-  margin: var(--toss-space-6) 0;
+  flex-direction: column;
+  gap: var(--toss-space-2);
+  margin-top: var(--toss-space-6);
+  padding-top: var(--toss-space-6);
+  border-top: 1px solid var(--toss-grey-200);
 }
 
-.divider::before,
-.divider::after {
-  content: "";
-  flex: 1;
-  height: 1px;
-  background: var(--toss-grey-200);
-}
-
-.dividerText {
+.linkButton {
+  display: block;
+  width: 100%;
+  margin-top: var(--toss-space-4);
+  padding: var(--toss-space-2);
+  border: 0;
+  background: none;
+  color: var(--toss-grey-700);
+  font-family: var(--toss-font-family);
   font-size: var(--toss-font-caption-size);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.linkButton:disabled {
   color: var(--toss-grey-500);
+  cursor: default;
 }
 
 .form {

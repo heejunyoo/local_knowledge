@@ -60,9 +60,42 @@
   cursor: default;
 }
 
+.passwordForm {
+  display: flex;
+  flex-direction: column;
+}
+
+.passwordLabel {
+  font-size: var(--toss-font-caption-size);
+  color: var(--toss-grey-700);
+  margin-bottom: var(--toss-space-1);
+}
+
+.passwordLabel + .passwordInput {
+  margin-bottom: var(--toss-space-3);
+}
+
+.passwordInput {
+  width: 100%;
+  height: 48px;
+  padding: 0 var(--toss-space-4);
+  border: 1px solid var(--toss-grey-200);
+  border-radius: var(--toss-radius-button);
+  background: var(--toss-grey-50);
+  color: var(--toss-grey-900);
+  font-family: var(--toss-font-family);
+  font-size: var(--toss-font-body-size);
+}
+
+.passwordInput:focus {
+  outline: 2px solid var(--toss-blue-500);
+  outline-offset: -1px;
+}
+
 .signOutButton {
   width: 100%;
   height: 48px;
+  margin-top: var(--toss-space-3);
   border: none;
   border-radius: var(--toss-radius-button);
   background: var(--toss-red-50);
