@@ -3,7 +3,7 @@
 | Field | Value |
 |-------|-------|
 | 최종 갱신 | 2026-07-31 |
-| 현재 위치 | **C2 완전 완료** + **P6 1~7단계 완료** + **Vercel 프로덕션 배포 완료(2026-07-29)**. `web/` 프로덕션 URL `https://web-rho-lovat-34.vercel.app`(Vercel 프로젝트 `luckyhyun/knowledge-web`, Root Directory=`web`). 필수 환경변수 6종(Supabase 4종+`INGEST_API_TOKEN`+`CRON_SECRET`) 등록 완료, 실 로그인으로 6라우트+`/api/ask` 스모크 확인. C2는 **이메일 채널 폐기 → 앱 내 표시로 종결**(2026-07-29, 마이그레이션 007로 cron·함수·Vault 되돌림). P6은 LLM 캐시/라우팅(캐스케이드)/RAG(ask·askFast)/RPC/`/chat`까지 전부 구현·테스트 완료. P6·C2 작업물은 2026-07-29 커밋 완료(`P6-1`/`P6-2`/`C2`/`chore`/`docs` 5개 — 직전 세션이 구현·검증만 하고 커밋 전에 중단돼 있었음). **C3(`diet.estimate_nutrition` LLM 보강)은 2026-07-31 완료** — 도메인 186개·regression 35개 전부 통과, `next build` 성공. **다음 남은 것은 전부 오너의 외부 자격증명 발급 대기: B4(Google OAuth 클라이언트, 최우선) · B3(`GEMINI_API_KEY`/`OPENROUTER_API_KEY`) · B1(GitHub PAT)** |
+| 현재 위치 | **C2 완전 완료** + **P6 1~7단계 완료** + **Vercel 프로덕션 배포 완료(2026-07-29)**. `web/` 프로덕션 URL `https://web-rho-lovat-34.vercel.app`(Vercel 프로젝트 `luckyhyun/knowledge-web`, Root Directory=`web`). 필수 환경변수 6종(Supabase 4종+`INGEST_API_TOKEN`+`CRON_SECRET`) 등록 완료, 실 로그인으로 6라우트+`/api/ask` 스모크 확인. C2는 **이메일 채널 폐기 → 앱 내 표시로 종결**(2026-07-29, 마이그레이션 007로 cron·함수·Vault 되돌림). P6은 LLM 캐시/라우팅(캐스케이드)/RAG(ask·askFast)/RPC/`/chat`까지 전부 구현·테스트 완료. P6·C2 작업물은 2026-07-29 커밋 완료(`P6-1`/`P6-2`/`C2`/`chore`/`docs` 5개 — 직전 세션이 구현·검증만 하고 커밋 전에 중단돼 있었음). **프로덕션 URL은 `https://hj-knowledge.vercel.app`으로 교체**(2026-07-31, Vercel 프로젝트 도메인으로 정식 등록 — 이전 `web-rho-lovat-34.vercel.app`은 프로젝트 생성 시 자동 생성된 무작위 별칭이라 서비스와 무관했다. 둘 다 살아 있고 배포 시 양쪽에 붙는다). **로그인은 비밀번호 방식**(매직링크는 복구용으로 강등, `web/scripts/set-password.ts`로 최초 설정). **C3(`diet.estimate_nutrition` LLM 보강)은 2026-07-31 완료** — 도메인 186개·regression 35개 전부 통과, `next build` 성공. **다음 남은 것은 전부 오너의 외부 자격증명 발급 대기: B4(Google OAuth 클라이언트, 최우선) · B3(`GEMINI_API_KEY`/`OPENROUTER_API_KEY`) · B1(GitHub PAT)** |
 | 다음 세션 읽기 순서 | ① 이 파일 ② "다음 작업 — MECE 분류" §B부터 ③ 막히면 `REFACTOR_BACKLOG.md`("P6에서 발견" 최신 포함) |
 | 결정 근거 | `docs/REFACTOR_DIRECTION_WEB_2026-07.md` (D-3 정의 §2.2) |
 | 미해결 이슈 | `docs/REFACTOR_BACKLOG.md` |
@@ -294,11 +294,12 @@ Urgency가 동률을 깬다.
 | **B1. G4a-2** GitHub PAT 발급 → inbox 왕복(vault 실제 커밋) 검증 | 4 | 2 | 3 | 검증 자체는 가벼우나, 여기 딸린 **후속 구현**(`corpus.sync`/`search.reindex`를 DB 내부 계산에서 GitHub Contents API 기반 실제 재수집으로 교체, `REFACTOR_BACKLOG.md` "P4a-9에서 발견")은 Effort 4~5의 별도 작업 — PAT 발급이 그 전체 체인의 진짜 병목 |
 | ~~**B2. INGEST_API_TOKEN** Vercel 환경변수 정식 발급/등록~~ | — | — | — | **완료(2026-07-29)** — B3에 통합, 랜덤 토큰 생성+Vercel Production 등록 완료 |
 | **B3. LLM API 키 발급·등록** (2026-07-31 갱신: 프로덕션에 키 0종) | 4 | 1 | 3 | ~~Vercel 배포~~·~~INGEST_API_TOKEN~~·~~CRON_SECRET~~ **완료(2026-07-29)**. ~~`RESEND_API_KEY`~~ **불필요해짐**(이메일 채널 폐기). 남은 건 ① `GEMINI_API_KEY`(aistudio.google.com/apikey), ② `OPENROUTER_API_KEY`(openrouter.ai/keys) — P6 캐스케이드 2·3순위(`GROQ_API_KEY`만으로도 골격은 동작하지만 groq 실패 시 폴백 없이 extractive로 떨어짐). 발급 후 `vercel env add <KEY> production` 대행 가능. **2026-07-31 갱신**: `vercel env ls production` 실측 결과 **프로덕션에 LLM 키가 하나도 없다**(등록된 6종은 Supabase 4종·`INGEST_API_TOKEN`·`CRON_SECRET`뿐 — `GROQ_API_KEY`조차 없음). 즉 `/chat`·`/api/ask`는 지금 항상 extractive로, C3(estimate_nutrition LLM 보강)는 항상 규칙 기반으로 떨어진다(둘 다 에러는 아님, 설계된 폴백). 키 1종만 등록해도 세 경로가 동시에 살아난다 — Impact를 3→4로 상향 |
-| **B4. Google OAuth 클라이언트 발급** (2026-07-29 신규, 최우선) | 5 | 1 | 4 | 로그인 진입 마찰 해소. 오너가 console.cloud.google.com에서 OAuth 클라이언트(웹) 생성 → 승인된 리디렉션 URI에 `https://gppklwzcmfuuhsefdeik.supabase.co/auth/v1/callback` 등록 → client ID/secret을 Supabase 대시보드 Authentication→Providers→Google에 입력. 코드 쪽(`/login` Google 버튼·스타일링)은 선행 완료. **리스크**: `disable_signup: true`라 최초 Google 로그인이 신규가입으로 막힐 수 있음 — 이론상 이메일 확인된 기존 계정과 자동 identity 연결되어 통과해야 하나 실측 필요. 막히면 가입을 잠깐 열고 연결 후 재차단(uid는 어느 쪽이든 보존) |
+| **B4. Google OAuth 클라이언트 발급** (2026-07-29 신규) | 2 | 1 | 1 | **2026-07-31: 우선순위 강등**(5/1/4 → 2/1/1). 이 항목의 목적이던 "로그인 진입 마찰"은 비밀번호 로그인 도입으로 해소됐다 — Google은 이제 있으면 좋은 선택지일 뿐 병목이 아니다. 아래는 원문. 로그인 진입 마찰 해소. 오너가 console.cloud.google.com에서 OAuth 클라이언트(웹) 생성 → 승인된 리디렉션 URI에 `https://gppklwzcmfuuhsefdeik.supabase.co/auth/v1/callback` 등록 → client ID/secret을 Supabase 대시보드 Authentication→Providers→Google에 입력. 코드 쪽(`/login` Google 버튼·스타일링)은 선행 완료. **리스크**: `disable_signup: true`라 최초 Google 로그인이 신규가입으로 막힐 수 있음 — 이론상 이메일 확인된 기존 계정과 자동 identity 연결되어 통과해야 하나 실측 필요. 막히면 가입을 잠깐 열고 연결 후 재차단(uid는 어느 쪽이든 보존) |
 
-**추천 순서(2026-07-31 갱신)**: B4(Google OAuth) → B3(LLM 키) → B1(GitHub PAT).
-B4는 로그인 진입 마찰의 유일한 병목이고, B3는 키 **1종만** 등록해도 `/chat`·`/api/ask`·C3
-세 경로가 한꺼번에 살아난다(지금 프로덕션 LLM 키 0종). B1은 P4a-9 이월 전체를 여는 별개 열쇠.
+**추천 순서(2026-07-31 재갱신)**: B3(LLM 키) → B1(GitHub PAT) → B4(Google, 선택).
+B3는 키 **1종만** 등록해도 `/chat`·`/api/ask`·C3 세 경로가 한꺼번에 살아난다(지금 프로덕션
+LLM 키 0종). B1은 P4a-9 이월 전체를 여는 별개 열쇠. B4는 비밀번호 로그인 도입으로 병목에서
+빠졌다.
 
 ### C. 오너의 정책·설계 결정 자체가 산출물 (결정 전엔 착수 불가)
 
