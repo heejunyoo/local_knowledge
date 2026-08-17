@@ -1,0 +1,492 @@
+{
+  "goal": "/diet 에서 기성식품을 이름으로 검색해 1회 섭취량으로 환산한 영양값(당·나트륨·포화지방 포함)과 함께 식단에 기록할 수 있다.",
+  "spec_ref": ".claude/specs/ingreed-diet-nutrition/spec.md",
+  "open_decisions": [],
+  "verify_command": "cd web && npm run test && npx next build",
+  "phases": [
+    {
+      "id": "p1-domain",
+      "name": "순수 도메인 + 마이그레이션 파일 (DB 없이 완결)",
+      "exit_check": {
+        "command": "cd /Users/heejunyoo/IdeaProjects/KnowledgeApp/web && npm run test",
+        "expect_exit_code": 0,
+        "expect_contains": ["Test Files", "passed"]
+      },
+      "rollback": "git checkout -- web/lib/domain web/supabase/migrations web/tests/domain && git clean -f web/lib/domain web/supabase/migrations web/tests/domain"
+    },
+    {
+      "id": "p2-wiring",
+      "name": "ingreed 클라이언트 + DB 쓰기 + RPC 배선",
+      "exit_check": {
+        "command": "cd /Users/heejunyoo/IdeaProjects/KnowledgeApp/web && npm run test && npx next build",
+        "expect_exit_code": 0,
+        "expect_contains": ["passed"]
+      },
+      "rollback": "git checkout -- web/lib web/tests"
+    },
+    {
+      "id": "p3-ui",
+      "name": "/diet 제품 검색·담기 화면",
+      "exit_check": {
+        "command": "cd /Users/heejunyoo/IdeaProjects/KnowledgeApp/web && npm run test && npx next build",
+        "expect_exit_code": 0,
+        "expect_contains": ["/diet"]
+      },
+      "rollback": "git checkout -- web/app/diet"
+    }
+  ],
+  "tasks": [
+    {
+      "task_id": "port-serving-size",
+      "kind": "implement",
+      "phase": "p1-domain",
+      "model_hint": "sonnet",
+      "objective": "ingreed 의 1회 섭취참고량 파서를 KnowledgeApp 도메인 계층으로 이식하고 함정 2건을 회귀 테스트로 못박는다.",
+      "done_when": [
+        "declaredServingG 가 유탕면 다중표기 표에서 봉지 120 · 용기 80 을 이름으로 갈라 반환한다",
+        "단위 없는 표기(\"1식\")에 대해 null 을 반환한다 (1 이 아니다)",
+        "kg·l 표기를 g·ml 로 환산한다",
+        "roundsUpTo30g · SNACK_STANDARD · perServing 은 이식하지 않았다"
+      ],
+      "acceptance": {
+        "command": "npm run test",
+        "expect_exit_code": 0,
+        "expect_contains": ["passed"],
+        "cwd": "/Users/heejunyoo/IdeaProjects/KnowledgeApp/web"
+      },
+      "files_to_create": [
+        "web/lib/domain/serving-size.ts",
+        "web/tests/domain/serving-size.test.ts"
+      ],
+      "edit_points": [
+        {
+          "path": "web/lib/domain/serving-size.ts",
+          "symbol": "declaredServingG, isServingTable, CUP_NOODLE, grams",
+          "what": "~/ingreed/scripts/hieng_rules.ts 의 191·202·170·267 행 심볼을 이식한다. grams 는 이 파일 안의 private helper 로 두되 테스트가 필요하면 export 한다. 단위 필수 정규식을 관대하게 고치지 않는다."
+        },
+        {
+          "path": "web/tests/domain/serving-size.test.ts",
+          "symbol": "describe('serving-size')",
+          "what": "~/ingreed/packages/scoring/test/serving.test.ts 의 케이스를 vitest 문법으로 옮긴다. 최소: 유탕면 표 봉지/용기 분기, \"1식\" → null, 정상 \"200ml\" → 200, kg/l 환산."
+        }
+      ],
+      "reference_impl": {
+        "path": "web/tests/domain/diet-nutrition-calc.test.ts",
+        "why": "이 리포의 vitest 도메인 테스트 작성 규약(describe/it, 임포트 별칭)"
+      },
+      "already_tried": [
+        { "what": "npm run test (착수 전 기준선)", "result": "21 files / 186 tests 통과 · 488ms" }
+      ],
+      "context": {
+        "spec_ref": ".claude/specs/ingreed-diet-nutrition/spec.md",
+        "facts": [
+          "원본은 다른 리포다: /Users/heejunyoo/ingreed/scripts/hieng_rules.ts (읽기만 한다)",
+          "이 파서가 존재하는 이유는 spec.md §3 의 함정 2건이다. 둘 다 예외를 안 던지고 그럴듯한 숫자를 준다",
+          "유탕면 다중표기 문자열: '생·숙면 200g, 건면 100g, 당면 30g, 유탕면(봉지)120g, 유탕면(용기)80g'",
+          "컵/봉지는 품목유형으로 안 갈린다 — 제품명 정규식 CUP_NOODLE 로 가른다"
+        ],
+        "conventions": [
+          "lib/domain/ 은 순수하다 — DB·네트워크·프레임워크 import 금지",
+          "임포트 별칭은 @/lib/...",
+          "원본 주석의 '왜' 를 함께 옮긴다. 이 리포는 결정 근거를 코드에 남긴다"
+        ],
+        "files": [
+          "/Users/heejunyoo/ingreed/scripts/hieng_rules.ts",
+          "/Users/heejunyoo/ingreed/packages/scoring/test/serving.test.ts",
+          "web/tests/domain/diet-nutrition-calc.test.ts"
+        ],
+        "excluded": "ingreed 의 채점 엔진(packages/scoring/src/score.ts)과 규제 판정 상수(SNACK_STANDARD·MEAL_STANDARD)는 일부러 안 보냈다. 이번 범위가 아니다."
+      },
+      "constraints": {
+        "must": [
+          "단위가 없는 표기는 null 을 반환한다",
+          "이식한 심볼마다 원본 파일:행 을 주석에 남긴다"
+        ],
+        "must_not": [
+          "roundsUpTo30g · SNACK_STANDARD · MEAL_STANDARD · perServing 을 이식하지 않는다 (규제 판정용이라 식단 기록에 쓰면 안 먹은 양이 기록된다)",
+          "~/ingreed 리포의 파일을 수정하지 않는다",
+          "기존 테스트 파일을 수정하지 않는다"
+        ]
+      },
+      "tools_allowed": ["Read", "Write", "Edit", "Bash", "Grep", "Glob"],
+      "budget": { "max_turns": 25, "wall_clock_s": 900 },
+      "on_failure": { "retry": 1, "partial_ok": false }
+    },
+    {
+      "task_id": "map-ingreed-nutrition",
+      "kind": "implement",
+      "phase": "p1-domain",
+      "model_hint": "sonnet",
+      "depends_on": ["port-serving-size"],
+      "objective": "ingreed detail 페이로드를 1회 섭취량 기준 영양 기록으로 바꾸는 순수 함수를 만든다.",
+      "done_when": [
+        "basis 100g/100mL 와 1회량으로 kcal·protein·sugar·sodium·satFat 를 환산한다",
+        "1회량을 못 구하면 servingG=null 을 담아 반환하고 영양값을 임의로 만들지 않는다",
+        "없는 영양 필드는 0 이 아니라 null 로 남는다",
+        "수량 배수(quantity)를 곱한 결과를 반환한다"
+      ],
+      "acceptance": {
+        "command": "npm run test",
+        "expect_exit_code": 0,
+        "expect_contains": ["passed"],
+        "cwd": "/Users/heejunyoo/IdeaProjects/KnowledgeApp/web"
+      },
+      "files_to_create": [
+        "web/lib/domain/ingreed-nutrition.ts",
+        "web/tests/domain/ingreed-nutrition.test.ts"
+      ],
+      "edit_points": [
+        {
+          "path": "web/lib/domain/ingreed-nutrition.ts",
+          "symbol": "IngreedNutrition, IngreedProductNutrition, toServingNutrition",
+          "what": "toServingNutrition(product, quantity) → { servingG, kcal, proteinG, sugarG, sodiumMg, satFatG, itemLine }. 1회량은 @/lib/domain/serving-size 의 declaredServingG 로 구하고, foodWeight 가 더 작으면 그것을 쓴다(spec.md D1). 없는 값은 null."
+        },
+        {
+          "path": "web/tests/domain/ingreed-nutrition.test.ts",
+          "symbol": "describe('ingreed-nutrition')",
+          "what": "spec.md §2 의 실측 페이로드를 픽스처로 쓴다. 최소: 정상 환산, servingSize 없음 → servingG null, 영양 필드 결측 → null 유지, quantity 0.5/2 배수, foodWeight < servingSize 인 경우."
+        }
+      ],
+      "reference_impl": {
+        "path": "web/lib/domain/diet-nutrition-calc.ts",
+        "why": "순수 도메인 모듈의 타입 선언·estimateAsDict 반환 모양·itemLine 문자열 규약"
+      },
+      "already_tried": [
+        { "what": "ingreed_detail 실호출로 nutrition 페이로드 확보", "result": "spec.md §2 에 실측 JSON 기록됨. label 은 null 일 수 있음" }
+      ],
+      "context": {
+        "spec_ref": ".claude/specs/ingreed-diet-nutrition/spec.md",
+        "facts": [
+          "basisAmount 는 실측 100 고정이지만 코드는 basisAmount 를 읽어 나눈다 (하드코딩 100 금지)",
+          "basis 는 '100g' 또는 '100mL' 이고 이것이 unit(g/ml)을 결정한다",
+          "영양 필드가 통째로 빠진 제품이 있다. 0 으로 채우면 기록이 거짓말을 한다",
+          "grade(A~E)는 이 함수의 반환에 포함하지 않는다 — spec.md D8"
+        ],
+        "conventions": [
+          "lib/domain/ 은 순수하다",
+          "숫자 반올림은 estimateAsDict 관례를 따른다: kcal 은 정수, g 단위는 소수 1자리"
+        ],
+        "files": [
+          "web/lib/domain/diet-nutrition-calc.ts",
+          "web/lib/domain/serving-size.ts"
+        ],
+        "excluded": "ingreed_detail 의 score.reasons / sources / ing_display 는 이번 범위가 아니라 안 보냈다."
+      },
+      "constraints": {
+        "must": [
+          "1회량을 모르면 servingG=null 로 반환하고 호출자가 사용자에게 g 을 묻게 한다"
+        ],
+        "must_not": [
+          "결측 영양값을 0 으로 채우지 않는다",
+          "grade 나 score 를 반환값에 넣지 않는다",
+          "네트워크 호출을 이 파일에 넣지 않는다"
+        ]
+      },
+      "tools_allowed": ["Read", "Write", "Edit", "Bash", "Grep", "Glob"],
+      "budget": { "max_turns": 25, "wall_clock_s": 900 },
+      "on_failure": { "retry": 1, "partial_ok": false }
+    },
+    {
+      "task_id": "write-migration-008",
+      "kind": "implement",
+      "phase": "p1-domain",
+      "model_hint": "haiku",
+      "objective": "diet_meal 에 영양 컬럼 5개를 추가하는 마이그레이션 SQL 파일을 작성한다 (적용하지 않는다).",
+      "done_when": [
+        "008_diet_meal_nutrition.sql 이 sugar_g · sodium_mg · satfat_g · source · ingreed_report_no 5개 컬럼을 add column 한다",
+        "왜 추가하는지 주석이 파일 머리에 있다",
+        "SQL 을 실행하지 않았다"
+      ],
+      "acceptance": {
+        "command": "for c in sugar_g sodium_mg satfat_g source ingreed_report_no; do grep -q \"$c\" supabase/migrations/008_diet_meal_nutrition.sql || exit 1; done; grep -qi 'add column' supabase/migrations/008_diet_meal_nutrition.sql",
+        "expect_exit_code": 0,
+        "cwd": "/Users/heejunyoo/IdeaProjects/KnowledgeApp/web"
+      },
+      "files_to_create": [
+        "web/supabase/migrations/008_diet_meal_nutrition.sql"
+      ],
+      "edit_points": [
+        {
+          "path": "web/supabase/migrations/008_diet_meal_nutrition.sql",
+          "symbol": "alter table diet_meal",
+          "what": "sugar_g numeric · sodium_mg numeric · satfat_g numeric · source text · ingreed_report_no text 를 add column 한다. 기존 행이 있으므로 not null 을 걸지 않는다. RLS 는 004_rls.sql 의 owner_all 정책이 테이블 단위라 컬럼 추가만으로 그대로 적용된다 — 정책을 다시 만들지 않는다."
+        }
+      ],
+      "reference_impl": {
+        "path": "web/supabase/migrations/007_drop_fasting_reminder_cron.sql",
+        "why": "이 리포의 마이그레이션 문체 — 무엇을 왜 바꾸는지 주석으로 먼저 쓴다"
+      },
+      "already_tried": [
+        { "what": "diet_meal 현재 DDL 확인", "result": "001_init.sql:101 — id/owner_id/ts/note/items/kcal/protein_g 뿐. 영양 축이 kcal·protein 둘뿐이다" }
+      ],
+      "context": {
+        "spec_ref": ".claude/specs/ingreed-diet-nutrition/spec.md",
+        "facts": [
+          "이 마이그레이션은 오너 승인을 받았다",
+          "Supabase 프로젝트가 지금 일시정지 상태라 적용할 수 없다 (spec.md §6). 파일만 만든다",
+          "grade 컬럼은 일부러 만들지 않는다 — spec.md D8",
+          "source 는 'ingreed' | 'catalog' | 'llm' | 'generic' 을 담는 text 다"
+        ],
+        "conventions": [
+          "마이그레이션 파일명은 NNN_스네이크케이스.sql",
+          "주석은 한국어"
+        ],
+        "files": [
+          "web/supabase/migrations/001_init.sql",
+          "web/supabase/migrations/004_rls.sql",
+          "web/supabase/migrations/007_drop_fasting_reminder_cron.sql"
+        ],
+        "excluded": "Supabase 접속 정보는 일부러 안 보냈다. 적용은 상위 모델이 한다."
+      },
+      "constraints": {
+        "must": [
+          "파일 작성만 한다"
+        ],
+        "must_not": [
+          "Bash 는 인수 검사(grep)에만 쓴다. SQL 을 실행하지 않는다 — psql · supabase CLI · MCP · 어떤 DB 접속도 금지",
+          "기존 마이그레이션 파일을 수정하지 않는다",
+          "not null 제약이나 default 를 걸지 않는다 (기존 행이 있다)",
+          "grade 컬럼을 만들지 않는다"
+        ]
+      },
+      "tools_allowed": ["Read", "Write", "Grep", "Glob", "Bash"],
+      "budget": { "max_turns": 10, "wall_clock_s": 300 },
+      "on_failure": { "retry": 1, "partial_ok": false }
+    },
+    {
+      "task_id": "ingreed-client",
+      "kind": "implement",
+      "phase": "p2-wiring",
+      "model_hint": "sonnet",
+      "depends_on": ["map-ingreed-nutrition"],
+      "objective": "ingreed RPC 를 타임아웃·쿨다운·폴백과 함께 호출하는 서버 전용 클라이언트를 만든다.",
+      "done_when": [
+        "환경변수가 없으면 조용히 null 을 반환하고 예외를 던지지 않는다",
+        "타임아웃 4초 · 실패 후 20초 쿨다운 동안 호출을 건너뛴다",
+        "fetch 를 주입 가능한 인자로 받아 네트워크 없이 테스트된다",
+        "성공하면 쿨다운이 해제된다"
+      ],
+      "acceptance": {
+        "command": "npm run test",
+        "expect_exit_code": 0,
+        "expect_contains": ["passed"],
+        "cwd": "/Users/heejunyoo/IdeaProjects/KnowledgeApp/web"
+      },
+      "files_to_create": [
+        "web/lib/diet/ingreed-client.ts",
+        "web/tests/domain/ingreed-client.test.ts"
+      ],
+      "edit_points": [
+        {
+          "path": "web/lib/diet/ingreed-client.ts",
+          "symbol": "searchProducts, fetchProductDetail, FetchFn",
+          "what": "searchProducts(q, limit, fetchFn?) 와 fetchProductDetail(reportNo, fetchFn?). 둘 다 실패 시 null 반환. 쿨다운 상태는 모듈 스코프 변수로 두되 테스트가 초기화할 수 있게 resetCooldown() 을 export 한다."
+        },
+        {
+          "path": "web/tests/domain/ingreed-client.test.ts",
+          "symbol": "describe('ingreed-client')",
+          "what": "주입 fetchFn 으로: 정상 응답 파싱, 500 응답 → null, 타임아웃 → null, 실패 직후 재호출이 fetchFn 을 부르지 않음(쿨다운), 성공 후 쿨다운 해제, 환경변수 없음 → null 이고 fetchFn 미호출."
+        }
+      ],
+      "reference_impl": {
+        "path": "web/lib/diet/nutrition-enrich.ts",
+        "why": "오케스트레이터를 lib/diet/ 에 두고 함수를 주입 가능한 인자로 받는 배선. 실패를 에러가 아니라 폴백으로 처리하는 원칙이 그대로 적용된다"
+      },
+      "already_tried": [
+        { "what": "ingreed_search / ingreed_detail 실호출", "result": "HTTP 200. search cold 2.97s / warm 0.14~0.48s, detail 0.32s. 페이로드는 spec.md §2" }
+      ],
+      "context": {
+        "spec_ref": ".claude/specs/ingreed-diet-nutrition/spec.md",
+        "facts": [
+          "엔드포인트·인자·응답 모양은 spec.md §2 에 실측으로 있다",
+          "URL 과 anon key 는 환경변수 INGREED_URL · INGREED_ANON_KEY 로 받는다 (spec.md D4)",
+          "anon key 는 설계상 공개값이지만 파일에 박지 않는다",
+          "cold 실측이 2.97s 라 타임아웃 4초는 여유가 좁다 — 실패해도 폴백이 있으므로 괜찮다",
+          "web/ENV_EXAMPLE.txt 에 새 환경변수 2개를 추가한다"
+        ],
+        "conventions": [
+          "서버 전용 모듈이다. 'use client' 를 붙이지 않는다",
+          "키 없음·실패·파싱 실패는 전부 에러가 아니라 폴백이다 (G6-3 원칙)"
+        ],
+        "files": [
+          "web/lib/diet/nutrition-enrich.ts",
+          "web/lib/llm/throttle.ts",
+          "web/ENV_EXAMPLE.txt"
+        ],
+        "excluded": "실제 anon key 값은 안 보냈다. 환경변수로만 읽는다."
+      },
+      "constraints": {
+        "must": [
+          "fetch 를 주입 가능한 인자로 받아 네트워크 없이 테스트한다",
+          "ENV_EXAMPLE.txt 에 INGREED_URL · INGREED_ANON_KEY 를 추가한다"
+        ],
+        "must_not": [
+          "URL 이나 키를 소스에 하드코딩하지 않는다",
+          "테스트에서 실제 네트워크를 호출하지 않는다",
+          "실패를 throw 로 올리지 않는다"
+        ]
+      },
+      "tools_allowed": ["Read", "Write", "Edit", "Bash", "Grep", "Glob"],
+      "budget": { "max_turns": 30, "wall_clock_s": 1200 },
+      "on_failure": { "retry": 1, "partial_ok": false }
+    },
+    {
+      "task_id": "wire-db-and-rpc",
+      "kind": "implement",
+      "phase": "p2-wiring",
+      "model_hint": "sonnet",
+      "depends_on": ["ingreed-client", "write-migration-008"],
+      "objective": "insertMeal 을 영양 5필드까지 저장하도록 넓히고 제품 검색·기록 RPC 두 개를 배선한다.",
+      "done_when": [
+        "insertMeal 이 sugarG·sodiumMg·satFatG·source·ingreedReportNo 를 받아 저장한다",
+        "새 인자는 전부 선택이라 기존 호출부가 그대로 컴파일된다",
+        "diet.search_product · diet.log_product_meal 이 dispatch 에 등록된다",
+        "ingreed 조회 실패 시 기존 LLM 추정 경로로 폴백한다",
+        "next build 가 통과한다"
+      ],
+      "acceptance": {
+        "command": "npm run test && npx next build",
+        "expect_exit_code": 0,
+        "expect_contains": ["passed"],
+        "cwd": "/Users/heejunyoo/IdeaProjects/KnowledgeApp/web"
+      },
+      "edit_points": [
+        {
+          "path": "web/lib/db/diet.ts",
+          "symbol": "insertMeal",
+          "what": "params 에 sugarG·sodiumMg·satFatG·source·ingreedReportNo 를 선택 필드로 추가하고 insert 객체에 sugar_g·sodium_mg·satfat_g·source·ingreed_report_no 로 매핑한다. 기존 호출부를 깨지 않는다."
+        },
+        {
+          "path": "web/lib/rpc/handlers.ts",
+          "symbol": "diet_search_product, diet_log_product_meal",
+          "what": "diet_search_product(params) 는 ingreed-client 의 searchProducts 결과를 그대로 반환(grade 포함 — 표시용). diet_log_product_meal(params) 는 report_no·quantity 를 받아 detail 조회 → toServingNutrition → insertMeal. ingreed 가 null 이면 기존 diet_log_meal 경로(LLM 추정)로 폴백한다."
+        },
+        {
+          "path": "web/lib/rpc/dispatch.ts",
+          "symbol": "HANDLERS",
+          "what": "\"diet.search_product\": h.diet_search_product 와 \"diet.log_product_meal\": h.diet_log_product_meal 을 diet.log_meal 근처에 추가한다."
+        }
+      ],
+      "reference_impl": {
+        "path": "web/lib/rpc/handlers.ts",
+        "why": "같은 파일의 diet_estimate_nutrition(182행)이 params 언랩·폴백·반환 dict 규약의 본보기다"
+      },
+      "already_tried": [
+        { "what": "insertMeal 현재 구현 확인", "result": "lib/db/diet.ts:260. items/kcal/protein_g/note 만 insert 하고 endActiveFastIfDue 를 호출한다" },
+        { "what": "dispatch 등록 방식 확인", "result": "lib/rpc/dispatch.ts:15-33 의 HANDLERS 객체에 문자열 키로 등록" }
+      ],
+      "context": {
+        "spec_ref": ".claude/specs/ingreed-diet-nutrition/spec.md",
+        "facts": [
+          "diet_meal 컬럼은 마이그레이션 008 이 추가한다. 아직 적용되지 않았으므로 실 DB 왕복 테스트는 이번 태스크에서 하지 않는다",
+          "insertMeal 은 첫 식사가 활성 단식을 종료시키는 부수효과(endActiveFastIfDue)가 있다 — 건드리지 않는다",
+          "저장값은 기록 시점 스냅샷이다 (spec.md D7)",
+          "grade 는 저장하지 않는다 (spec.md D8). 검색 결과 반환에는 포함해도 된다 — 화면 표시용"
+        ],
+        "conventions": [
+          "핸들러는 unknown params 를 받아 내부에서 좁힌다",
+          "새 인자는 선택으로 추가해 기존 호출부를 깨지 않는다"
+        ],
+        "files": [
+          "web/lib/db/diet.ts",
+          "web/lib/rpc/handlers.ts",
+          "web/lib/rpc/dispatch.ts",
+          "web/lib/diet/ingreed-client.ts",
+          "web/lib/domain/ingreed-nutrition.ts"
+        ],
+        "excluded": "실 DB 회귀 테스트는 일부러 뺐다 — Supabase 프로젝트가 일시정지 상태다(spec.md §6). 상위 모델이 복구 후 돌린다."
+      },
+      "constraints": {
+        "must": [
+          "새 파라미터를 전부 선택으로 만들어 기존 호출부가 그대로 컴파일되게 한다",
+          "ingreed 실패 시 기존 LLM 추정 경로로 폴백한다"
+        ],
+        "must_not": [
+          "grade 를 diet_meal 에 저장하지 않는다",
+          "lib/domain/diet-read.ts 의 기존 계산을 고치지 않는다",
+          "기존 골든·회귀 테스트 파일을 수정하지 않는다",
+          "endActiveFastIfDue 호출을 제거하거나 순서를 바꾸지 않는다",
+          "실 DB 에 접속하거나 마이그레이션을 적용하지 않는다"
+        ]
+      },
+      "tools_allowed": ["Read", "Write", "Edit", "Bash", "Grep", "Glob"],
+      "budget": { "max_turns": 35, "wall_clock_s": 1500 },
+      "on_failure": { "retry": 1, "partial_ok": false }
+    },
+    {
+      "task_id": "diet-product-ui",
+      "kind": "implement",
+      "phase": "p3-ui",
+      "model_hint": "sonnet",
+      "depends_on": ["wire-db-and-rpc"],
+      "objective": "/diet 에 제품 이름 검색과 1회량·수량 확인 후 담기 흐름을 붙인다.",
+      "done_when": [
+        "이름으로 검색해 제품 목록이 뜨고 등급이 표시된다",
+        "제품을 고르면 1회량과 환산 영양값이 보이고 수량 배수를 바꿀 수 있다",
+        "1회량을 모르는 제품은 사용자가 g 을 직접 입력한다",
+        "담기를 누르면 diet.log_product_meal 이 호출된다",
+        "next build 가 통과한다"
+      ],
+      "acceptance": {
+        "command": "npm run test && npx next build",
+        "expect_exit_code": 0,
+        "expect_contains": ["/diet"],
+        "cwd": "/Users/heejunyoo/IdeaProjects/KnowledgeApp/web"
+      },
+      "edit_points": [
+        {
+          "path": "web/app/diet/page.tsx",
+          "symbol": "식사 기록 섹션",
+          "what": "기존 자유입력 기록 옆에 제품 검색 진입을 추가한다. 기존 자유입력 경로를 없애지 않는다 — ingreed 가 못 찾는 음식이 여전히 있다."
+        },
+        {
+          "path": "web/app/diet/page.module.css",
+          "symbol": "제품 검색 관련 클래스",
+          "what": "기존 클래스 명명·간격 토큰을 따른다. 새 색상 값을 도입하지 않는다."
+        }
+      ],
+      "reference_impl": {
+        "path": "web/app/search/page.tsx",
+        "why": "이 리포의 검색 입력·결과 목록·빈 상태 렌더링 규약"
+      },
+      "already_tried": [
+        { "what": "app/diet/page.tsx 규모 확인", "result": "809행. 기존 식사/운동/체중 기록 UI 가 이미 있다" }
+      ],
+      "context": {
+        "spec_ref": ".claude/specs/ingreed-diet-nutrition/spec.md",
+        "facts": [
+          "검색은 warm 0.14~0.48s 지만 cold 는 2.97s 다 — 로딩 상태를 반드시 보여준다",
+          "검색 실패 시 화면이 비지 않게 기존 자유입력으로 이어지게 한다",
+          "바코드 스캔은 만들지 않는다 (데이터가 없다 — spec.md §5)"
+        ],
+        "conventions": [
+          "문구는 해요체. 빈 상태는 짧게 (\"찾는 제품이 없어요\")",
+          "설명 문구를 늘어놓지 않는다. 표와 수치가 스스로 말하게 둔다",
+          "장식·이펙트를 넣지 않는다"
+        ],
+        "files": [
+          "web/app/diet/page.tsx",
+          "web/app/diet/page.module.css",
+          "web/app/search/page.tsx",
+          "web/components/ui"
+        ],
+        "excluded": "ingreed 의 근거 카드·원재료 표시 UI 는 이번 범위가 아니라 안 보냈다."
+      },
+      "constraints": {
+        "must": [
+          "로딩 상태를 표시한다",
+          "기존 자유입력 기록 경로를 남긴다"
+        ],
+        "must_not": [
+          "바코드 스캔 UI 를 만들지 않는다",
+          "등급을 하루 점수에 더하거나 합산 표시하지 않는다 — 제품별 표시만",
+          "새 색상·디자인 토큰을 도입하지 않는다",
+          "기존 식사·운동·체중 기록 UI 를 재작성하지 않는다"
+        ]
+      },
+      "tools_allowed": ["Read", "Write", "Edit", "Bash", "Grep", "Glob"],
+      "budget": { "max_turns": 35, "wall_clock_s": 1500 },
+      "on_failure": { "retry": 1, "partial_ok": false }
+    }
+  ]
+}
