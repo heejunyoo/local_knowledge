@@ -9,6 +9,8 @@ import { createClient } from "@/lib/supabase/server";
 import * as dietRead from "@/lib/domain/diet-read";
 import * as nutritionCalc from "@/lib/domain/diet-nutrition-calc";
 import { enrichWithLlm } from "@/lib/diet/nutrition-enrich";
+import { searchProducts, fetchProductDetail } from "@/lib/diet/ingreed-client";
+import { toServingNutrition, type IngreedProductNutrition, type IngreedNutrition } from "@/lib/domain/ingreed-nutrition";
 import * as dietDb from "@/lib/db/diet";
 import { fetchDietGoals, fetchDietProfile, fetchRecentDietSnapshots } from "@/lib/db/diet";
 import {
@@ -703,6 +705,79 @@ export async function diet_log_meal(params: unknown) {
   if (meal.kcal != null) out.kcal = meal.kcal;
   if (meal.proteinG != null) out.protein_g = meal.proteinG;
   if (meal.note != null) out.note = meal.note;
+  return out;
+}
+
+/**
+ * 기성식품을 이름으로 검색한다(ingreed_search 배선). 결과를 그대로 반환한다 —
+ * grade는 여기(검색 화면 표시)에서만 쓰고 diet_meal에는 저장하지 않는다(D8).
+ * ingreed 실패(환경변수 없음·타임아웃·쿨다운 등)는 에러가 아니라 빈 목록이다.
+ */
+export async function diet_search_product(params: unknown) {
+  const p = (params ?? {}) as { q?: string; query?: string; limit?: number };
+  const q = (p.q ?? p.query ?? "").trim();
+  if (!q) return { q, items: [] };
+  const limit = Math.max(1, Math.min(50, Math.trunc(p.limit ?? 20)));
+  const items = await searchProducts(q, limit);
+  return { q, items: items ?? [] };
+}
+
+/**
+ * report_no·quantity로 기성식품 상세를 조회해 1회 섭취량 기준 영양값으로
+ * 환산한 뒤 diet_meal에 기록한다(마이그레이션 008의 5필드까지). ingreed_detail
+ * 조회 자체가 실패하면(제품을 못 찾음·네트워크 등) 기존 diet.log_meal
+ * 경로(LLM 추정)로 폴백한다. 제품은 찾았지만 1회량을 못 구하면(servingG=null)
+ * 영양값을 지어내지 않고 그 사실을 그대로 응답에 드러낸다 — LLM 추정으로
+ * 대체하지 않는다(제품은 특정됐으므로 조회 실패가 아니다).
+ */
+export async function diet_log_product_meal(params: unknown) {
+  const p = (params ?? {}) as { report_no?: string; reportNo?: string; quantity?: number; note?: string };
+  const reportNo = p.report_no ?? p.reportNo ?? "";
+  if (!reportNo) return diet_log_meal(params);
+
+  const detail = await fetchProductDetail(reportNo);
+  if (!detail) return diet_log_meal(params);
+
+  const productRaw = detail.product ?? {};
+  const product: IngreedProductNutrition = {
+    reportNo: String(productRaw.report_no ?? reportNo),
+    name: String(productRaw.name ?? ""),
+    category: String(productRaw.category ?? ""),
+    nutrition: (productRaw.nutrition ?? null) as IngreedNutrition | null,
+  };
+  const quantity = typeof p.quantity === "number" && p.quantity > 0 ? p.quantity : 1;
+  const serving = toServingNutrition(product, quantity);
+
+  const meal = await dietDb.insertMeal({
+    items: [serving.itemLine],
+    kcal: serving.kcal,
+    proteinG: serving.proteinG,
+    note: typeof p.note === "string" ? p.note : null,
+    sugarG: serving.sugarG,
+    sodiumMg: serving.sodiumMg,
+    satFatG: serving.satFatG,
+    source: "ingreed",
+    ingreedReportNo: product.reportNo,
+  });
+
+  const out: Record<string, unknown> = {
+    id: meal.id,
+    ts: meal.ts,
+    items: meal.items,
+    source: "ingreed",
+    report_no: product.reportNo,
+    serving_g: serving.servingG,
+  };
+  if (meal.kcal != null) out.kcal = meal.kcal;
+  if (meal.proteinG != null) out.protein_g = meal.proteinG;
+  if (serving.sugarG != null) out.sugar_g = serving.sugarG;
+  if (serving.sodiumMg != null) out.sodium_mg = serving.sodiumMg;
+  if (serving.satFatG != null) out.satfat_g = serving.satFatG;
+  if (meal.note != null) out.note = meal.note;
+  if (serving.servingG === null) {
+    // 1회량을 못 구함 — 지어내지 않았다는 사실을 호출자가 알 수 있게 명시.
+    out.nutrition_unavailable = true;
+  }
   return out;
 }
 

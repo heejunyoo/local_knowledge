@@ -3,3 +3,8 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=
 SUPABASE_SERVICE_ROLE_KEY=
 SUPABASE_DB_URL=
 INGEST_API_TOKEN=
+# ingreed 제품 영양 연동(교차 프로젝트 Supabase RPC). 없으면 기능이 조용히
+# 꺼지고 기존 LLM 추정 폴백으로 넘어간다. anon key는 설계상 공개값이지만
+# 실제 값을 이 파일에 적지 않는다.
+INGREED_URL=
+INGREED_ANON_KEY=

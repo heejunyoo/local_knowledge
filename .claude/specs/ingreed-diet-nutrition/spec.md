@@ -42,6 +42,11 @@ POST https://pzatcwqxlwiearxcsyxm.supabase.co/rest/v1/rpc/ingreed_detail
 ```
 
 `ingreed_detail` 인자 `{in_report_no}` → `{product, score, sources, label}`.
+
+`product` 의 키는 **snake_case 다**(실측):
+`sub · name · hieng · maker · category · ing_canon · nutrition · report_no · ing_display · reported_at · unmatched_count`.
+→ `toServingNutrition` 의 `IngreedProductNutrition`(camelCase `reportNo`)으로 넘길 때 매핑이 필요하다.
+
 `product.nutrition` 은 jsonb 이고 **실측 페이로드**는 이 모양이다:
 
 ```json
@@ -81,7 +86,7 @@ POST https://pzatcwqxlwiearxcsyxm.supabase.co/rest/v1/rpc/ingreed_detail
 | D3 | 사용자가 **수량 배수**(0.5·1·2…)를 곱한다. 저장값은 배수 적용 후 | 반 봉지·두 개를 못 적으면 기록이 안 맞는다 |
 | D4 | ingreed URL·anon key 는 **환경변수**로 받는다(`INGREED_URL`·`INGREED_ANON_KEY`). 없으면 기능이 조용히 꺼지고 기존 경로로 폴백 | 이 리포 규약: 키를 파일에 박지 않는다. anon key 가 공개값이어도 마찬가지 |
 | D5 | ingreed 호출은 **서버(RPC 핸들러)에서만** 한다 | 이 리포의 모든 데이터 접근이 `lib/rpc/handlers.ts` 를 지난다. 클라이언트 직호출은 규약 이탈 |
-| D6 | 타임아웃 **4초** · 실패 시 **20초 쿨다운**(그동안 호출 스킵) | cold 실측 2.97s 위 여유. 쿨다운 값은 ingreed 가 같은 사고를 겪고 채택한 값 |
+| D6 | 타임아웃 **8초** · 실패 시 **20초 쿨다운**(그동안 호출 스킵) | ~~4초~~ → 8초로 **정정(2026-08-17)**. 실호출에서 cold 첫 질의가 4초를 넘겨 그대로 폴백으로 떨어졌다(같은 질의 warm 175ms). ingreed `docs/NEXT.md` 도 "첫 질의 하나가 4초를 넘길 수 있다"고 적고 있다 — 4초는 경계 위가 아니라 경계 그 자체였다. 쿨다운 값은 ingreed 가 같은 사고를 겪고 채택한 값 |
 | D7 | 조회한 영양값은 **기록 시점 스냅샷**으로 `diet_meal` 에 박아 저장한다. `ingreed_report_no` 도 함께 | ingreed 룰셋이 바뀌어도 과거 식단 기록이 흔들리면 안 된다 |
 | D8 | **`grade`(A~E)는 저장하지 않는다.** 검색 결과 화면에만 표시 | 경계 조항("하루 점수에 쓰지 않는다")을 컬럼을 안 만드는 것으로 강제한다 |
 | D9 | ingreed 조회 실패/미매칭 시에만 기존 LLM 추정 폴백(`enrichWithLlm`). 에러 경로가 아니다 | G6-3(전면 실패 시 extractive)과 같은 원칙 |

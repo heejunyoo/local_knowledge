@@ -30,6 +30,8 @@ const REGISTRY: Record<string, Handler> = {
   "diet.suggest": h.diet_suggest,
   "diet.goals.set": h.diet_goals_set,
   "diet.log_meal": h.diet_log_meal,
+  "diet.search_product": h.diet_search_product,
+  "diet.log_product_meal": h.diet_log_product_meal,
   "diet.log_workout": h.diet_log_workout,
   "diet.log_metric": h.diet_log_metric,
   "diet.delete_meal": h.diet_delete_meal,

@@ -263,6 +263,13 @@ export async function insertMeal(params: {
   proteinG: number | null;
   note: string | null;
   ts?: Date;
+  /** ingreed 제품 조회로 얻은 영양 스냅샷(선택) — 마이그레이션 008. 기존 호출부는 안 넘겨도 된다. */
+  sugarG?: number | null;
+  sodiumMg?: number | null;
+  satFatG?: number | null;
+  /** 레코드 출처: 'ingreed' | 'catalog' | 'llm' | 'generic' 등. 기록 시점 스냅샷(D7) — grade는 저장하지 않는다(D8). */
+  source?: string | null;
+  ingreedReportNo?: string | null;
 }): Promise<dietRead.Meal> {
   const supabase = await createClient();
   const ts = params.ts ?? new Date();
@@ -274,9 +281,34 @@ export async function insertMeal(params: {
     proteinG: params.proteinG,
     note: params.note,
   };
-  const { error } = await supabase
-    .from("diet_meal")
-    .insert({ id: meal.id, ts: meal.ts, items: meal.items, kcal: meal.kcal, protein_g: meal.proteinG, note: meal.note });
+  /**
+   * 008 컬럼은 **넘길 값이 있을 때만** 페이로드에 넣는다.
+   *
+   * 항상 넣으면 마이그레이션 008 이 적용되기 전에는 PostgREST 가 컬럼을 못 찾아
+   * `insertMeal` 전체가 실패한다 — ingreed 경로뿐 아니라 **기존 자유입력 식사 기록까지**
+   * 같이 죽는다. 새 기능이 옛 경로를 끌고 들어가면 안 된다.
+   * 008 이 적용되기 전에 ingreed 경로를 쓰면 그때는 소리내어 실패하는 것이 맞다.
+   */
+  const nutritionCols =
+    params.sugarG != null || params.sodiumMg != null || params.satFatG != null ||
+    params.source != null || params.ingreedReportNo != null
+      ? {
+          sugar_g: params.sugarG ?? null,
+          sodium_mg: params.sodiumMg ?? null,
+          satfat_g: params.satFatG ?? null,
+          source: params.source ?? null,
+          ingreed_report_no: params.ingreedReportNo ?? null,
+        }
+      : {};
+  const { error } = await supabase.from("diet_meal").insert({
+    id: meal.id,
+    ts: meal.ts,
+    items: meal.items,
+    kcal: meal.kcal,
+    protein_g: meal.proteinG,
+    note: meal.note,
+    ...nutritionCols,
+  });
   if (error) throw error;
   // 원본 logMeal(): 첫 식사가 활성 단식을 자동 종료시킨다(공복 창 종료).
   await endActiveFastIfDue("meal", ts);
