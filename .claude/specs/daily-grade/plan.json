@@ -6,7 +6,7 @@
   "phases": [
     {
       "id": "p1-standards",
-      "name": "외부 기준 원문 확인 (값을 지어내지 않기 위해 먼저 한다)",
+      "name": "외부 공중보건 기준 원문 확인",
       "exit_check": {
         "command": "test -f docs/HEALTH_STANDARDS_2026-08.md && grep -q 'https://' docs/HEALTH_STANDARDS_2026-08.md",
         "expect_exit_code": 0
@@ -19,7 +19,9 @@
       "exit_check": {
         "command": "cd /Users/heejunyoo/IdeaProjects/KnowledgeApp/web && npm run test",
         "expect_exit_code": 0,
-        "expect_contains": ["passed"]
+        "expect_contains": [
+          "passed"
+        ]
       },
       "rollback": "git checkout -- web/lib/domain web/tests/domain"
     },
@@ -29,7 +31,9 @@
       "exit_check": {
         "command": "cd /Users/heejunyoo/IdeaProjects/KnowledgeApp/web && npm run test",
         "expect_exit_code": 0,
-        "expect_contains": ["passed"]
+        "expect_contains": [
+          "passed"
+        ]
       },
       "rollback": "git checkout -- web/lib/domain web/tests/domain"
     },
@@ -37,9 +41,11 @@
       "id": "p4-pipe",
       "name": "활동 데이터 파이프 확장 + RPC 배선",
       "exit_check": {
-        "command": "cd /Users/heejunyoo/IdeaProjects/KnowledgeApp/web && npm run test && npx next build",
+        "command": "grep -q '단축어' /Users/heejunyoo/IdeaProjects/KnowledgeApp/docs/HEALTH_STANDARDS_2026-08.md && cd /Users/heejunyoo/IdeaProjects/KnowledgeApp/web && npm run test && npx next build",
         "expect_exit_code": 0,
-        "expect_contains": ["passed"]
+        "expect_contains": [
+          "passed"
+        ]
       },
       "rollback": "git checkout -- web/lib web/tests && git clean -f web/supabase/migrations"
     },
@@ -49,7 +55,9 @@
       "exit_check": {
         "command": "cd /Users/heejunyoo/IdeaProjects/KnowledgeApp/web && npm run test && npx next build",
         "expect_exit_code": 0,
-        "expect_contains": ["/"]
+        "expect_contains": [
+          "/"
+        ]
       },
       "rollback": "git checkout -- web/app web/components"
     }
@@ -72,9 +80,14 @@
         "expect_exit_code": 0,
         "cwd": "/Users/heejunyoo/IdeaProjects/KnowledgeApp"
       },
-      "files_to_create": ["docs/HEALTH_STANDARDS_2026-08.md"],
+      "files_to_create": [
+        "docs/HEALTH_STANDARDS_2026-08.md"
+      ],
       "already_tried": [
-        { "what": "코드 내 권장치 함수 확인", "result": "recommendedProteinG=체중×1.6, RECOMMENDED_WEEKLY_WORKOUTS/MINUTES 는 활동수준별 하드코딩. 셋 다 출처 주석이 없다" }
+        {
+          "what": "코드 내 권장치 함수 확인",
+          "result": "recommendedProteinG=체중×1.6, RECOMMENDED_WEEKLY_WORKOUTS/MINUTES 는 활동수준별 하드코딩. 셋 다 출처 주석이 없다"
+        }
       ],
       "context": {
         "spec_ref": ".claude/specs/daily-grade/spec.md",
@@ -87,7 +100,9 @@
           "이 리포는 확인하지 않은 근거를 사전에 넣지 않는다",
           "문서는 한국어. 표로 정리한다"
         ],
-        "files": ["web/lib/domain/diet-read.ts"],
+        "files": [
+          "web/lib/domain/diet-read.ts"
+        ],
         "excluded": "채점 로직은 이 태스크의 범위가 아니다. 숫자와 출처만 모은다."
       },
       "constraints": {
@@ -104,21 +119,55 @@
           "git commit 을 하지 않는다"
         ]
       },
-      "tools_allowed": ["WebSearch", "WebFetch", "Read", "Write", "Bash", "Grep"],
-      "budget": { "max_turns": 40, "wall_clock_s": 1800 },
+      "tools_allowed": [
+        "WebSearch",
+        "WebFetch",
+        "Read",
+        "Write",
+        "Bash",
+        "Grep"
+      ],
+      "budget": {
+        "max_turns": 40,
+        "wall_clock_s": 1800
+      },
       "return_schema": {
-        "sleep_hours": { "min": "number", "max": "number", "agency": "string", "year": "number", "url": "string" },
-        "activity_weekly_minutes": { "moderate": "number", "agency": "string", "year": "number", "url": "string" },
-        "daily_limits": { "sugar_g": "number|null", "sodium_mg": "number|null", "satfat_g": "number|null", "sources": "array" },
-        "protein": { "g_per_kg": "number", "agency": "string", "url": "string", "matches_code_1_6": "boolean|null" },
+        "sleep_hours": {
+          "min": "number",
+          "max": "number",
+          "agency": "string",
+          "year": "number",
+          "url": "string"
+        },
+        "activity_weekly_minutes": {
+          "moderate": "number",
+          "agency": "string",
+          "year": "number",
+          "url": "string"
+        },
+        "daily_limits": {
+          "sugar_g": "number|null",
+          "sodium_mg": "number|null",
+          "satfat_g": "number|null",
+          "sources": "array"
+        },
+        "protein": {
+          "g_per_kg": "number",
+          "agency": "string",
+          "url": "string",
+          "matches_code_1_6": "boolean|null"
+        },
         "unverified": "array"
       },
-      "on_failure": { "retry": 1, "partial_ok": true }
+      "on_failure": {
+        "retry": 1,
+        "partial_ok": true
+      }
     },
     {
       "task_id": "research-shortcuts-healthkit",
       "kind": "investigate",
-      "phase": "p1-standards",
+      "phase": "p4-pipe",
       "model_hint": "sonnet",
       "objective": "iOS 단축어가 HealthKit 에서 내보낼 수 있는 항목을 확인해 활동 축에 쓸 수 있는 필드를 정한다.",
       "done_when": [
@@ -131,10 +180,19 @@
         "expect_exit_code": 0,
         "cwd": "/Users/heejunyoo/IdeaProjects/KnowledgeApp"
       },
-      "depends_on": ["research-health-standards"],
       "already_tried": [
-        { "what": "리포 내 HealthKit 네이티브 리더 탐색", "result": "HKQuantityTypeIdentifier 0건. 단축어 → /api/health/ingest Bearer POST 가 유일한 경로다" },
-        { "what": "현 수용 필드 확인", "result": "workout(kind,minutes) · metric(weight_kg, sleep_h) 뿐" }
+        {
+          "what": "리포 내 HealthKit 네이티브 리더 탐색",
+          "result": "HKQuantityTypeIdentifier 0건. 단축어 → /api/health/ingest Bearer POST 가 유일한 경로다"
+        },
+        {
+          "what": "현 수용 필드 확인",
+          "result": "workout(kind,minutes) · metric(weight_kg, sleep_h) 뿐"
+        },
+        {
+          "what": "2026-08-20 1차 디스패치",
+          "result": "세션 한도(API)로 중단됨. 패킷 문제가 아니다 — 그대로 재실행하면 된다"
+        }
       ],
       "context": {
         "spec_ref": ".claude/specs/daily-grade/spec.md",
@@ -143,12 +201,20 @@
           "활동 축은 운동 분만으로 먼저 동작하고, 걸음수는 확인되면 하위 항목으로 붙는다(spec.md D-G)",
           "결과는 research-health-standards 가 만든 docs/HEALTH_STANDARDS_2026-08.md 에 절을 추가해 적는다"
         ],
-        "conventions": ["문서는 한국어. 판정은 가능/불가능/불확실 3값"],
-        "files": ["web/lib/health-ingest.ts", "docs/ENV_VARS.md"],
+        "conventions": [
+          "문서는 한국어. 판정은 가능/불가능/불확실 3값"
+        ],
+        "files": [
+          "web/lib/health-ingest.ts",
+          "docs/ENV_VARS.md"
+        ],
         "excluded": "스키마 변경과 코드 수정은 Phase 4 의 일이다."
       },
       "constraints": {
-        "must": ["판정마다 근거를 남긴다", "불확실한 것은 불확실하다고 적는다"],
+        "must": [
+          "판정마다 근거를 남긴다",
+          "불확실한 것은 불확실하다고 적는다"
+        ],
         "must_not": [
           "코드를 수정하지 않는다",
           "기억으로 단정하지 않는다",
@@ -156,16 +222,41 @@
           "git commit 을 하지 않는다"
         ]
       },
-      "tools_allowed": ["WebSearch", "WebFetch", "Read", "Edit", "Bash", "Grep"],
-      "budget": { "max_turns": 30, "wall_clock_s": 1500 },
+      "tools_allowed": [
+        "WebSearch",
+        "WebFetch",
+        "Read",
+        "Edit",
+        "Bash",
+        "Grep"
+      ],
+      "budget": {
+        "max_turns": 30,
+        "wall_clock_s": 1500
+      },
       "return_schema": {
-        "steps": { "verdict": "string", "evidence": "string" },
-        "active_energy": { "verdict": "string", "evidence": "string" },
-        "resting_hr": { "verdict": "string", "evidence": "string" },
-        "sleep_stages": { "verdict": "string", "evidence": "string" },
+        "steps": {
+          "verdict": "string",
+          "evidence": "string"
+        },
+        "active_energy": {
+          "verdict": "string",
+          "evidence": "string"
+        },
+        "resting_hr": {
+          "verdict": "string",
+          "evidence": "string"
+        },
+        "sleep_stages": {
+          "verdict": "string",
+          "evidence": "string"
+        },
         "owner_checks": "array"
       },
-      "on_failure": { "retry": 1, "partial_ok": true }
+      "on_failure": {
+        "retry": 1,
+        "partial_ok": true
+      }
     },
     {
       "task_id": "grade-core",
@@ -183,10 +274,15 @@
       "acceptance": {
         "command": "npm run test",
         "expect_exit_code": 0,
-        "expect_contains": ["passed"],
+        "expect_contains": [
+          "passed"
+        ],
         "cwd": "/Users/heejunyoo/IdeaProjects/KnowledgeApp/web"
       },
-      "files_to_create": ["web/lib/domain/day-grade.ts", "web/tests/domain/day-grade.test.ts"],
+      "files_to_create": [
+        "web/lib/domain/day-grade.ts",
+        "web/tests/domain/day-grade.test.ts"
+      ],
       "edit_points": [
         {
           "path": "web/lib/domain/day-grade.ts",
@@ -204,8 +300,14 @@
         "why": "ScoreResult 의 모양(score·grade·confidence·ratable·breakdown·reasons·rulesetVersion)만 가져온다. 재정규화 규칙과 임계값은 가져오지 않는다 — spec.md D-A 가 다르다"
       },
       "already_tried": [
-        { "what": "하루 등급 코드 존재 확인", "result": "0줄. 새로 만든다" },
-        { "what": "DaySnapshot 구조 확인", "result": "수면은 최상위에 없고 metrics[].sleepH 안에 있다" }
+        {
+          "what": "하루 등급 코드 존재 확인",
+          "result": "0줄. 새로 만든다"
+        },
+        {
+          "what": "DaySnapshot 구조 확인",
+          "result": "수면은 최상위에 없고 metrics[].sleepH 안에 있다"
+        }
       ],
       "context": {
         "spec_ref": ".claude/specs/daily-grade/spec.md",
@@ -242,16 +344,33 @@
           "git commit 을 하지 않는다"
         ]
       },
-      "tools_allowed": ["Read", "Write", "Edit", "Bash", "Grep", "Glob"],
-      "budget": { "max_turns": 35, "wall_clock_s": 1800 },
-      "on_failure": { "retry": 1, "partial_ok": false }
+      "tools_allowed": [
+        "Read",
+        "Write",
+        "Edit",
+        "Bash",
+        "Grep",
+        "Glob"
+      ],
+      "budget": {
+        "max_turns": 35,
+        "wall_clock_s": 1800
+      },
+      "on_failure": {
+        "retry": 1,
+        "partial_ok": false
+      }
     },
     {
       "task_id": "grade-thresholds",
       "kind": "implement",
       "phase": "p3-thresholds",
       "model_hint": "sonnet",
-      "depends_on": ["grade-core", "research-health-standards", "research-shortcuts-healthkit"],
+      "depends_on": [
+        "grade-core",
+        "research-health-standards",
+        "research-shortcuts-healthkit"
+      ],
       "objective": "조사된 공식 기준으로 임계값과 등급 컷을 확정하고 출처를 코드에 남긴다.",
       "done_when": [
         "임계값마다 기관·연도·URL 이 주석에 있다",
@@ -262,10 +381,15 @@
       "acceptance": {
         "command": "npm run test",
         "expect_exit_code": 0,
-        "expect_contains": ["passed"],
+        "expect_contains": [
+          "passed"
+        ],
         "cwd": "/Users/heejunyoo/IdeaProjects/KnowledgeApp/web"
       },
-      "files_to_create": ["web/lib/domain/day-grade-thresholds.ts", "web/tests/domain/day-grade-thresholds.test.ts"],
+      "files_to_create": [
+        "web/lib/domain/day-grade-thresholds.ts",
+        "web/tests/domain/day-grade-thresholds.test.ts"
+      ],
       "edit_points": [
         {
           "path": "web/lib/domain/day-grade-thresholds.ts",
@@ -278,7 +402,10 @@
         "why": "NUTRITION_THRESHOLDS 가 카테고리별 임계값을 출처 주석과 함께 두는 방식의 본보기"
       },
       "already_tried": [
-        { "what": "코드 내 권장치 함수 확인", "result": "bmr·tdee·recommendedKcal·recommendedProteinG·recommendedWorkoutMinutesPerDay 가 이미 있다 — 다시 만들지 않는다" }
+        {
+          "what": "코드 내 권장치 함수 확인",
+          "result": "bmr·tdee·recommendedKcal·recommendedProteinG·recommendedWorkoutMinutesPerDay 가 이미 있다 — 다시 만들지 않는다"
+        }
       ],
       "context": {
         "spec_ref": ".claude/specs/daily-grade/spec.md",
@@ -310,16 +437,31 @@
           "git commit 을 하지 않는다"
         ]
       },
-      "tools_allowed": ["Read", "Write", "Edit", "Bash", "Grep", "Glob"],
-      "budget": { "max_turns": 30, "wall_clock_s": 1500 },
-      "on_failure": { "retry": 1, "partial_ok": false }
+      "tools_allowed": [
+        "Read",
+        "Write",
+        "Edit",
+        "Bash",
+        "Grep",
+        "Glob"
+      ],
+      "budget": {
+        "max_turns": 30,
+        "wall_clock_s": 1500
+      },
+      "on_failure": {
+        "retry": 1,
+        "partial_ok": false
+      }
     },
     {
       "task_id": "widen-health-ingest",
       "kind": "implement",
       "phase": "p4-pipe",
       "model_hint": "sonnet",
-      "depends_on": ["research-shortcuts-healthkit"],
+      "depends_on": [
+        "research-shortcuts-healthkit"
+      ],
       "objective": "걸음수·활동에너지를 받도록 health.ingest 를 넓힌다.",
       "done_when": [
         "metric 샘플이 steps·active_energy_kcal 을 받는다",
@@ -329,16 +471,32 @@
       "acceptance": {
         "command": "npm run test",
         "expect_exit_code": 0,
-        "expect_contains": ["passed"],
+        "expect_contains": [
+          "passed"
+        ],
         "cwd": "/Users/heejunyoo/IdeaProjects/KnowledgeApp/web"
       },
       "edit_points": [
-        { "path": "web/lib/health-ingest.ts", "symbol": "IngestSample, ingestHealthSamples", "what": "metric 분기에 steps·active_energy_kcal 을 추가한다. 기존 '둘 다 없으면 에러' 검사에 새 필드를 포함시킨다." },
-        { "path": "web/lib/domain/diet-read.ts", "symbol": "Metric", "what": "steps·activeEnergyKcal 을 선택 필드로 추가한다. 기존 계산은 건드리지 않는다." }
+        {
+          "path": "web/lib/health-ingest.ts",
+          "symbol": "IngestSample, ingestHealthSamples",
+          "what": "metric 분기에 steps·active_energy_kcal 을 추가한다. 기존 '둘 다 없으면 에러' 검사에 새 필드를 포함시킨다."
+        },
+        {
+          "path": "web/lib/domain/diet-read.ts",
+          "symbol": "Metric",
+          "what": "steps·activeEnergyKcal 을 선택 필드로 추가한다. 기존 계산은 건드리지 않는다."
+        }
       ],
-      "reference_impl": { "path": "web/lib/health-ingest.ts", "why": "같은 파일의 weight_kg/sleep_h 처리(snake·camel 양쪽 수용, parseIngestNumber)를 그대로 따른다" },
+      "reference_impl": {
+        "path": "web/lib/health-ingest.ts",
+        "why": "같은 파일의 weight_kg/sleep_h 처리(snake·camel 양쪽 수용, parseIngestNumber)를 그대로 따른다"
+      },
       "already_tried": [
-        { "what": "현 수용 필드 확인", "result": "workout(kind,minutes) · metric(weight_kg, sleep_h). metric 은 둘 다 없으면 에러를 낸다" }
+        {
+          "what": "현 수용 필드 확인",
+          "result": "workout(kind,minutes) · metric(weight_kg, sleep_h). metric 은 둘 다 없으면 에러를 낸다"
+        }
       ],
       "context": {
         "spec_ref": ".claude/specs/daily-grade/spec.md",
@@ -347,12 +505,22 @@
           "DB 컬럼은 마이그레이션 009 가 추가한다(별도 태스크). 이 태스크는 코드만 넓힌다",
           "무엇을 추가할지는 research-shortcuts-healthkit 의 판정을 따른다"
         ],
-        "conventions": ["snake_case·camelCase 양쪽을 받는다", "새 필드는 선택으로 추가해 기존 호출을 깨지 않는다"],
-        "files": ["web/lib/health-ingest.ts", "web/lib/domain/diet-read.ts", "web/tests/domain/health-ingest.test.ts"],
+        "conventions": [
+          "snake_case·camelCase 양쪽을 받는다",
+          "새 필드는 선택으로 추가해 기존 호출을 깨지 않는다"
+        ],
+        "files": [
+          "web/lib/health-ingest.ts",
+          "web/lib/domain/diet-read.ts",
+          "web/tests/domain/health-ingest.test.ts"
+        ],
         "excluded": "마이그레이션 파일과 RPC 배선은 같은 Phase 의 다른 태스크다."
       },
       "constraints": {
-        "must": ["기존 호출부가 그대로 동작하게 한다", "조사 판정에 없는 필드를 추가하지 않는다"],
+        "must": [
+          "기존 호출부가 그대로 동작하게 한다",
+          "조사 판정에 없는 필드를 추가하지 않는다"
+        ],
         "must_not": [
           "service role 사용 범위를 다른 파일로 넓히지 않는다",
           "lib/domain/diet-read.ts 의 기존 계산 함수를 고치지 않는다 — 타입에 선택 필드만 추가한다",
@@ -361,9 +529,22 @@
           "git commit 을 하지 않는다"
         ]
       },
-      "tools_allowed": ["Read", "Write", "Edit", "Bash", "Grep", "Glob"],
-      "budget": { "max_turns": 25, "wall_clock_s": 1200 },
-      "on_failure": { "retry": 1, "partial_ok": false }
+      "tools_allowed": [
+        "Read",
+        "Write",
+        "Edit",
+        "Bash",
+        "Grep",
+        "Glob"
+      ],
+      "budget": {
+        "max_turns": 25,
+        "wall_clock_s": 1200
+      },
+      "on_failure": {
+        "retry": 1,
+        "partial_ok": false
+      }
     },
     {
       "task_id": "write-migration-009",
@@ -381,13 +562,25 @@
         "expect_exit_code": 0,
         "cwd": "/Users/heejunyoo/IdeaProjects/KnowledgeApp/web"
       },
-      "files_to_create": ["web/supabase/migrations/009_diet_metric_activity.sql"],
-      "edit_points": [
-        { "path": "web/supabase/migrations/009_diet_metric_activity.sql", "symbol": "alter table diet_metric", "what": "steps integer · active_energy_kcal numeric 을 add column 한다. 기존 행이 있으므로 not null 을 걸지 않는다. RLS 는 004_rls.sql 의 테이블 단위 정책이 그대로 적용되므로 재정의하지 않는다." }
+      "files_to_create": [
+        "web/supabase/migrations/009_diet_metric_activity.sql"
       ],
-      "reference_impl": { "path": "web/supabase/migrations/008_diet_meal_nutrition.sql", "why": "직전 마이그레이션의 문체 — 무엇을 왜 바꾸는지 주석으로 먼저 쓴다" },
+      "edit_points": [
+        {
+          "path": "web/supabase/migrations/009_diet_metric_activity.sql",
+          "symbol": "alter table diet_metric",
+          "what": "steps integer · active_energy_kcal numeric 을 add column 한다. 기존 행이 있으므로 not null 을 걸지 않는다. RLS 는 004_rls.sql 의 테이블 단위 정책이 그대로 적용되므로 재정의하지 않는다."
+        }
+      ],
+      "reference_impl": {
+        "path": "web/supabase/migrations/008_diet_meal_nutrition.sql",
+        "why": "직전 마이그레이션의 문체 — 무엇을 왜 바꾸는지 주석으로 먼저 쓴다"
+      },
       "already_tried": [
-        { "what": "diet_metric 현재 DDL 확인", "result": "001_init.sql — id/owner_id/ts/weight_kg/sleep_h, 005 에서 context 추가됨" }
+        {
+          "what": "diet_metric 현재 DDL 확인",
+          "result": "001_init.sql — id/owner_id/ts/weight_kg/sleep_h, 005 에서 context 추가됨"
+        }
       ],
       "context": {
         "spec_ref": ".claude/specs/daily-grade/spec.md",
@@ -395,12 +588,21 @@
           "Supabase 프로젝트가 일시정지라 적용할 수 없다. 파일만 만든다",
           "008 이 아직 적용되지 않았다 — 009 는 그 다음 번호일 뿐 의존하지 않는다"
         ],
-        "conventions": ["파일명은 NNN_스네이크케이스.sql", "주석은 한국어"],
-        "files": ["web/supabase/migrations/001_init.sql", "web/supabase/migrations/005_diet_metric_context.sql", "web/supabase/migrations/008_diet_meal_nutrition.sql"],
+        "conventions": [
+          "파일명은 NNN_스네이크케이스.sql",
+          "주석은 한국어"
+        ],
+        "files": [
+          "web/supabase/migrations/001_init.sql",
+          "web/supabase/migrations/005_diet_metric_context.sql",
+          "web/supabase/migrations/008_diet_meal_nutrition.sql"
+        ],
         "excluded": "Supabase 접속 정보는 안 보냈다. 적용은 상위 모델이 한다."
       },
       "constraints": {
-        "must": ["파일 작성만 한다"],
+        "must": [
+          "파일 작성만 한다"
+        ],
         "must_not": [
           "Bash 는 인수 검사(grep)에만 쓴다. SQL 을 실행하지 않는다 — psql · supabase CLI · MCP · 어떤 DB 접속도 금지",
           "기존 마이그레이션 파일을 수정하지 않는다",
@@ -408,16 +610,31 @@
           "git commit 을 하지 않는다"
         ]
       },
-      "tools_allowed": ["Read", "Write", "Grep", "Glob", "Bash"],
-      "budget": { "max_turns": 10, "wall_clock_s": 300 },
-      "on_failure": { "retry": 1, "partial_ok": false }
+      "tools_allowed": [
+        "Read",
+        "Write",
+        "Grep",
+        "Glob",
+        "Bash"
+      ],
+      "budget": {
+        "max_turns": 10,
+        "wall_clock_s": 300
+      },
+      "on_failure": {
+        "retry": 1,
+        "partial_ok": false
+      }
     },
     {
       "task_id": "wire-day-grade-rpc",
       "kind": "implement",
       "phase": "p4-pipe",
       "model_hint": "sonnet",
-      "depends_on": ["grade-thresholds", "widen-health-ingest"],
+      "depends_on": [
+        "grade-thresholds",
+        "widen-health-ingest"
+      ],
       "objective": "day.grade RPC 를 배선해 화면이 하루 등급을 받아갈 수 있게 한다.",
       "done_when": [
         "day.grade 가 오늘(또는 지정한 날짜)의 등급을 돌려준다",
@@ -428,17 +645,36 @@
       "acceptance": {
         "command": "npm run test && npx next build",
         "expect_exit_code": 0,
-        "expect_contains": ["passed"],
+        "expect_contains": [
+          "passed"
+        ],
         "cwd": "/Users/heejunyoo/IdeaProjects/KnowledgeApp/web"
       },
       "edit_points": [
-        { "path": "web/lib/rpc/handlers.ts", "symbol": "day_grade", "what": "DaySnapshot 과 Profile 을 읽어 thresholdsFor(profile) → gradeDay() 를 부르고 결과 dict 를 반환한다. 프로필이 불완전하면(profileIsComplete=false) 프로필 의존 축을 결측 처리한다." },
-        { "path": "web/lib/rpc/dispatch.ts", "symbol": "HANDLERS", "what": "\"day.grade\": h.day_grade 를 추가한다." }
+        {
+          "path": "web/lib/rpc/handlers.ts",
+          "symbol": "day_grade",
+          "what": "DaySnapshot 과 Profile 을 읽어 thresholdsFor(profile) → gradeDay() 를 부르고 결과 dict 를 반환한다. 프로필이 불완전하면(profileIsComplete=false) 프로필 의존 축을 결측 처리한다."
+        },
+        {
+          "path": "web/lib/rpc/dispatch.ts",
+          "symbol": "HANDLERS",
+          "what": "\"day.grade\": h.day_grade 를 추가한다."
+        }
       ],
-      "reference_impl": { "path": "web/lib/rpc/handlers.ts", "why": "같은 파일의 diet_dashboard 가 DaySnapshot·Profile 을 읽어 조립하는 방식의 본보기" },
+      "reference_impl": {
+        "path": "web/lib/rpc/handlers.ts",
+        "why": "같은 파일의 diet_dashboard 가 DaySnapshot·Profile 을 읽어 조립하는 방식의 본보기"
+      },
       "already_tried": [
-        { "what": "dispatch 등록 방식 확인", "result": "lib/rpc/dispatch.ts 의 HANDLERS 객체에 문자열 키로 등록" },
-        { "what": "profileIsComplete 존재 확인", "result": "diet-read.ts 에 있다 — 재사용한다" }
+        {
+          "what": "dispatch 등록 방식 확인",
+          "result": "lib/rpc/dispatch.ts 의 HANDLERS 객체에 문자열 키로 등록"
+        },
+        {
+          "what": "profileIsComplete 존재 확인",
+          "result": "diet-read.ts 에 있다 — 재사용한다"
+        }
       ],
       "context": {
         "spec_ref": ".claude/specs/daily-grade/spec.md",
@@ -447,12 +683,23 @@
           "Supabase 가 일시정지라 실 DB 왕복 테스트는 하지 않는다",
           "프로필이 불완전한 것은 구조적 결측이 아니라 설정 미완료다 — 화면이 프로필 입력을 유도할 수 있게 그 사실을 응답에 드러낸다"
         ],
-        "conventions": ["핸들러는 unknown params 를 받아 내부에서 좁힌다", "응답 키는 snake_case"],
-        "files": ["web/lib/rpc/handlers.ts", "web/lib/rpc/dispatch.ts", "web/lib/domain/day-grade.ts", "web/lib/domain/day-grade-thresholds.ts"],
+        "conventions": [
+          "핸들러는 unknown params 를 받아 내부에서 좁힌다",
+          "응답 키는 snake_case"
+        ],
+        "files": [
+          "web/lib/rpc/handlers.ts",
+          "web/lib/rpc/dispatch.ts",
+          "web/lib/domain/day-grade.ts",
+          "web/lib/domain/day-grade-thresholds.ts"
+        ],
         "excluded": "화면은 Phase 5 다."
       },
       "constraints": {
-        "must": ["등급을 저장하지 않고 계산한다", "룰셋 버전을 응답에 담는다"],
+        "must": [
+          "등급을 저장하지 않고 계산한다",
+          "룰셋 버전을 응답에 담는다"
+        ],
         "must_not": [
           "day-grade.ts · day-grade-thresholds.ts 를 수정하지 않는다",
           "lib/domain/diet-read.ts 의 기존 계산을 고치지 않는다",
@@ -461,16 +708,31 @@
           "git commit 을 하지 않는다"
         ]
       },
-      "tools_allowed": ["Read", "Write", "Edit", "Bash", "Grep", "Glob"],
-      "budget": { "max_turns": 30, "wall_clock_s": 1500 },
-      "on_failure": { "retry": 1, "partial_ok": false }
+      "tools_allowed": [
+        "Read",
+        "Write",
+        "Edit",
+        "Bash",
+        "Grep",
+        "Glob"
+      ],
+      "budget": {
+        "max_turns": 30,
+        "wall_clock_s": 1500
+      },
+      "on_failure": {
+        "retry": 1,
+        "partial_ok": false
+      }
     },
     {
       "task_id": "tabs-to-three",
       "kind": "implement",
       "phase": "p5-ia",
       "model_hint": "sonnet",
-      "depends_on": ["wire-day-grade-rpc"],
+      "depends_on": [
+        "wire-day-grade-rpc"
+      ],
       "objective": "탭을 오늘·돌아보기·묻기 셋으로 줄이고 나머지 화면을 그 아래로 넣는다.",
       "done_when": [
         "탭이 셋이다 — 오늘(/) · 돌아보기(/review) · 묻기(/ask)",
@@ -481,17 +743,37 @@
       "acceptance": {
         "command": "npm run test && npx next build",
         "expect_exit_code": 0,
-        "expect_contains": ["passed"],
+        "expect_contains": [
+          "passed"
+        ],
         "cwd": "/Users/heejunyoo/IdeaProjects/KnowledgeApp/web"
       },
       "edit_points": [
-        { "path": "web/components/BottomNav.tsx", "symbol": "탭 목록", "what": "6개를 3개로 줄인다. 홈→오늘, 신규 돌아보기, 채팅+검색→묻기. 설정은 탭에서 제거." },
-        { "path": "web/app/review/page.tsx", "symbol": "ReviewPage", "what": "신규 — 과거의 날들·추세. 기존 assistant.week_review 를 재사용해 얇게 시작한다." },
-        { "path": "web/app/ask/page.tsx", "symbol": "AskPage", "what": "신규 — 묻기. 기존 /chat 과 /search 로 가는 두 갈래를 한 화면에서 고르게 한다. 기능을 재구현하지 않는다." }
+        {
+          "path": "web/components/BottomNav.tsx",
+          "symbol": "탭 목록",
+          "what": "6개를 3개로 줄인다. 홈→오늘, 신규 돌아보기, 채팅+검색→묻기. 설정은 탭에서 제거."
+        },
+        {
+          "path": "web/app/review/page.tsx",
+          "symbol": "ReviewPage",
+          "what": "신규 — 과거의 날들·추세. 기존 assistant.week_review 를 재사용해 얇게 시작한다."
+        },
+        {
+          "path": "web/app/ask/page.tsx",
+          "symbol": "AskPage",
+          "what": "신규 — 묻기. 기존 /chat 과 /search 로 가는 두 갈래를 한 화면에서 고르게 한다. 기능을 재구현하지 않는다."
+        }
       ],
-      "reference_impl": { "path": "web/app/search/page.tsx", "why": "이 리포의 페이지 구조·컴포넌트 사용·빈 상태 규약" },
+      "reference_impl": {
+        "path": "web/app/search/page.tsx",
+        "why": "이 리포의 페이지 구조·컴포넌트 사용·빈 상태 규약"
+      },
       "already_tried": [
-        { "what": "탭 구성 확인", "result": "홈·채팅·검색·식단·인박스·설정 6개. BottomNav.tsx 39행, AppShell.tsx 24행" }
+        {
+          "what": "탭 구성 확인",
+          "result": "홈·채팅·검색·식단·인박스·설정 6개. BottomNav.tsx 39행, AppShell.tsx 24행"
+        }
       ],
       "context": {
         "spec_ref": ".claude/specs/daily-grade/spec.md",
@@ -500,12 +782,24 @@
           "라우트를 지우지 않는다 — 탭에서 내릴 뿐이다. 지우면 되돌리기 어렵고 링크가 깨진다",
           "묻기 화면은 기존 /chat·/search 기능을 재구현하지 않는다. 진입점만 합친다"
         ],
-        "conventions": ["문구는 해요체", "장식·이펙트를 넣지 않는다", "새 색상·디자인 토큰을 도입하지 않는다"],
-        "files": ["web/components/BottomNav.tsx", "web/components/AppShell.tsx", "web/app/search/page.tsx", "web/app/chat"],
+        "conventions": [
+          "문구는 해요체",
+          "장식·이펙트를 넣지 않는다",
+          "새 색상·디자인 토큰을 도입하지 않는다"
+        ],
+        "files": [
+          "web/components/BottomNav.tsx",
+          "web/components/AppShell.tsx",
+          "web/app/search/page.tsx",
+          "web/app/chat"
+        ],
         "excluded": "오늘 화면의 등급 표시는 같은 Phase 의 다른 태스크다."
       },
       "constraints": {
-        "must": ["기존 라우트를 살려둔다", "설정에 도달할 경로를 남긴다"],
+        "must": [
+          "기존 라우트를 살려둔다",
+          "설정에 도달할 경로를 남긴다"
+        ],
         "must_not": [
           "기존 /diet · /inbox · /search · /chat 페이지를 삭제하거나 재작성하지 않는다",
           "app/page.tsx 를 수정하지 않는다 — 다른 태스크가 만진다",
@@ -514,16 +808,31 @@
           "git commit 을 하지 않는다"
         ]
       },
-      "tools_allowed": ["Read", "Write", "Edit", "Bash", "Grep", "Glob"],
-      "budget": { "max_turns": 35, "wall_clock_s": 1800 },
-      "on_failure": { "retry": 1, "partial_ok": false }
+      "tools_allowed": [
+        "Read",
+        "Write",
+        "Edit",
+        "Bash",
+        "Grep",
+        "Glob"
+      ],
+      "budget": {
+        "max_turns": 35,
+        "wall_clock_s": 1800
+      },
+      "on_failure": {
+        "retry": 1,
+        "partial_ok": false
+      }
     },
     {
       "task_id": "today-screen-grade",
       "kind": "implement",
       "phase": "p5-ia",
       "model_hint": "sonnet",
-      "depends_on": ["wire-day-grade-rpc"],
+      "depends_on": [
+        "wire-day-grade-rpc"
+      ],
       "objective": "'오늘' 화면의 중심에 하루 등급을 놓고 축별 근거와 불완전 표시를 보여준다.",
       "done_when": [
         "등급과 점수가 화면 상단에 있다",
@@ -535,16 +844,32 @@
       "acceptance": {
         "command": "npm run test && npx next build",
         "expect_exit_code": 0,
-        "expect_contains": ["passed"],
+        "expect_contains": [
+          "passed"
+        ],
         "cwd": "/Users/heejunyoo/IdeaProjects/KnowledgeApp/web"
       },
       "edit_points": [
-        { "path": "web/app/page.tsx", "symbol": "HubPage", "what": "assistant_today 위에 day.grade 결과를 얹는다. 등급·점수·축별 breakdown·reasons·ratable·confidence 를 보여준다. 기존 브리핑 카드는 아래로 내린다." },
-        { "path": "web/app/page.module.css", "symbol": "등급 관련 클래스", "what": "기존 토큰만 쓴다. 새 색상 값을 도입하지 않는다." }
+        {
+          "path": "web/app/page.tsx",
+          "symbol": "HubPage",
+          "what": "assistant_today 위에 day.grade 결과를 얹는다. 등급·점수·축별 breakdown·reasons·ratable·confidence 를 보여준다. 기존 브리핑 카드는 아래로 내린다."
+        },
+        {
+          "path": "web/app/page.module.css",
+          "symbol": "등급 관련 클래스",
+          "what": "기존 토큰만 쓴다. 새 색상 값을 도입하지 않는다."
+        }
       ],
-      "reference_impl": { "path": "web/app/diet/page.tsx", "why": "이 리포의 카드·배지·수치 표시 규약" },
+      "reference_impl": {
+        "path": "web/app/diet/page.tsx",
+        "why": "이 리포의 카드·배지·수치 표시 규약"
+      },
       "already_tried": [
-        { "what": "홈 화면 확인", "result": "assistant_today() 로 몸/지식/다음 3줄 브리핑 카드를 렌더한다" }
+        {
+          "what": "홈 화면 확인",
+          "result": "assistant_today() 로 몸/지식/다음 3줄 브리핑 카드를 렌더한다"
+        }
       ],
       "context": {
         "spec_ref": ".claude/specs/daily-grade/spec.md",
@@ -558,11 +883,19 @@
           "설명 문구를 늘어놓지 않는다. 표와 수치가 스스로 말하게 둔다",
           "장식·이펙트를 넣지 않는다"
         ],
-        "files": ["web/app/page.tsx", "web/app/page.module.css", "web/app/diet/page.tsx", "web/components/ui"],
+        "files": [
+          "web/app/page.tsx",
+          "web/app/page.module.css",
+          "web/app/diet/page.tsx",
+          "web/components/ui"
+        ],
         "excluded": "탭 재편은 같은 Phase 의 다른 태스크다."
       },
       "constraints": {
-        "must": ["ratable false 를 화면에 드러낸다", "등급을 화면 상단에 놓는다"],
+        "must": [
+          "ratable false 를 화면에 드러낸다",
+          "등급을 화면 상단에 놓는다"
+        ],
         "must_not": [
           "등급을 LLM 문장으로 설명하지 않는다",
           "노트·지식 활동을 등급 점수처럼 보이게 표시하지 않는다",
@@ -572,9 +905,22 @@
           "git commit 을 하지 않는다"
         ]
       },
-      "tools_allowed": ["Read", "Write", "Edit", "Bash", "Grep", "Glob"],
-      "budget": { "max_turns": 35, "wall_clock_s": 1800 },
-      "on_failure": { "retry": 1, "partial_ok": false }
+      "tools_allowed": [
+        "Read",
+        "Write",
+        "Edit",
+        "Bash",
+        "Grep",
+        "Glob"
+      ],
+      "budget": {
+        "max_turns": 35,
+        "wall_clock_s": 1800
+      },
+      "on_failure": {
+        "retry": 1,
+        "partial_ok": false
+      }
     }
   ]
 }
