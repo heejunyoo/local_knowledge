@@ -10,6 +10,9 @@ interface MealRow {
   kcal: number | null;
   protein_g: number | null;
   note: string | null;
+  sugar_g: number | null;
+  sodium_mg: number | null;
+  satfat_g: number | null;
 }
 
 interface WorkoutRow {
@@ -29,7 +32,17 @@ interface MetricRow {
 }
 
 function toMeal(r: MealRow): dietRead.Meal {
-  return { id: r.id, ts: r.ts, items: r.items ?? [], kcal: r.kcal, proteinG: r.protein_g, note: r.note };
+  return {
+    id: r.id,
+    ts: r.ts,
+    items: r.items ?? [],
+    kcal: r.kcal,
+    proteinG: r.protein_g,
+    note: r.note,
+    sugarG: r.sugar_g,
+    sodiumMg: r.sodium_mg,
+    satFatG: r.satfat_g,
+  };
 }
 
 function toWorkout(r: WorkoutRow): dietRead.Workout {
@@ -42,7 +55,11 @@ function toMetric(r: MetricRow): dietRead.Metric {
 
 async function fetchWindow(supabase: SupabaseClient, sinceISO: string) {
   const [mealsRes, workoutsRes, metricsRes] = await Promise.all([
-    supabase.from("diet_meal").select("id,ts,items,kcal,protein_g,note").gte("ts", sinceISO).order("ts"),
+    supabase
+      .from("diet_meal")
+      .select("id,ts,items,kcal,protein_g,note,sugar_g,sodium_mg,satfat_g")
+      .gte("ts", sinceISO)
+      .order("ts"),
     supabase.from("diet_workout").select("id,ts,kind,minutes,intensity").gte("ts", sinceISO).order("ts"),
     supabase.from("diet_metric").select("id,ts,weight_kg,sleep_h,context").gte("ts", sinceISO).order("ts"),
   ]);
@@ -140,7 +157,7 @@ export async function fetchLastMeal(): Promise<dietRead.Meal | null> {
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("diet_meal")
-    .select("id,ts,items,kcal,protein_g,note")
+    .select("id,ts,items,kcal,protein_g,note,sugar_g,sodium_mg,satfat_g")
     .order("ts", { ascending: false })
     .limit(1);
   if (error) throw error;

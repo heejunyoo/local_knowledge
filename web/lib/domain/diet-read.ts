@@ -15,6 +15,10 @@ export interface Meal {
   kcal: number | null;
   proteinG: number | null;
   note: string | null;
+  /** 섭취 상한 축(당·나트륨·포화지방) 채점용 — 마이그레이션 008. 기존 행은 null(결측)이다. */
+  sugarG?: number | null;
+  sodiumMg?: number | null;
+  satFatG?: number | null;
 }
 
 export interface Workout {
