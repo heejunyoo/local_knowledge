@@ -232,4 +232,66 @@ describe("ingreed-nutrition", () => {
       expect(r).not.toHaveProperty("score");
     });
   });
+
+  /**
+   * D2 — 신고 1회량이 없는 제품은 사용자가 양을 직접 넣는다. 그때도 환산은
+   * ingreed 의 100g 실측값으로 한다. 여기가 무너지면 화면이 LLM 추정으로
+   * 되돌아가고, 기성식품을 조회하는 의미가 사라진다.
+   */
+  describe("servingGOverride", () => {
+    /** servingSize 가 단위 없는 "1식" — grams() 가 null 을 주는 실제 케이스(즉석섭취식품 717건). */
+    const noServing: IngreedProductNutrition = {
+      reportNo: "X",
+      name: "도시락",
+      category: "즉석섭취식품",
+      nutrition: {
+        basis: "100g",
+        basisAmount: 100,
+        servingSize: "1식",
+        foodWeight: null,
+        energyKcal: 150,
+        proteinG: 5,
+        sugarG: 3,
+        satFatG: 1.5,
+        sodiumMg: 400,
+      },
+    };
+
+    it("override 없이는 1회량을 못 구해 영양값이 전부 null 이다", () => {
+      const r = toServingNutrition(noServing, 1);
+      expect(r.servingG).toBeNull();
+      expect(r.kcal).toBeNull();
+      expect(r.sodiumMg).toBeNull();
+    });
+
+    it("사용자가 넣은 g 으로 ingreed 실측값을 환산한다", () => {
+      const r = toServingNutrition(noServing, 1, 300);
+      expect(r.servingG).toBe(300);
+      expect(r.kcal).toBe(450); // 150 × 3
+      expect(r.sodiumMg).toBe(1200); // 400 × 3
+      expect(r.satFatG).toBe(4.5);
+      expect(r.itemLine).toBe("도시락 300g");
+    });
+
+    it("override 와 quantity 가 함께 곱해진다", () => {
+      const r = toServingNutrition(noServing, 2, 300);
+      expect(r.kcal).toBe(900);
+      expect(r.itemLine).toBe("도시락 600g");
+    });
+
+    it("0·음수·NaN override 는 무시하고 기존 경로로 돌아간다", () => {
+      for (const bad of [0, -100, NaN]) {
+        expect(toServingNutrition(noServing, 1, bad).servingG).toBeNull();
+      }
+    });
+
+    it("신고 1회량이 있으면 override 가 그것을 덮어쓴다(사용자가 실제로 먹은 양이 우선)", () => {
+      const withServing: IngreedProductNutrition = {
+        ...noServing,
+        nutrition: { ...noServing.nutrition!, servingSize: "200g" },
+      };
+      expect(toServingNutrition(withServing, 1).servingG).toBe(200);
+      expect(toServingNutrition(withServing, 1, 50).servingG).toBe(50);
+    });
+  });
 });

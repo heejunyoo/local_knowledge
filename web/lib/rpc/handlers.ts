@@ -722,21 +722,26 @@ export async function diet_search_product(params: unknown) {
   return { q, items: items ?? [] };
 }
 
+interface ProductParams {
+  report_no?: string;
+  reportNo?: string;
+  quantity?: number;
+  /** 신고 1회량을 못 구한 제품에 사용자가 직접 넣은 양(g/mL) — spec D2. */
+  serving_g?: number;
+  note?: string;
+}
+
 /**
- * report_no·quantity로 기성식품 상세를 조회해 1회 섭취량 기준 영양값으로
- * 환산한 뒤 diet_meal에 기록한다(마이그레이션 008의 5필드까지). ingreed_detail
- * 조회 자체가 실패하면(제품을 못 찾음·네트워크 등) 기존 diet.log_meal
- * 경로(LLM 추정)로 폴백한다. 제품은 찾았지만 1회량을 못 구하면(servingG=null)
- * 영양값을 지어내지 않고 그 사실을 그대로 응답에 드러낸다 — LLM 추정으로
- * 대체하지 않는다(제품은 특정됐으므로 조회 실패가 아니다).
+ * report_no로 상세를 받아 1회량 기준으로 환산한다. 조회 실패면 null.
+ * `diet.preview_product`(쓰기 없음)와 `diet.log_product_meal`(쓰기)이 공유한다 —
+ * 두 경로가 다른 값을 내면 화면에 보인 것과 저장된 것이 갈린다.
  */
-export async function diet_log_product_meal(params: unknown) {
-  const p = (params ?? {}) as { report_no?: string; reportNo?: string; quantity?: number; note?: string };
+async function resolveProductServing(p: ProductParams) {
   const reportNo = p.report_no ?? p.reportNo ?? "";
-  if (!reportNo) return diet_log_meal(params);
+  if (!reportNo) return null;
 
   const detail = await fetchProductDetail(reportNo);
-  if (!detail) return diet_log_meal(params);
+  if (!detail) return null;
 
   const productRaw = detail.product ?? {};
   const product: IngreedProductNutrition = {
@@ -746,7 +751,62 @@ export async function diet_log_product_meal(params: unknown) {
     nutrition: (productRaw.nutrition ?? null) as IngreedNutrition | null,
   };
   const quantity = typeof p.quantity === "number" && p.quantity > 0 ? p.quantity : 1;
-  const serving = toServingNutrition(product, quantity);
+  const override = typeof p.serving_g === "number" && p.serving_g > 0 ? p.serving_g : null;
+  return { product, serving: toServingNutrition(product, quantity, override) };
+}
+
+function servingDict(
+  product: IngreedProductNutrition,
+  serving: ReturnType<typeof toServingNutrition>,
+): Record<string, unknown> {
+  const out: Record<string, unknown> = {
+    source: "ingreed",
+    report_no: product.reportNo,
+    name: product.name,
+    item_line: serving.itemLine,
+    serving_g: serving.servingG,
+    unit: serving.unit,
+  };
+  if (serving.kcal != null) out.kcal = serving.kcal;
+  if (serving.proteinG != null) out.protein_g = serving.proteinG;
+  if (serving.sugarG != null) out.sugar_g = serving.sugarG;
+  if (serving.sodiumMg != null) out.sodium_mg = serving.sodiumMg;
+  if (serving.satFatG != null) out.satfat_g = serving.satFatG;
+  // 1회량을 못 구함 — 지어내지 않았다는 사실을 호출자가 알 수 있게 명시(D2).
+  if (serving.servingG === null) out.nutrition_unavailable = true;
+  return out;
+}
+
+/**
+ * 담기 전에 환산 결과만 보여준다 — **쓰기가 없다.**
+ *
+ * 이게 없으면 화면이 "일단 저장하고 값을 보여준" 뒤 틀리면 지우는 모양이 된다.
+ * 1회량을 모르는 제품에서 특히 나쁘다 — 되돌리면서 ingreed 실측값을 버리고
+ * LLM 추정으로 바꿔치기하게 되기 때문이다. 그건 이 기능의 목적과 정반대다.
+ */
+export async function diet_preview_product(params: unknown) {
+  const p = (params ?? {}) as ProductParams;
+  const resolved = await resolveProductServing(p);
+  if (!resolved) return { found: false };
+  return { found: true, ...servingDict(resolved.product, resolved.serving) };
+}
+
+/**
+ * report_no·quantity로 기성식품 상세를 조회해 1회 섭취량 기준 영양값으로
+ * 환산한 뒤 diet_meal에 기록한다(마이그레이션 008의 5필드까지). ingreed_detail
+ * 조회 자체가 실패하면(제품을 못 찾음·네트워크 등) 기존 diet.log_meal
+ * 경로(LLM 추정)로 폴백한다. 제품은 찾았지만 1회량을 못 구하면(servingG=null)
+ * 영양값을 지어내지 않고 그 사실을 그대로 응답에 드러낸다 — LLM 추정으로
+ * 대체하지 않는다(제품은 특정됐으므로 조회 실패가 아니다).
+ *
+ * 사용자가 `serving_g`를 넣어 다시 부르면 그 값으로 환산한다 — 그때도 환산의
+ * 기준은 ingreed 의 100g 실측값이다.
+ */
+export async function diet_log_product_meal(params: unknown) {
+  const p = (params ?? {}) as ProductParams;
+  const resolved = await resolveProductServing(p);
+  if (!resolved) return diet_log_meal(params);
+  const { product, serving } = resolved;
 
   const meal = await dietDb.insertMeal({
     items: [serving.itemLine],
@@ -764,20 +824,9 @@ export async function diet_log_product_meal(params: unknown) {
     id: meal.id,
     ts: meal.ts,
     items: meal.items,
-    source: "ingreed",
-    report_no: product.reportNo,
-    serving_g: serving.servingG,
+    ...servingDict(product, serving),
   };
-  if (meal.kcal != null) out.kcal = meal.kcal;
-  if (meal.proteinG != null) out.protein_g = meal.proteinG;
-  if (serving.sugarG != null) out.sugar_g = serving.sugarG;
-  if (serving.sodiumMg != null) out.sodium_mg = serving.sodiumMg;
-  if (serving.satFatG != null) out.satfat_g = serving.satFatG;
   if (meal.note != null) out.note = meal.note;
-  if (serving.servingG === null) {
-    // 1회량을 못 구함 — 지어내지 않았다는 사실을 호출자가 알 수 있게 명시.
-    out.nutrition_unavailable = true;
-  }
   return out;
 }
 

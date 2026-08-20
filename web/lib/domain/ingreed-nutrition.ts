@@ -85,12 +85,17 @@ function scaleInt(value: number | null | undefined, factor: number): number | nu
 export function toServingNutrition(
   product: IngreedProductNutrition,
   quantity: number,
+  servingGOverride?: number | null,
 ): ServingNutrition {
   const n = product.nutrition ?? null;
   const unit = unitFromBasis(n?.basis);
 
   let servingG: number | null = null;
-  if (n) {
+  if (typeof servingGOverride === "number" && Number.isFinite(servingGOverride) && servingGOverride > 0) {
+    // 사용자가 직접 넣은 양(D2). 신고 1회량을 못 구했을 때 쓴다 — 이때도 환산은
+    // ingreed 의 100g 기준 실측값으로 한다. LLM 추정으로 바꿔치기하지 않는다.
+    servingG = servingGOverride;
+  } else if (n) {
     const declared = declaredServingG(n.servingSize, product.category ?? "", product.name);
     if (declared !== null) {
       const foodWeightG = grams(n.foodWeight);

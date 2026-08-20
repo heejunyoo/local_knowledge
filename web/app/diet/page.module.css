@@ -664,3 +664,155 @@
   color: var(--toss-grey-500);
   cursor: default;
 }
+
+/* Product search (기성식품 검색) */
+.productSearchBar {
+  display: flex;
+  gap: var(--toss-space-3);
+  margin-bottom: var(--toss-space-3);
+}
+
+.productSearchInput {
+  flex: 1;
+  min-width: 0;
+  padding: 12px;
+  border: none;
+  border-radius: 12px;
+  background: var(--toss-grey-100);
+  font-size: 15px;
+  font-family: var(--toss-font-family);
+  color: var(--toss-grey-900);
+}
+
+.productSearchSubmit {
+  flex: none;
+  border: none;
+  background: none;
+  font-size: var(--toss-font-body-size);
+  font-weight: 600;
+  color: var(--toss-blue-500);
+  cursor: pointer;
+}
+
+.productSearchSubmit:disabled {
+  color: var(--toss-grey-200);
+  cursor: default;
+}
+
+.productStatusText {
+  font-size: var(--toss-font-caption-size);
+  color: var(--toss-grey-500);
+  text-align: center;
+  padding: var(--toss-space-5) 0;
+  margin: 0;
+}
+
+.productEmpty {
+  text-align: center;
+  padding: var(--toss-space-5) 0;
+}
+
+.productList {
+  display: flex;
+  flex-direction: column;
+}
+
+.productItem {
+  display: flex;
+  align-items: center;
+  gap: var(--toss-space-3);
+  width: 100%;
+  padding: var(--toss-space-3) var(--toss-space-1);
+  border: none;
+  background: none;
+  text-align: left;
+  cursor: pointer;
+}
+
+.productItem + .productItem {
+  border-top: 1px solid var(--toss-grey-100);
+}
+
+.productItemTexts {
+  flex: 1;
+  min-width: 0;
+}
+
+.productItemTitle {
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--toss-grey-900);
+  margin: 0;
+}
+
+.productItemMeta {
+  font-size: var(--toss-font-caption-size);
+  color: var(--toss-grey-500);
+  margin: 2px 0 0;
+}
+
+/* Selected product / quantity */
+.productSelectedHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--toss-space-2);
+}
+
+.productSelectedTitle {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--toss-grey-900);
+  margin: 0;
+}
+
+.productSelectedMeta {
+  font-size: var(--toss-font-caption-size);
+  color: var(--toss-grey-500);
+  margin: 4px 0 var(--toss-space-3);
+}
+
+.qtyRow {
+  display: flex;
+  align-items: center;
+  gap: var(--toss-space-3);
+  margin: var(--toss-space-3) 0;
+}
+
+.qtyButton {
+  flex: none;
+  width: 36px;
+  height: 36px;
+  border: none;
+  border-radius: 10px;
+  background: var(--toss-grey-100);
+  color: var(--toss-grey-900);
+  font-size: 18px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.qtyValue {
+  min-width: 48px;
+  text-align: center;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--toss-grey-900);
+}
+
+.manualGramsRow {
+  display: flex;
+  gap: var(--toss-space-3);
+  align-items: center;
+  margin-top: var(--toss-space-3);
+}
+
+.manualGramsInput {
+  width: 100px;
+  height: 40px;
+  padding: 0 10px;
+  border: 1px solid var(--toss-grey-200);
+  border-radius: 10px;
+  font-size: 15px;
+  font-family: var(--toss-font-family);
+}

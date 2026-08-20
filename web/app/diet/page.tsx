@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { callRpc } from "@/lib/rpc/client";
 import { MEAL_PRESETS, WORKOUT_PRESETS, scaledMealPreset } from "@/lib/domain/diet-presets";
-import { Card } from "@/components/ui";
+import { Card, Badge } from "@/components/ui";
 import styles from "./page.module.css";
 
 const SLOTS = ["아침", "점심", "저녁", "간식"] as const;
@@ -39,6 +39,31 @@ interface ProfileDict {
   sex: "male" | "female";
   target_weight_kg: number;
   activity: string;
+}
+interface ProductHit {
+  report_no: string;
+  name: string;
+  maker: string;
+  category: string;
+  grade: string;
+  ratable: boolean;
+}
+/** diet.preview_product 응답 — 쓰기 없이 환산값만. */
+interface ProductPreview {
+  found: boolean;
+  item_line?: string;
+  serving_g?: number | null;
+  unit?: string | null;
+  kcal?: number;
+  protein_g?: number;
+  sugar_g?: number;
+  sodium_mg?: number;
+  satfat_g?: number;
+  nutrition_unavailable?: boolean;
+}
+/** diet.log_product_meal 응답 — 위와 같은 필드 + 저장된 행의 id. */
+interface ProductLogResult extends Omit<ProductPreview, "found"> {
+  id: string;
 }
 interface FastingDict {
   active: boolean;
@@ -82,7 +107,7 @@ export default function DietPage() {
   const [toast, setToast] = useState<string | null>(null);
   const [selectedSlot, setSelectedSlot] = useState<Slot>("점심");
   const [quickLine, setQuickLine] = useState("");
-  const [panel, setPanel] = useState<"log" | "week" | "goals" | "profile" | null>(null);
+  const [panel, setPanel] = useState<"log" | "week" | "goals" | "profile" | "product" | null>(null);
   const [weightKg, setWeightKg] = useState("");
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -137,17 +162,9 @@ export default function DietPage() {
     );
   }
 
-  async function commitQuickLine() {
-    const line = quickLine.trim();
-    if (!line) return;
-    setQuickLine("");
-    if (line.includes("운동") || line.toLowerCase().includes("workout")) {
-      const digits = line.match(/\d+/)?.[0];
-      const minutes = digits ? parseInt(digits, 10) : 20;
-      const kind = line.replace("운동", "").replace(/\d+\s*분/, "").trim() || "workout";
-      await runAction(`운동 ${minutes}분 저장됐어요`, () => callRpc("diet.log_workout", { kind, minutes }));
-      return;
-    }
+  // 한 줄 자유입력 텍스트 → 추정 + 기록. 제품 검색에서 1회량을 못 구한
+  // 경우(g 직접 입력)도 이 경로를 그대로 재사용한다 — 새 호출 방식을 만들지 않는다.
+  async function logFoodLine(line: string) {
     try {
       const est = await callRpc<{
         matched: boolean;
@@ -178,6 +195,56 @@ export default function DietPage() {
     await runAction("식사 저장됐어요", () =>
       callRpc("diet.log_meal", { items: withSlotPrefix([line]), kcal, note: line }),
     );
+  }
+
+  async function commitQuickLine() {
+    const line = quickLine.trim();
+    if (!line) return;
+    setQuickLine("");
+    if (line.includes("운동") || line.toLowerCase().includes("workout")) {
+      const digits = line.match(/\d+/)?.[0];
+      const minutes = digits ? parseInt(digits, 10) : 20;
+      const kind = line.replace("운동", "").replace(/\d+\s*분/, "").trim() || "workout";
+      await runAction(`운동 ${minutes}분 저장됐어요`, () => callRpc("diet.log_workout", { kind, minutes }));
+      return;
+    }
+    await logFoodLine(line);
+  }
+
+  // 담기 전에 환산값만 받아 본다 — 쓰기가 없다. 저장하고 나서 값을 보여준 뒤
+  // 틀리면 지우는 모양을 피하려는 것이다(1회량을 모르는 제품에서 특히 나빴다).
+  async function previewProduct(
+    product: ProductHit,
+    quantity: number,
+    servingG?: number,
+  ): Promise<ProductPreview> {
+    return callRpc<ProductPreview>("diet.preview_product", {
+      report_no: product.report_no,
+      quantity,
+      ...(servingG ? { serving_g: servingG } : {}),
+    });
+  }
+
+  // 미리보기에서 확인한 것과 같은 인자로 기록한다. servingG 는 신고 1회량을
+  // 못 구했을 때 사용자가 넣은 값이고, 그때도 환산 기준은 ingreed 의 100g
+  // 실측값이다 — LLM 추정으로 바꿔치기하지 않는다(D2).
+  async function addProduct(
+    product: ProductHit,
+    quantity: number,
+    servingG?: number,
+  ): Promise<ProductLogResult> {
+    const result = await callRpc<ProductLogResult>("diet.log_product_meal", {
+      report_no: product.report_no,
+      quantity,
+      ...(servingG ? { serving_g: servingG } : {}),
+    });
+    notify(
+      result.nutrition_unavailable
+        ? `${product.name} 저장했어요 · 양을 몰라 영양값은 비어 있어요`
+        : `${product.name} ${result.serving_g ?? ""}${result.unit ?? "g"} · ~${Math.round(result.kcal ?? 0)}kcal 저장됐어요`,
+    );
+    await refresh();
+    return result;
   }
 
   async function deleteMeal(id: string) {
@@ -390,6 +457,9 @@ export default function DietPage() {
               추가
             </button>
           </div>
+          <button type="button" className={styles.linkAction} onClick={() => setPanel("product")}>
+            기성식품 검색해서 담기
+          </button>
         </Card>
       </div>
 
@@ -526,6 +596,14 @@ export default function DietPage() {
             </p>
           ))}
         </Panel>
+      ) : null}
+
+      {panel === "product" ? (
+        <ProductPanel
+          onClose={() => setPanel(null)}
+          onAdd={addProduct}
+          onPreview={previewProduct}
+        />
       ) : null}
 
       {panel === "goals" ? (
@@ -804,6 +882,213 @@ function ProfilePanel({
       >
         저장하고 목표 자동 적용
       </button>
+    </Panel>
+  );
+}
+
+function ProductPanel({
+  onClose,
+  onAdd,
+  onPreview,
+}: {
+  onClose: () => void;
+  onAdd: (product: ProductHit, quantity: number, servingG?: number) => Promise<ProductLogResult>;
+  onPreview: (product: ProductHit, quantity: number, servingG?: number) => Promise<ProductPreview>;
+}) {
+  const [query, setQuery] = useState("");
+  const [status, setStatus] = useState<"idle" | "searching" | "done">("idle");
+  const [hits, setHits] = useState<ProductHit[]>([]);
+  const requestId = useRef(0);
+  const [selected, setSelected] = useState<ProductHit | null>(null);
+  const [qty, setQty] = useState(1);
+  const [busy, setBusy] = useState(false);
+  /** 담기 전에 보여주는 환산값. 저장 결과가 아니라 미리보기다 — 쓰기가 없다. */
+  const [preview, setPreview] = useState<ProductPreview | null>(null);
+  const [previewing, setPreviewing] = useState(false);
+  const [gramsInput, setGramsInput] = useState("");
+  const previewId = useRef(0);
+
+  async function runSearch() {
+    const trimmed = query.trim();
+    if (!trimmed) {
+      setStatus("idle");
+      setHits([]);
+      return;
+    }
+    setStatus("searching");
+    const myId = ++requestId.current;
+    try {
+      const res = await callRpc<{ q: string; items: ProductHit[] }>("diet.search_product", { q: trimmed });
+      if (myId !== requestId.current) return; // 응답 도착 전에 새 검색이 시작됨
+      setHits(res.items ?? []);
+      setStatus("done");
+    } catch {
+      if (myId !== requestId.current) return;
+      setHits([]);
+      setStatus("done");
+    }
+  }
+
+  const manualGrams = parseFloat(gramsInput);
+  const manualG = manualGrams > 0 ? manualGrams : undefined;
+
+  /** 선택·수량·직접입력이 바뀔 때마다 다시 환산해 보여준다. 저장하지 않는다. */
+  async function refreshPreview(product: ProductHit, quantity: number, servingG?: number) {
+    const myId = ++previewId.current;
+    setPreviewing(true);
+    try {
+      const p = await onPreview(product, quantity, servingG);
+      if (myId !== previewId.current) return; // 더 새 요청이 이미 나갔다
+      setPreview(p);
+    } catch {
+      if (myId !== previewId.current) return;
+      setPreview(null);
+    } finally {
+      if (myId === previewId.current) setPreviewing(false);
+    }
+  }
+
+  function pick(product: ProductHit) {
+    setSelected(product);
+    setQty(1);
+    setPreview(null);
+    setGramsInput("");
+    void refreshPreview(product, 1);
+  }
+
+  function changeQty(next: number) {
+    setQty(next);
+    if (selected) void refreshPreview(selected, next, manualG);
+  }
+
+  function changeGrams(next: string) {
+    setGramsInput(next);
+    const g = parseFloat(next);
+    if (selected && g > 0) void refreshPreview(selected, qty, g);
+  }
+
+  async function handleAdd() {
+    if (!selected) return;
+    setBusy(true);
+    try {
+      await onAdd(selected, qty, manualG);
+      onClose();
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Panel title="제품 검색" onClose={onClose}>
+      {!selected ? (
+        <>
+          <div className={styles.productSearchBar}>
+            <input
+              className={styles.productSearchInput}
+              type="search"
+              placeholder="제품 이름으로 검색"
+              autoFocus
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") runSearch();
+              }}
+            />
+            <button type="button" className={styles.productSearchSubmit} disabled={!query.trim()} onClick={runSearch}>
+              검색
+            </button>
+          </div>
+
+          {status === "searching" ? (
+            <p className={styles.productStatusText}>찾는 중…</p>
+          ) : status === "done" && hits.length === 0 ? (
+            <div className={styles.productEmpty}>
+              <p className={styles.ctaTitle}>찾는 제품이 없어요</p>
+              <p className={styles.ctaBody}>제품명을 바꿔보거나, 위 「한 줄로 남기기」로 직접 기록해 주세요.</p>
+              <button type="button" className={styles.linkAction} onClick={onClose}>
+                직접 입력으로 남기기
+              </button>
+            </div>
+          ) : (
+            <div className={styles.productList}>
+              {hits.map((item) => (
+                <button key={item.report_no} type="button" className={styles.productItem} onClick={() => pick(item)}>
+                  <span className={styles.productItemTexts}>
+                    <p className={styles.productItemTitle}>{item.name}</p>
+                    <p className={styles.productItemMeta}>
+                      {item.maker} · {item.category}
+                    </p>
+                  </span>
+                  <Badge kind="neutral">{item.grade}</Badge>
+                </button>
+              ))}
+            </div>
+          )}
+        </>
+      ) : (
+        <div>
+          <div className={styles.productSelectedHeader}>
+            <p className={styles.productSelectedTitle}>{selected.name}</p>
+            <Badge kind="neutral">{selected.grade}</Badge>
+          </div>
+          <p className={styles.productSelectedMeta}>
+            {selected.maker} · {selected.category}
+          </p>
+
+          <div className={styles.qtyRow}>
+            <button
+              type="button"
+              className={styles.qtyButton}
+              disabled={qty <= 0.5}
+              onClick={() => changeQty(Math.max(0.5, Math.round((qty - 0.5) * 10) / 10))}
+            >
+              −
+            </button>
+            <span className={styles.qtyValue}>{qty}배</span>
+            <button type="button" className={styles.qtyButton} onClick={() => changeQty(Math.round((qty + 0.5) * 10) / 10)}>
+              +
+            </button>
+          </div>
+
+          {previewing ? (
+            <p className={styles.smallNote}>영양값을 불러오는 중…</p>
+          ) : preview?.nutrition_unavailable ? (
+            <div className={styles.manualGramsRow}>
+              <input
+                className={styles.manualGramsInput}
+                type="number"
+                placeholder="먹은 양 (g)"
+                value={gramsInput}
+                onChange={(e) => changeGrams(e.target.value)}
+              />
+            </div>
+          ) : preview ? (
+            <>
+              <p className={styles.planEta}>
+                {preview.serving_g}
+                {preview.unit ?? "g"} · ~{Math.round(preview.kcal ?? 0)}kcal
+              </p>
+              <p className={styles.smallNote}>
+                {[
+                  preview.protein_g != null ? `단백질 ${preview.protein_g}g` : null,
+                  preview.sugar_g != null ? `당 ${preview.sugar_g}g` : null,
+                  preview.sodium_mg != null ? `나트륨 ${preview.sodium_mg}mg` : null,
+                  preview.satfat_g != null ? `포화지방 ${preview.satfat_g}g` : null,
+                ]
+                  .filter(Boolean)
+                  .join(" · ")}
+              </p>
+            </>
+          ) : null}
+
+          <button type="button" className={styles.formSubmit} disabled={busy || previewing} onClick={handleAdd}>
+            {busy ? "담는 중…" : "담기"}
+          </button>
+          <button type="button" className={styles.linkAction} onClick={() => setSelected(null)}>
+            다른 제품 선택
+          </button>
+        </div>
+      )}
     </Panel>
   );
 }
