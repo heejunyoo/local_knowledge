@@ -75,33 +75,18 @@
 - L427-429 `recommendedProteinG` = `weightKg × 1.6`
 - L431-437 `RECOMMENDED_WEEKLY_WORKOUTS`(활동수준별 3~5회), `RECOMMENDED_WORKOUT_MINUTES_PER_DAY`(20~45분) — 출처 주석 없음, 이번 조사로도 1차 매칭 기준을 찾지 못함(§3 WHO/KDCA 는 활동수준 세분화 없이 150–300분/주 단일 범위만 제시)
 
-## 7. iOS 단축어 HealthKit 내보내기
+## 7. iOS 단축어 HealthKit 내보내기 → **`HEALTHKIT_SHORTCUTS_2026-08.md` 로 이관**
 
-작성 2026-08-20 · Sonnet 5 · `research-shortcuts-healthkit` (phase p1-standards)
-**목적**: 활동 축(§3 참고)에 걸음수·활동에너지 같은 하위 항목을 붙이려면(spec.md D-G) 단축어 앱이 HealthKit
-에서 실제로 무엇을 꺼낼 수 있는지부터 확인해야 한다. 리포에 네이티브 HealthKit 리더가 없다는 것은 선행
-조사(§6-2 각주, `DAILY_GRADE_AND_IA_2026-08.md` §8)에서 이미 확인됐다 — 유일한 경로는 단축어의
-"건강 샘플 가져오기"(Find/Get Health Samples) 류 액션이다.
+이 절에 1차 조사가 있었으나 `research-shortcuts-healthkit`(p4-pipe)이 같은 주제를 원문부터
+다시 열어 재검증하면서 별도 문서로 분리했다. **단일 출처는 `docs/HEALTHKIT_SHORTCUTS_2026-08.md` 다.**
+두 벌을 두면 갈라지고, 갈라지면 어느 쪽이 참인지 아무도 모른다.
 
-**조사 방법의 한계부터 적는다**: Apple 공식 문서(`support.apple.com/guide/shortcuts/...`)는 이 액션의
-Type(유형) 드롭다운에 어떤 항목이 있는지 **고정된 목록으로 게시하지 않는다** — 이 조사에서 관련
-Apple 공식 가이드 페이지 여러 개를 직접 열었으나("About actions in complicated shortcuts" 등) 모두
-액션 자체의 UI 설명일 뿐 유형 목록은 없었다. 이는 그 드롭다운이 Health 앱의 "탐색" 탭과 같은 HealthKit
-유형 카탈로그를 그 자리에서 동적으로 끌어오는 구조이기 때문으로 보인다(카탈로그를 그때그때 검색하는
-UI라 정적 문서로 나열할 이유가 없다) — **이 문장 자체는 이번 조사에서 원문으로 확인한 사실이 아니라
-정황상 추정**이며, 그렇게 표시해 둔다. 결과적으로 이 절의 판정은 apple.com 1차 문서가 아니라 **실제로
-그 액션을 만들어 값을 받아본 사용자들의 1차 후기(직접 연 페이지)** 에 근거한다 — objective 가 요구하는
-"근거(원문 URL 또는 확인 방법)"의 성격이 §1~§6(공중보건 기관 원문)과 다르다는 점을 명시한다.
+재검증에서 판정이 하나 바뀌었다.
 
-| 항목 | 판정 | 근거 |
-|---|---|---|
-| 걸음수 (Steps) | **가능** | Maxime Heckel, *Using Shortcuts and serverless to build a personal Apple Health API* — 원문 열람 확인 (<https://blog.maximeheckel.com/posts/build-personal-health-api-shortcuts-serverless/>). 저자가 단축어의 "건강 샘플 가져오기" 액션으로 Steps 를 실제로 가져와 "Steps measurements are grouped by hour"로 확인했고, 그 값을 JSON(`steps.count`/`steps.date`, `\n` 구분 텍스트)으로 서버리스 함수에 전송하는 전체 흐름을 직접 구현·공개했다. 같은 글에서 Heart Rate 도 동일 방식으로 가져온 것을 확인(단, Resting Heart Rate 는 아님 — 아래 참고) |
-| 활동에너지 (Active Energy) | **불확실** | 이 조사에서 직접 연 1차 후기 중 "Active Energy를 건강 샘플 가져오기로 꺼냈다"를 명시한 페이지는 없었다. 정황 근거는 있음: RoutineHub 에 "Active Energy"라는 이름의 단축어가 존재(<https://routinehub.co/shortcut/1480/> — 열람 시도 시 403 으로 원문 직접 확인 실패)하고, 검색 결과 스니펫(원문 미열람)은 "Find Health Samples action in Shortcuts filtered for Active Calories"라 언급함. Health Exporter & Shortcuts 앱의 App Store 설명(원문 열람 확인, <https://apps.apple.com/no/app/health-exporter-shortcuts/id6759006922>)은 "Active Calories"를 Activity 카테고리 내보내기 항목으로 명시하지만, 이 앱이 단축어의 네이티브 "건강 샘플 가져오기" 액션을 쓰는지 자체 HealthKit 리더를 쓰고 단축어는 트리거로만 쓰는지는 설명만으로 구분 불가. Steps 와 Active Energy 는 Health 앱에서 같은 "활동(Activity)" 카테고리에 속하는 표준 HealthKit 수량 유형이라는 점에서 가능성은 높아 보이나, 이는 추정이지 이번 조사로 직접 확인한 사실이 아니다 |
-| 안정시심박 (Resting Heart Rate) | **불확실** | 이 조사에서 직접 연 페이지 중 "Resting Heart Rate"를 명시적으로 건강 샘플 가져오기 액션에서 선택해 값을 받은 사례를 확인한 것은 없다. 확인된 것은 (a) 일반 "Heart Rate"(안정시 아님)를 같은 방식으로 가져온 사례(Maxime Heckel, 위 URL) (b) intervals.icu 포럼(<https://forum.intervals.icu/t/getting-wellness-data-from-your-apple-watch-via-apple-shortcuts/86164> — 원문 열람 확인)에서 사용자가 "Find Health Samples 로 원하는 데이터를 가져올 수 있다"고만 언급하고 구체 유형은 스크린샷에만 있어 텍스트로 확인 불가 (c) Health Exporter & Shortcuts 앱 설명(위 URL, 원문 열람 확인)이 "Resting Heart Rate"를 Heart 카테고리 항목으로 명시 — 다만 (b)와 동일하게 앱의 내보내기 경로가 단축어 네이티브 액션인지는 불명확 |
-| 수면단계 (Sleep stages) | **가능 (단, 파싱 필요)** | Automators Talk 포럼 "Shortcut to export Sleep Data" 스레드 — 원문 열람 확인 (<https://talk.automators.fm/t/shortcut-to-export-sleep-data/18100>). 사용자 mvan231 이 공유한 단축어("Last Night's Sleep", "Chosen Date Sleep Analysis")가 Sleep Analysis 유형의 건강 샘플을 가져와 Awake/Deep/REM/Core 개별 단계를 실제로 분리해 냈다고 확인됨. 단, 원문이 "수면은 몇 분 단위로 기록되고 단계가 계속 바뀌어 복잡하다", "텍스트 매칭으로 각 값을 분리하는 게 복잡했다"고 명시 — 단축어가 단계별로 미리 집계된 필드를 주는 게 아니라 **개별 샘플(각각 시작·끝 시각 + 단계 이름 문자열)의 나열**을 주고, 이걸 앱/서버 쪽에서 합산·분류해야 한다는 뜻으로 읽힌다 |
+| 항목 | 1차(이 절) | 재검증 | 무엇이 달라졌나 |
+|---|---|---|---|
+| 안정시심박 | 불확실 | **가능** | heartbridge README 원문(<https://github.com/mm/heartbridge>)이 지원 유형에 "Resting Heart Rate"를 명시하고 Type 파라미터 변경 절차까지 적어 둔 것을 직접 열어 확인했다 |
+| 걸음수 · 활동에너지 · 수면단계 | 가능 · 불확실 · 가능(파싱 필요) | 동일 | 근거 문서도 같다 |
 
-**오너가 실기기에서 확인할 절차** (판정이 불확실한 두 항목):
-1. 활동에너지 — 아이폰 단축어 앱 > 새 단축어 > "건강 샘플 가져오기"(또는 "건강 표본 찾기") 액션 추가 > 유형(Type) 을 탭해 "활동 에너지"/"Active Energy"를 검색해 선택되는지, 실행 시 오늘자 값이 실제로 반환되는지 확인한다.
-2. 안정시심박 — 같은 액션의 유형 목록에서 "안정 시 심박수"/"Resting Heart Rate"를 검색해 선택되는지, Apple Watch 로 최근 측정된 값이 있는 날짜에 실제로 반환되는지 확인한다(단축어 자체가 유형을 지원해도 기기에 그 유형의 샘플이 없으면 빈 결과가 나올 수 있어 두 가지를 구분해야 한다).
-
-**§6 변경 지점 표(코드 변경, Phase 4)에 참고**: `web/lib/health-ingest.ts`가 향후 `steps`·`active_energy_kcal`을 수용하도록 확장될 예정이나(위 §1의 `DAILY_GRADE_AND_IA_2026-08.md` §4 표), 이 절의 판정상 걸음수는 근거가 충분하고 활동에너지·안정시심박은 오너의 실기기 확인이 선행돼야 안전하다. 수면단계는 D-G(활동 축은 운동 분만으로 시작)의 범위 밖(수면은 회복 축)이라 이번 스펙의 활동 축 하위 항목에는 직접 관련이 없지만, 회복 축을 나중에 수면단계까지 세분화할 경우를 대비해 함께 조사했다.
+**활동에너지는 여전히 불확실하다** — 오너가 실기기에서 확인할 절차는 이관된 문서에 있다.
+확인 전까지 이 필드가 항상 채워진다고 가정한 로직을 만들지 않는다.
