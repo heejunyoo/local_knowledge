@@ -1,5 +1,5 @@
 {
-  "goal": "/diet 에서 기성식품을 이름으로 검색해 1회 섭취량으로 환산한 영양값(당·나트륨·포화지방 포함)과 함께 식단에 기록할 수 있다.",
+  "goal": "/diet 에서 기성식품을 이름으로 검색해 1회 섭취량으로 환산한 영양값(당·나트륨·포화지방 포함)과 함께 식단에 기록할 수 있다.  [1단계 완료 2026-08-20 — 커밋 f18a50b·9f9617e·d3cc2c5]",
   "spec_ref": ".claude/specs/ingreed-diet-nutrition/spec.md",
   "open_decisions": [],
   "verify_command": "cd web && npm run test && npx next build",
@@ -10,7 +10,10 @@
       "exit_check": {
         "command": "cd /Users/heejunyoo/IdeaProjects/KnowledgeApp/web && npm run test",
         "expect_exit_code": 0,
-        "expect_contains": ["Test Files", "passed"]
+        "expect_contains": [
+          "Test Files",
+          "passed"
+        ]
       },
       "rollback": "git checkout -- web/lib/domain web/supabase/migrations web/tests/domain && git clean -f web/lib/domain web/supabase/migrations web/tests/domain"
     },
@@ -20,7 +23,9 @@
       "exit_check": {
         "command": "cd /Users/heejunyoo/IdeaProjects/KnowledgeApp/web && npm run test && npx next build",
         "expect_exit_code": 0,
-        "expect_contains": ["passed"]
+        "expect_contains": [
+          "passed"
+        ]
       },
       "rollback": "git checkout -- web/lib web/tests"
     },
@@ -30,7 +35,9 @@
       "exit_check": {
         "command": "cd /Users/heejunyoo/IdeaProjects/KnowledgeApp/web && npm run test && npx next build",
         "expect_exit_code": 0,
-        "expect_contains": ["/diet"]
+        "expect_contains": [
+          "/diet"
+        ]
       },
       "rollback": "git checkout -- web/app/diet"
     }
@@ -51,7 +58,9 @@
       "acceptance": {
         "command": "npm run test",
         "expect_exit_code": 0,
-        "expect_contains": ["passed"],
+        "expect_contains": [
+          "passed"
+        ],
         "cwd": "/Users/heejunyoo/IdeaProjects/KnowledgeApp/web"
       },
       "files_to_create": [
@@ -75,7 +84,10 @@
         "why": "이 리포의 vitest 도메인 테스트 작성 규약(describe/it, 임포트 별칭)"
       },
       "already_tried": [
-        { "what": "npm run test (착수 전 기준선)", "result": "21 files / 186 tests 통과 · 488ms" }
+        {
+          "what": "npm run test (착수 전 기준선)",
+          "result": "21 files / 186 tests 통과 · 488ms"
+        }
       ],
       "context": {
         "spec_ref": ".claude/specs/ingreed-diet-nutrition/spec.md",
@@ -108,16 +120,31 @@
           "기존 테스트 파일을 수정하지 않는다"
         ]
       },
-      "tools_allowed": ["Read", "Write", "Edit", "Bash", "Grep", "Glob"],
-      "budget": { "max_turns": 25, "wall_clock_s": 900 },
-      "on_failure": { "retry": 1, "partial_ok": false }
+      "tools_allowed": [
+        "Read",
+        "Write",
+        "Edit",
+        "Bash",
+        "Grep",
+        "Glob"
+      ],
+      "budget": {
+        "max_turns": 25,
+        "wall_clock_s": 900
+      },
+      "on_failure": {
+        "retry": 1,
+        "partial_ok": false
+      }
     },
     {
       "task_id": "map-ingreed-nutrition",
       "kind": "implement",
       "phase": "p1-domain",
       "model_hint": "sonnet",
-      "depends_on": ["port-serving-size"],
+      "depends_on": [
+        "port-serving-size"
+      ],
       "objective": "ingreed detail 페이로드를 1회 섭취량 기준 영양 기록으로 바꾸는 순수 함수를 만든다.",
       "done_when": [
         "basis 100g/100mL 와 1회량으로 kcal·protein·sugar·sodium·satFat 를 환산한다",
@@ -128,7 +155,9 @@
       "acceptance": {
         "command": "npm run test",
         "expect_exit_code": 0,
-        "expect_contains": ["passed"],
+        "expect_contains": [
+          "passed"
+        ],
         "cwd": "/Users/heejunyoo/IdeaProjects/KnowledgeApp/web"
       },
       "files_to_create": [
@@ -152,7 +181,10 @@
         "why": "순수 도메인 모듈의 타입 선언·estimateAsDict 반환 모양·itemLine 문자열 규약"
       },
       "already_tried": [
-        { "what": "ingreed_detail 실호출로 nutrition 페이로드 확보", "result": "spec.md §2 에 실측 JSON 기록됨. label 은 null 일 수 있음" }
+        {
+          "what": "ingreed_detail 실호출로 nutrition 페이로드 확보",
+          "result": "spec.md §2 에 실측 JSON 기록됨. label 은 null 일 수 있음"
+        }
       ],
       "context": {
         "spec_ref": ".claude/specs/ingreed-diet-nutrition/spec.md",
@@ -182,9 +214,22 @@
           "네트워크 호출을 이 파일에 넣지 않는다"
         ]
       },
-      "tools_allowed": ["Read", "Write", "Edit", "Bash", "Grep", "Glob"],
-      "budget": { "max_turns": 25, "wall_clock_s": 900 },
-      "on_failure": { "retry": 1, "partial_ok": false }
+      "tools_allowed": [
+        "Read",
+        "Write",
+        "Edit",
+        "Bash",
+        "Grep",
+        "Glob"
+      ],
+      "budget": {
+        "max_turns": 25,
+        "wall_clock_s": 900
+      },
+      "on_failure": {
+        "retry": 1,
+        "partial_ok": false
+      }
     },
     {
       "task_id": "write-migration-008",
@@ -217,7 +262,10 @@
         "why": "이 리포의 마이그레이션 문체 — 무엇을 왜 바꾸는지 주석으로 먼저 쓴다"
       },
       "already_tried": [
-        { "what": "diet_meal 현재 DDL 확인", "result": "001_init.sql:101 — id/owner_id/ts/note/items/kcal/protein_g 뿐. 영양 축이 kcal·protein 둘뿐이다" }
+        {
+          "what": "diet_meal 현재 DDL 확인",
+          "result": "001_init.sql:101 — id/owner_id/ts/note/items/kcal/protein_g 뿐. 영양 축이 kcal·protein 둘뿐이다"
+        }
       ],
       "context": {
         "spec_ref": ".claude/specs/ingreed-diet-nutrition/spec.md",
@@ -249,16 +297,30 @@
           "grade 컬럼을 만들지 않는다"
         ]
       },
-      "tools_allowed": ["Read", "Write", "Grep", "Glob", "Bash"],
-      "budget": { "max_turns": 10, "wall_clock_s": 300 },
-      "on_failure": { "retry": 1, "partial_ok": false }
+      "tools_allowed": [
+        "Read",
+        "Write",
+        "Grep",
+        "Glob",
+        "Bash"
+      ],
+      "budget": {
+        "max_turns": 10,
+        "wall_clock_s": 300
+      },
+      "on_failure": {
+        "retry": 1,
+        "partial_ok": false
+      }
     },
     {
       "task_id": "ingreed-client",
       "kind": "implement",
       "phase": "p2-wiring",
       "model_hint": "sonnet",
-      "depends_on": ["map-ingreed-nutrition"],
+      "depends_on": [
+        "map-ingreed-nutrition"
+      ],
       "objective": "ingreed RPC 를 타임아웃·쿨다운·폴백과 함께 호출하는 서버 전용 클라이언트를 만든다.",
       "done_when": [
         "환경변수가 없으면 조용히 null 을 반환하고 예외를 던지지 않는다",
@@ -269,7 +331,9 @@
       "acceptance": {
         "command": "npm run test",
         "expect_exit_code": 0,
-        "expect_contains": ["passed"],
+        "expect_contains": [
+          "passed"
+        ],
         "cwd": "/Users/heejunyoo/IdeaProjects/KnowledgeApp/web"
       },
       "files_to_create": [
@@ -293,7 +357,10 @@
         "why": "오케스트레이터를 lib/diet/ 에 두고 함수를 주입 가능한 인자로 받는 배선. 실패를 에러가 아니라 폴백으로 처리하는 원칙이 그대로 적용된다"
       },
       "already_tried": [
-        { "what": "ingreed_search / ingreed_detail 실호출", "result": "HTTP 200. search cold 2.97s / warm 0.14~0.48s, detail 0.32s. 페이로드는 spec.md §2" }
+        {
+          "what": "ingreed_search / ingreed_detail 실호출",
+          "result": "HTTP 200. search cold 2.97s / warm 0.14~0.48s, detail 0.32s. 페이로드는 spec.md §2"
+        }
       ],
       "context": {
         "spec_ref": ".claude/specs/ingreed-diet-nutrition/spec.md",
@@ -326,16 +393,32 @@
           "실패를 throw 로 올리지 않는다"
         ]
       },
-      "tools_allowed": ["Read", "Write", "Edit", "Bash", "Grep", "Glob"],
-      "budget": { "max_turns": 30, "wall_clock_s": 1200 },
-      "on_failure": { "retry": 1, "partial_ok": false }
+      "tools_allowed": [
+        "Read",
+        "Write",
+        "Edit",
+        "Bash",
+        "Grep",
+        "Glob"
+      ],
+      "budget": {
+        "max_turns": 30,
+        "wall_clock_s": 1200
+      },
+      "on_failure": {
+        "retry": 1,
+        "partial_ok": false
+      }
     },
     {
       "task_id": "wire-db-and-rpc",
       "kind": "implement",
       "phase": "p2-wiring",
       "model_hint": "sonnet",
-      "depends_on": ["ingreed-client", "write-migration-008"],
+      "depends_on": [
+        "ingreed-client",
+        "write-migration-008"
+      ],
       "objective": "insertMeal 을 영양 5필드까지 저장하도록 넓히고 제품 검색·기록 RPC 두 개를 배선한다.",
       "done_when": [
         "insertMeal 이 sugarG·sodiumMg·satFatG·source·ingreedReportNo 를 받아 저장한다",
@@ -347,7 +430,9 @@
       "acceptance": {
         "command": "npm run test && npx next build",
         "expect_exit_code": 0,
-        "expect_contains": ["passed"],
+        "expect_contains": [
+          "passed"
+        ],
         "cwd": "/Users/heejunyoo/IdeaProjects/KnowledgeApp/web"
       },
       "edit_points": [
@@ -372,8 +457,14 @@
         "why": "같은 파일의 diet_estimate_nutrition(182행)이 params 언랩·폴백·반환 dict 규약의 본보기다"
       },
       "already_tried": [
-        { "what": "insertMeal 현재 구현 확인", "result": "lib/db/diet.ts:260. items/kcal/protein_g/note 만 insert 하고 endActiveFastIfDue 를 호출한다" },
-        { "what": "dispatch 등록 방식 확인", "result": "lib/rpc/dispatch.ts:15-33 의 HANDLERS 객체에 문자열 키로 등록" }
+        {
+          "what": "insertMeal 현재 구현 확인",
+          "result": "lib/db/diet.ts:260. items/kcal/protein_g/note 만 insert 하고 endActiveFastIfDue 를 호출한다"
+        },
+        {
+          "what": "dispatch 등록 방식 확인",
+          "result": "lib/rpc/dispatch.ts:15-33 의 HANDLERS 객체에 문자열 키로 등록"
+        }
       ],
       "context": {
         "spec_ref": ".claude/specs/ingreed-diet-nutrition/spec.md",
@@ -409,16 +500,31 @@
           "실 DB 에 접속하거나 마이그레이션을 적용하지 않는다"
         ]
       },
-      "tools_allowed": ["Read", "Write", "Edit", "Bash", "Grep", "Glob"],
-      "budget": { "max_turns": 35, "wall_clock_s": 1500 },
-      "on_failure": { "retry": 1, "partial_ok": false }
+      "tools_allowed": [
+        "Read",
+        "Write",
+        "Edit",
+        "Bash",
+        "Grep",
+        "Glob"
+      ],
+      "budget": {
+        "max_turns": 35,
+        "wall_clock_s": 1500
+      },
+      "on_failure": {
+        "retry": 1,
+        "partial_ok": false
+      }
     },
     {
       "task_id": "diet-product-ui",
       "kind": "implement",
       "phase": "p3-ui",
       "model_hint": "sonnet",
-      "depends_on": ["wire-db-and-rpc"],
+      "depends_on": [
+        "wire-db-and-rpc"
+      ],
       "objective": "/diet 에 제품 이름 검색과 1회량·수량 확인 후 담기 흐름을 붙인다.",
       "done_when": [
         "이름으로 검색해 제품 목록이 뜨고 등급이 표시된다",
@@ -430,7 +536,9 @@
       "acceptance": {
         "command": "npm run test && npx next build",
         "expect_exit_code": 0,
-        "expect_contains": ["/diet"],
+        "expect_contains": [
+          "/diet"
+        ],
         "cwd": "/Users/heejunyoo/IdeaProjects/KnowledgeApp/web"
       },
       "edit_points": [
@@ -450,7 +558,10 @@
         "why": "이 리포의 검색 입력·결과 목록·빈 상태 렌더링 규약"
       },
       "already_tried": [
-        { "what": "app/diet/page.tsx 규모 확인", "result": "809행. 기존 식사/운동/체중 기록 UI 가 이미 있다" }
+        {
+          "what": "app/diet/page.tsx 규모 확인",
+          "result": "809행. 기존 식사/운동/체중 기록 UI 가 이미 있다"
+        }
       ],
       "context": {
         "spec_ref": ".claude/specs/ingreed-diet-nutrition/spec.md",
@@ -484,9 +595,22 @@
           "기존 식사·운동·체중 기록 UI 를 재작성하지 않는다"
         ]
       },
-      "tools_allowed": ["Read", "Write", "Edit", "Bash", "Grep", "Glob"],
-      "budget": { "max_turns": 35, "wall_clock_s": 1500 },
-      "on_failure": { "retry": 1, "partial_ok": false }
+      "tools_allowed": [
+        "Read",
+        "Write",
+        "Edit",
+        "Bash",
+        "Grep",
+        "Glob"
+      ],
+      "budget": {
+        "max_turns": 35,
+        "wall_clock_s": 1500
+      },
+      "on_failure": {
+        "retry": 1,
+        "partial_ok": false
+      }
     }
   ]
 }

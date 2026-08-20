@@ -164,3 +164,36 @@ SQL **파일 작성**)을 Phase 1 로 몰았다. 프로젝트가 살아나면 �
 | `npm run test:regression` | 6 files 실패 / 27 tests 실패 — 전부 `fetch failed`. 코드 문제 아님(§6) |
 | ingreed `ingreed_search` · `ingreed_detail` 실호출 | HTTP 200. 페이로드 §2 에 기록 |
 | Knowledge Supabase DNS·REST 도달 확인 | 실패. §6 |
+
+---
+
+## 9. 1단계 완료 (2026-08-20)
+
+커밋 `f18a50b`(p1) · `9f9617e`(p2) · `d3cc2c5`(p3).
+검증 `npm run test` **24 files / 224 tests** · `npx next build` 성공.
+실서비스 왕복 — 김치사발면 → 80g(용기) → 354kcal · 나트륨 1414mg.
+
+### 실호출로 잡은 결함 3건 (전부 단위 테스트는 초록불이었다)
+
+| | 무엇 | 어떻게 잡았나 |
+|---|---|---|
+| ⑴ | 타임아웃 4초가 cold 첫 질의를 폴백으로 떨어뜨렸다 → 8초 | 실서비스 스모크 |
+| ⑵ | 008 컬럼을 항상 insert 해 **기존 자유입력 기록까지** 깨뜨렸다 → 값 있을 때만 | 배포 순서 검토 |
+| ⑶ | 미리보기 RPC 가 없어 화면이 "저장하고 보여준 뒤 지우는" 모양이었다. 1회량 불명 제품에서 ingreed 실측값을 버리고 LLM 추정으로 바꿔치기했다 → `diet.preview_product` + `servingGOverride` | 결과 검토 |
+
+⑶ 은 **패킷이 미리보기 엔드포인트를 빠뜨린 것**이 원인이다. 하위 모델은 없는 것을
+우회했고 그 사실을 정직하게 보고했다 — 패킷에 없는 엔드포인트를 지어내지 않은 것은 맞다.
+
+### 남은 것
+
+1. **오너**: Supabase 대시보드에서 `gppklwzcmfuuhsefdeik` **Resume project**
+2. 재개 후: 마이그레이션 008 적용 → `npm run test:regression` → `/diet` 화면 실렌더링 확인
+3. `/api/cron/keepalive` 가 왜 정지를 못 막았는지 확인
+4. ingreed 쪽 `statement timeout` (§6 ⑵) — ingreed 리포 과제
+
+### 2단계(하루 건강 점수)의 미결 판단 — 하위 모델에 위임 금지
+
+**등급 컷을 정할 분포가 없다.** ingreed 는 `ratable` 제품의 실측 분포로 컷을 잡았는데,
+하루 점수는 사용자가 1명이라 분포 자체가 존재하지 않는다. KDRIs 등 외부 기준을
+**원문으로 확인해** 가져와야 한다. 넘기면 그럴듯한 임의 컷이 나온다 — 이 프로젝트가
+이미 두 번 데인 실패 모드다(`serving.test.ts` 주석).

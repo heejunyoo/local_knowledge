@@ -9,6 +9,46 @@
 | 미해결 이슈 | `docs/REFACTOR_BACKLOG.md` |
 | 작업 브랜치 | `refactor/web-p0` |
 
+## ⚠ 먼저 읽을 것 — 차단 2건 (2026-08-20)
+
+**⑴ Knowledge Supabase 프로젝트 `gppklwzcmfuuhsefdeik` 가 일시정지 상태다.**
+`dig` 에 DNS 레코드가 없고 REST 는 HTTP 000. 무료 티어 7일 무활동 정지로 보인다
+(마지막 활동 2026-07-31). `/api/cron/keepalive` 가 막기로 돼 있었는데 **작동하지 않았다** —
+왜 안 돌았는지는 아직 안 봤다. 복구는 오너가 대시보드에서 **Resume project** 클릭 1회.
+
+그래서 지금 **못 하는 것**: `npm run test:regression` · 마이그레이션 008 적용 ·
+`/diet` 화면 실렌더링 확인. 재개되면 이 셋을 먼저 한다.
+
+**⑵ ingreed 프로젝트가 불안정하다** (연동 대상, `pzatcwqxlwiearxcsyxm`).
+3일 유휴 뒤 `ingreed_search` 가 `57014 canceling statement due to statement timeout`
+을 오갔다 — 실측 8.5s→500 · 49.6s→200 · 14.8s→500. 몇 번 두드리면 warm 이 되고
+그 뒤엔 1.7s 다. **우리 쪽 폴백이 이 상태를 견디는 것은 확인했다**(예외 없이 빈 목록).
+다만 ingreed 가 이 상태면 식단 기록이 자주 LLM 추정으로 떨어진다 — ingreed 리포 쪽
+과제다.
+
+## ingreed 제품 영양 연동 1단계 (2026-08-17~20, 커밋 `f18a50b`·`9f9617e`·`d3cc2c5`)
+
+`/diet` 에서 기성식품을 이름으로 검색해 **1회 섭취량으로 환산한 영양값**(당·나트륨·
+포화지방 포함)과 함께 기록한다. 근거·설계 판단은 `.claude/specs/ingreed-diet-nutrition/spec.md`,
+Phase 계획은 같은 폴더 `plan.json`.
+
+| Phase | 상태 | 산출물 |
+|---|---|---|
+| p1 순수 도메인 + 마이그레이션 파일 | ✅ | `lib/domain/serving-size.ts` · `lib/domain/ingreed-nutrition.ts` · `supabase/migrations/008_diet_meal_nutrition.sql`(**미적용**) |
+| p2 클라이언트 + DB + RPC | ✅ | `lib/diet/ingreed-client.ts` · `diet.search_product` · `diet.log_product_meal` |
+| p3 화면 + 미리보기 | ✅ | `app/diet/page.tsx` ProductPanel · `diet.preview_product` |
+
+검증: `npm run test` **24 files / 224 tests** · `npx next build` 성공.
+실서비스 왕복 확인 — 김치사발면 → 80g(용기) → 354kcal · 나트륨 1414mg.
+
+**하루 건강 점수·등급은 이번 범위가 아니다(2단계).** ingreed 의 A~E 는 100g 기준·
+카테고리 상대 등급이라 그대로 더할 수 없다. 그래서 `diet_meal` 에 `grade` 컬럼을
+**일부러 만들지 않았다** — 경계를 주석이 아니라 스키마로 강제한다.
+
+2단계에 남은 진짜 문제: **등급 컷을 정할 분포가 없다.** ingreed 는 `ratable` 제품
+실측 분포로 컷을 잡았는데, 하루 점수는 사용자가 1명이라 분포가 없다. 외부 기준
+(KDRIs 등)을 원문으로 확인해 가져와야 한다 — 하위 모델에 넘길 일이 아니다.
+
 ## Phase 진행 상황
 
 | Phase | 상태 | 산출물 |
