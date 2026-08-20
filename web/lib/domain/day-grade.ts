@@ -71,6 +71,14 @@ export interface DayGradeInput {
   intake: AxisInput;
 }
 
+export interface GradeDayOptions {
+  /**
+   * 하루가 끝났는가. 판정(Asia/Seoul 자정 경계) 자체는 이 함수의 일이 아니다 —
+   * 호출자(RPC 핸들러)가 이미 판정한 결과를 넘긴다. 여기서 new Date() 를 부르지 않는다.
+   */
+  closed: boolean;
+}
+
 const AXIS_ORDER: AxisId[] = ["recovery", "activity", "intake"];
 
 /**
@@ -95,7 +103,7 @@ export function toGrade(score: number, cuts: GradeCuts): Grade {
  *   absent_structural  → **분모에서 뺀다**
  *   absent_behavioral  → **분모에 넣고 0점으로 쓴다**
  */
-export function gradeDay(input: DayGradeInput, cuts: GradeCuts): DayGradeResult {
+export function gradeDay(input: DayGradeInput, cuts: GradeCuts, opts: GradeDayOptions): DayGradeResult {
   const breakdown: AxisResult[] = AXIS_ORDER.map((id) => {
     const a = input[id];
     return {
@@ -155,6 +163,22 @@ export function gradeDay(input: DayGradeInput, cuts: GradeCuts): DayGradeResult 
    * 반올림은 표시의 문제지 채점의 문제가 아니다(화면에서 정수로 보이면 된다).
    */
   const score = round1(weighted / denominator);
+
+  if (!opts.closed) {
+    // 진행 중인 하루 — 등급을 매기지 않는다. 아직 안 끝난 하루는 다른 날과 비교할 수
+    // 없다(자정까지 남은 시간만큼 낮은 점수로 보일 수 있어서). score 는 참고값으로
+    // 남기되(예: 진행 중 화면 표시용) grade·ratable 은 강제로 미확정 상태다.
+    // pro-rate(경과 비율로 목표를 깎는 안)는 기각됐다 — 하지 않는다.
+    return {
+      score,
+      grade: null,
+      ratable: false,
+      confidence,
+      breakdown,
+      reasons: breakdown.map((b) => b.reason).filter(Boolean),
+      rulesetVersion: RULESET_VERSION,
+    };
+  }
 
   return {
     score,

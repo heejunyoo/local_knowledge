@@ -20,8 +20,8 @@ describe("day-grade", () => {
    */
   describe("행동적 결측은 이득이 되지 않는다", () => {
     it("식사를 기록하지 않은 날이 나쁘게 먹고 기록한 날보다 높은 점수를 받지 않는다", () => {
-      const notLogged = gradeDay(day(present(100), present(100), behavioral()), CUTS);
-      const loggedBadly = gradeDay(day(present(100), present(100), present(20)), CUTS);
+      const notLogged = gradeDay(day(present(100), present(100), behavioral()), CUTS, { closed: true });
+      const loggedBadly = gradeDay(day(present(100), present(100), present(20)), CUTS, { closed: true });
 
       expect(notLogged.score).not.toBeNull();
       expect(loggedBadly.score).not.toBeNull();
@@ -29,15 +29,15 @@ describe("day-grade", () => {
     });
 
     it("아주 나쁘게 먹어도(1점) 기록한 쪽이 여전히 높다", () => {
-      const notLogged = gradeDay(day(present(100), present(100), behavioral()), CUTS);
-      const loggedBadly = gradeDay(day(present(100), present(100), present(1)), CUTS);
+      const notLogged = gradeDay(day(present(100), present(100), behavioral()), CUTS, { closed: true });
+      const loggedBadly = gradeDay(day(present(100), present(100), present(1)), CUTS, { closed: true });
       expect(notLogged.score!).toBeLessThan(loggedBadly.score!);
     });
 
     it("섭취 0~100 전 구간에서 기록한 쪽이 한 번도 더 낮지 않다", () => {
-      const notLogged = gradeDay(day(present(100), present(100), behavioral()), CUTS).score!;
+      const notLogged = gradeDay(day(present(100), present(100), behavioral()), CUTS, { closed: true }).score!;
       for (let s = 0; s <= 100; s++) {
-        const logged = gradeDay(day(present(100), present(100), present(s)), CUTS).score!;
+        const logged = gradeDay(day(present(100), present(100), present(s)), CUTS, { closed: true }).score!;
         expect(logged, `섭취 ${s}점에서 뒤집혔다`).toBeGreaterThanOrEqual(notLogged);
       }
     });
@@ -45,9 +45,9 @@ describe("day-grade", () => {
     it("다른 축이 어떤 값이어도 뒤집히지 않는다", () => {
       for (const r of [0, 37, 100]) {
         for (const a of [0, 58, 100]) {
-          const notLogged = gradeDay(day(present(r), present(a), behavioral()), CUTS).score!;
+          const notLogged = gradeDay(day(present(r), present(a), behavioral()), CUTS, { closed: true }).score!;
           for (const s of [0, 1, 50, 99, 100]) {
-            const logged = gradeDay(day(present(r), present(a), present(s)), CUTS).score!;
+            const logged = gradeDay(day(present(r), present(a), present(s)), CUTS, { closed: true }).score!;
             expect(logged, `회복 ${r} · 활동 ${a} · 섭취 ${s}`).toBeGreaterThanOrEqual(notLogged);
           }
         }
@@ -56,34 +56,34 @@ describe("day-grade", () => {
 
     it("행동적 결측 축은 분모에 남는다 — 재정규화되지 않는다", () => {
       // 100·100·(0) / 3 = 66.7 → 67.  재정규화했다면 100 이 됐을 것이다.
-      const r = gradeDay(day(present(100), present(100), behavioral()), CUTS);
+      const r = gradeDay(day(present(100), present(100), behavioral()), CUTS, { closed: true });
       expect(r.score).toBe(66.7);
       expect(r.score).not.toBe(100);
     });
 
     it("행동적 결측이 있으면 ratable 이 false 다", () => {
-      expect(gradeDay(day(present(100), present(100), behavioral()), CUTS).ratable).toBe(false);
+      expect(gradeDay(day(present(100), present(100), behavioral()), CUTS, { closed: true }).ratable).toBe(false);
     });
   });
 
   describe("구조적 결측은 재정규화된다", () => {
     it("워치를 안 찬 날은 그 축이 분모에서 빠진다", () => {
       // 활동·섭취만 100 → 100. 회복을 0으로 셌다면 67 이었을 것이다.
-      const r = gradeDay(day(structural(), present(100), present(100)), CUTS);
+      const r = gradeDay(day(structural(), present(100), present(100)), CUTS, { closed: true });
       expect(r.score).toBe(100);
       expect(r.grade).toBe("A");
     });
 
     it("구조적 결측만으로는 ratable 이 유지된다 (남은 축이 2개 이상이면)", () => {
-      expect(gradeDay(day(structural(), present(80), present(80)), CUTS).ratable).toBe(true);
+      expect(gradeDay(day(structural(), present(80), present(80)), CUTS, { closed: true }).ratable).toBe(true);
     });
 
     it("아는 축이 1개뿐이면 ratable 이 false 다", () => {
-      expect(gradeDay(day(structural(), structural(), present(100)), CUTS).ratable).toBe(false);
+      expect(gradeDay(day(structural(), structural(), present(100)), CUTS, { closed: true }).ratable).toBe(false);
     });
 
     it("모든 축이 구조적 결측이면 등급을 지어내지 않는다", () => {
-      const r = gradeDay(day(structural(), structural(), structural()), CUTS);
+      const r = gradeDay(day(structural(), structural(), structural()), CUTS, { closed: true });
       expect(r.score).toBeNull();
       expect(r.grade).toBeNull();
       expect(r.ratable).toBe(false);
@@ -92,39 +92,78 @@ describe("day-grade", () => {
 
   describe("confidence", () => {
     it("전 축을 알면 1", () => {
-      expect(gradeDay(day(present(50), present(50), present(50)), CUTS).confidence).toBe(1);
+      expect(gradeDay(day(present(50), present(50), present(50)), CUTS, { closed: true }).confidence).toBe(1);
     });
 
     it("결측이 늘면 단조 감소한다 — 구조적이든 행동적이든", () => {
-      const all = gradeDay(day(present(50), present(50), present(50)), CUTS).confidence;
-      const one = gradeDay(day(structural(), present(50), present(50)), CUTS).confidence;
-      const two = gradeDay(day(structural(), structural(), present(50)), CUTS).confidence;
+      const all = gradeDay(day(present(50), present(50), present(50)), CUTS, { closed: true }).confidence;
+      const one = gradeDay(day(structural(), present(50), present(50)), CUTS, { closed: true }).confidence;
+      const two = gradeDay(day(structural(), structural(), present(50)), CUTS, { closed: true }).confidence;
       expect(all).toBeGreaterThan(one);
       expect(one).toBeGreaterThan(two);
     });
 
     it("행동적 결측도 confidence 를 깎는다 — 0점인 것과 값을 아는 것은 다르다", () => {
-      const known = gradeDay(day(present(100), present(100), present(0)), CUTS).confidence;
-      const unknown = gradeDay(day(present(100), present(100), behavioral()), CUTS).confidence;
+      const known = gradeDay(day(present(100), present(100), present(0)), CUTS, { closed: true }).confidence;
+      const unknown = gradeDay(day(present(100), present(100), behavioral()), CUTS, { closed: true }).confidence;
       expect(unknown).toBeLessThan(known);
     });
   });
 
   describe("breakdown · reasons", () => {
     it("결측 축의 score 는 null 이다 — 0 이 아니다", () => {
-      const r = gradeDay(day(behavioral(), structural(), present(70)), CUTS);
+      const r = gradeDay(day(behavioral(), structural(), present(70)), CUTS, { closed: true });
       expect(r.breakdown.find((b) => b.id === "recovery")!.score).toBeNull();
       expect(r.breakdown.find((b) => b.id === "activity")!.score).toBeNull();
       expect(r.breakdown.find((b) => b.id === "intake")!.score).toBe(70);
     });
 
     it("룰셋 버전을 담는다", () => {
-      expect(gradeDay(day(present(50), present(50), present(50)), CUTS).rulesetVersion).toBe(RULESET_VERSION);
+      expect(gradeDay(day(present(50), present(50), present(50)), CUTS, { closed: true }).rulesetVersion).toBe(RULESET_VERSION);
     });
 
     it("등급을 LLM 으로 만들지 않으므로 같은 입력에 같은 출력이다", () => {
       const input = day(present(73), structural(), present(41));
-      expect(gradeDay(input, CUTS)).toEqual(gradeDay(input, CUTS));
+      expect(gradeDay(input, CUTS, { closed: true })).toEqual(gradeDay(input, CUTS, { closed: true }));
+    });
+  });
+
+  describe("진행 중인 하루 (closed: false)", () => {
+    it("closed=false 면 grade 가 null 이고 ratable 이 false 다", () => {
+      const r = gradeDay(day(present(90), present(90), present(90)), CUTS, { closed: false });
+      expect(r.grade).toBeNull();
+      expect(r.ratable).toBe(false);
+    });
+
+    it("같은 입력이라도 closed=true 면 등급이 나온다", () => {
+      const input = day(present(90), present(90), present(90));
+      const open = gradeDay(input, CUTS, { closed: false });
+      const closed = gradeDay(input, CUTS, { closed: true });
+      expect(open.grade).toBeNull();
+      expect(closed.grade).toBe("A");
+      expect(closed.ratable).toBe(true);
+    });
+
+    it("closed=false 여도 breakdown 의 축 상태와 현재 값은 채워진다", () => {
+      const r = gradeDay(day(present(73), structural(), behavioral()), CUTS, { closed: false });
+      expect(r.breakdown.find((b) => b.id === "recovery")).toEqual({
+        id: "recovery", state: "present", score: 73, reason: "x",
+      });
+      expect(r.breakdown.find((b) => b.id === "activity")!.state).toBe("absent_structural");
+      expect(r.breakdown.find((b) => b.id === "intake")!.state).toBe("absent_behavioral");
+    });
+
+    it("closed=false 여도 score 는 참고값으로 남는다 (등급만 미확정)", () => {
+      const r = gradeDay(day(present(100), present(100), present(100)), CUTS, { closed: false });
+      expect(r.score).toBe(100);
+      expect(r.grade).toBeNull();
+    });
+
+    it("모든 축이 결측이면 closed=false 에서도 score 가 null 이다", () => {
+      const r = gradeDay(day(structural(), structural(), structural()), CUTS, { closed: false });
+      expect(r.score).toBeNull();
+      expect(r.grade).toBeNull();
+      expect(r.ratable).toBe(false);
     });
   });
 
