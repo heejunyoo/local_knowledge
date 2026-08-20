@@ -23,6 +23,10 @@ export interface IngestSample {
   weightKg?: unknown;
   sleep_h?: unknown;
   sleepH?: unknown;
+  /** 하루 종일 커지는 누적 스냅샷 — dedupe 대신 upsert 경로를 탄다(D-M). */
+  steps?: unknown;
+  active_energy_kcal?: unknown;
+  activeEnergyKcal?: unknown;
 }
 
 export function parseIngestNumber(v: unknown): number | null {
@@ -86,11 +90,15 @@ export interface IngestResult {
 }
 
 /**
- * 원본 ingestHealthSamples(_:) 1:1. client_id 기준 idempotent — 이미 존재하는
- * id는 deduped로 집계하고 재삽입하지 않는다. metric은 weight_kg/sleep_h 중
- * 최소 하나 필요. HealthKit metric의 context는 항상 "healthkit"(사용자 아침
- * 공복 스케일과 절대 섞이지 않게 하는 원본의 핵심 계약) — source가
- * healthkit이 아닐 때만 활성 단식 여부로 "morning_fasted" 자동 태깅.
+ * 원본 ingestHealthSamples(_:) 1:1 + D-M 확장. client_id 기준 idempotent —
+ * 이미 존재하는 id는 deduped로 집계하고 재삽입하지 않는다. metric은
+ * weight_kg/sleep_h/steps/active_energy_kcal 중 최소 하나 필요. steps·
+ * active_energy_kcal이 있는 샘플은 하루 종일 커지는 누적 스냅샷이라 예외적으로
+ * dedupe 대신 upsert로 갱신한다(같은 client_id 재전송이 정상) — weight_kg·
+ * sleep_h만 있는 샘플의 dedupe 계약은 그대로다. HealthKit metric의 context는
+ * 항상 "healthkit"(사용자 아침 공복 스케일과 절대 섞이지 않게 하는 원본의 핵심
+ * 계약) — source가 healthkit이 아닐 때만 활성 단식 여부로 "morning_fasted"
+ * 자동 태깅.
  */
 export async function ingestHealthSamples(samples: IngestSample[]): Promise<IngestResult> {
   const supabase = serviceClient();
@@ -133,35 +141,60 @@ export async function ingestHealthSamples(samples: IngestSample[]): Promise<Inge
         if (insErr) throw insErr;
         accepted++;
       } else if (type === "metric") {
-        const { data: existing, error } = await supabase
-          .from("diet_metric")
-          .select("id")
-          .eq("id", clientId)
-          .maybeSingle();
-        if (error) throw error;
-        if (existing) {
-          deduped++;
-          continue;
-        }
         const weightKg = parseIngestNumber(s.weight_kg ?? s.weightKg);
         const sleepH = parseIngestNumber(s.sleep_h ?? s.sleepH);
-        if (weightKg == null && sleepH == null) {
-          errors.push(`[${idx}] metric needs weight_kg or sleep_h`);
+        const steps = parseIngestNumber(s.steps);
+        const activeEnergyKcal = parseIngestNumber(s.active_energy_kcal ?? s.activeEnergyKcal);
+        if (weightKg == null && sleepH == null && steps == null && activeEnergyKcal == null) {
+          errors.push(`[${idx}] metric needs weight_kg, sleep_h, steps, or active_energy_kcal`);
           continue;
         }
+        // 누적 스냅샷이 아닌 기존 경로는 **dedupe 를 먼저 본다.** 중복이면 여기서 끝나야
+        // 원래처럼 isFastingActive() 조회를 타지 않는다 — 순서를 바꾸면 중복 재전송마다
+        // settings 를 한 번씩 더 읽고, 그 조회가 실패할 때 원래는 deduped 였을 샘플이
+        // 에러로 뒤집힌다.
+        const cumulative = steps != null || activeEnergyKcal != null;
+        if (!cumulative) {
+          const { data: existing, error } = await supabase
+            .from("diet_metric")
+            .select("id")
+            .eq("id", clientId)
+            .maybeSingle();
+          if (error) throw error;
+          if (existing) {
+            deduped++;
+            continue;
+          }
+        }
+
         let context: string | null = source === "healthkit" ? "healthkit" : null;
         if (context == null && weightKg != null && (await isFastingActive(supabase))) {
           context = "morning_fasted";
         }
-        const { error: insErr } = await supabase.from("diet_metric").insert({
+        const row = {
           id: clientId,
           owner_id: OWNER_ID,
           ts: ts.toISOString(),
           weight_kg: weightKg,
           sleep_h: sleepH,
+          steps,
+          active_energy_kcal: activeEnergyKcal,
           context,
-        });
-        if (insErr) throw insErr;
+        };
+
+        // steps·active_energy_kcal은 그 시점까지의 누적 스냅샷이다(D-M) — 단축어가
+        // 같은 client_id(예: steps-2026-08-20)로 하루 종일 재전송하는 것이 정상 동작
+        // 이라 dedupe로 버리면 값이 절대 갱신되지 않는다. syncProfileWeight와 같은
+        // upsert 방식으로 최신값을 덮어쓴다. weight_kg·sleep_h만 있는 샘플(하루 한
+        // 번 찍는 값)은 기존 idempotent 계약(이미 있으면 deduped++, 재삽입 안 함)을
+        // 그대로 유지한다 — 반환 집계의 의미를 바꾸지 않는다.
+        if (cumulative) {
+          const { error: upErr } = await supabase.from("diet_metric").upsert(row);
+          if (upErr) throw upErr;
+        } else {
+          const { error: insErr } = await supabase.from("diet_metric").insert(row);
+          if (insErr) throw insErr;
+        }
         if (weightKg != null) await syncProfileWeight(supabase, weightKg);
         accepted++;
       } else {

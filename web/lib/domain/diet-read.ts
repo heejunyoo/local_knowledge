@@ -36,6 +36,9 @@ export interface Metric {
   sleepH: number | null;
   /** e.g. "morning_fasted"/"healthkit" — weightForPlan() 우선순위 판정에만 쓰이고 일별 요약에는 노출 안 됨(원본 metricDict과 동일). */
   context: string | null;
+  /** 활동 축(D-J) 하위항목용 — 마이그레이션 009. 적용 전 기존 행·구버전 클라이언트는 null(구조적 결측). */
+  steps?: number | null;
+  activeEnergyKcal?: number | null;
 }
 
 export interface DaySnapshot {

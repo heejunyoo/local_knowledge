@@ -647,7 +647,8 @@
         "활동 축이 최근 7일 창으로 계산된다",
         "등급을 저장하지 않고 매번 계산한다",
         "dispatch 에 등록된다",
-        "next build 가 통과한다"
+        "next build 가 통과한다",
+        "diet_metric 조회가 steps·active_energy_kcal 을 가져와 도메인 Metric 까지 도달한다"
       ],
       "acceptance": {
         "command": "npm run test && npx next build",
@@ -658,6 +659,11 @@
         "cwd": "/Users/heejunyoo/IdeaProjects/KnowledgeApp/web"
       },
       "edit_points": [
+        {
+          "path": "web/lib/db/diet.ts",
+          "symbol": "select(\"id,ts,weight_kg,sleep_h,context\")",
+          "what": "metric 조회 select 에 steps·active_energy_kcal 을 추가하고 toMetric 매퍼에서 camelCase 로 옮긴다. expose-meal-limits 가 diet_meal 에 한 것과 같은 작업 — Metric 타입에는 필드가 올라왔는데 읽기 쿼리가 안 가져와서 값이 도메인까지 오지 못한다. ⚠ 009 가 DB 에 적용되기 전에는 이 select 가 깨진다 — 적용 순서는 008 → 009 → 코드 배포다."
+        },
         {
           "path": "web/lib/rpc/handlers.ts",
           "symbol": "day_grade",
