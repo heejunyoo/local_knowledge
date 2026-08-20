@@ -18,7 +18,7 @@
 | **D-2** | `ingreed` 는 **합치지 않는다.** 교차 프로젝트 RPC(제품 영양 공급자)로 남긴다 |
 | **D-3** | Vercel Hobby 를 유지한다. **주기 실행은 Vercel Cron 이 아니라 Supabase `pg_cron`** 에 둔다 |
 | **D-4** | `refactor/web-p0` → `main` 머지가 개인비서 확장의 **선행 조건**이다 |
-| **D-5** | Supabase keepalive 는 **지금 고장나 있다.** 실제 DB 쿼리로 바꾼다 |
+| **D-5** | Supabase 가 정지됐다. keepalive 코드는 멀쩡하므로 **원인을 진단부터** 한다 (§2.3) |
 
 ---
 
@@ -86,17 +86,25 @@ Vercel 이 이 브랜치를 프로덕션으로 보고 있다(`REFACTOR_STATUS.md
 | "Fly/Railway/자체 호스팅이 낫지 않나" | **기각.** 얻는 것은 cron 자유 하나인데 그건 pg_cron 으로 이미 해결된다. 1인이 런타임·TLS·배포를 떠안는 대가가 크다 |
 | "그럼 지금 아픈 곳은 없나" | **있다.** → §2.3 |
 
-### 2.3 ⭐ keepalive 가 작동하지 않고 있다
+### 2.3 ⭐ keepalive 는 돌지 않았다 — 코드 탓이 아니다
 
 `web/vercel.json` 에 `/api/cron/keepalive` 가 하루 한 번 걸려 있는데 **Supabase 프로젝트는 실제로
 일시정지됐다**(`.claude/specs/daily-grade/spec.md` §1 — `test:regression` 실행 불가).
 
-Supabase 공식 문서는 정지 기준을 "**user database activity**"로 명시하고, 자체 확인 문서
-(`SUPABASE_FREE_TIER_CHECK_2026-07-27.md` 항목 2)도 이미 "단순 HTTP 헬스체크만으로는 불충분할
-수 있음"이라고 조건부 PASS 로 적어 뒀다. **그 조건이 실제로 터진 것이다.**
+**코드를 먼저 의심했다가 틀렸다.** 라우트는 `settings` 테이블에 실제 select 를 날리고
+(`web/app/api/cron/keepalive/route.ts`), `CRON_SECRET` 도 Vercel Production 에 등록돼 있다
+(`docs/ENV_VARS.md`, 2026-07-29). 고칠 코드가 없다.
 
-→ **D-5**: keepalive 를 실제 테이블에 닿는 쿼리로 바꾸고, 정지 재발 시 알 수 있게 한다.
-호스팅 선택과 무관한 결함이므로 개인비서 Phase 와 별개로 먼저 고친다.
+남는 원인은 둘이고, **어느 쪽인지 로그를 봐야 안다.**
+
+| 가설 | 왜 그럴듯한가 | 확인 방법 |
+|---|---|---|
+| **⑴ 크론이 아예 안 돌았다** | Vercel Cron 은 **Production 배포에서만** 실행된다. 이 리포의 프로덕션 브랜치가 `main` 이면, `main` 은 69커밋 뒤에 멈춰 있어 keepalive 라우트가 프로덕션에 없거나 낡은 채로 떠 있다 — §1.3 과 정확히 맞물린다 | Vercel 대시보드 Cron Jobs 실행 이력 (200 / 401 / 404) |
+| **⑵ 하루 1회가 기준에 못 미친다** | Supabase 문서는 "**a few** user requests to the database **each day**"라고 쓴다. Hobby 크론 상한이 1일 1회라 이 경로로는 더 늘릴 수 없다 | 위 로그가 계속 200 인데도 정지됐다면 이쪽 |
+
+**⑴ 이면 F-1(main 머지)이 그대로 처방이다.** ⑵ 라면 하루 여러 번 두드릴 채널이 따로 필요한데
+(pg_cron 은 DB 내부 작업이라 "user request" 로 집계되지 않을 공산이 크다) **새 외부 서비스 도입은
+오너 승인 대상**이라 여기서 정하지 않는다.
 
 ### 2.4 감도 확인 — 언제 이 결론이 뒤집히나
 
@@ -114,7 +122,7 @@ DB 안에서만 돈다. **알림이 개인비서의 핵심 기능으로 승격�
 | # | 조치 | 왜 지금 |
 |---|---|---|
 | F-1 | `refactor/web-p0` → `main` 머지 · Vercel 프로덕션 브랜치 복귀 | 트렁크 없이 기능을 더 얹지 않는다 (D-4) |
-| F-2 | keepalive 를 실제 DB 쿼리로 교체 | 지금 정지돼 있다 (D-5) |
+| F-2 | Vercel Cron 실행 이력을 보고 정지 원인을 ⑴/⑵ 로 가른다 | 코드는 멀쩡하다. 원인을 모르고 고치지 않는다 (D-5) |
 | F-3 | LLM 경유 라우트에 `maxDuration` 명시 | 기본 10s 가 경계 위다 (§2.2) |
 | F-4 | 주기 작업은 `pg_cron` 으로 설계 | Vercel Hobby 1일 1회 제약 회피 (D-3) |
 
