@@ -130,7 +130,7 @@ WHO 2020 신체활동 권장은 **주 150~300분(중강도)** 이다. 하루 단
 ⚠ 코드의 `RECOMMENDED_WEEKLY_WORKOUTS`(활동수준별 3~5회)·`RECOMMENDED_WORKOUT_MINUTES_PER_DAY`
 (20~45분)는 **조사로도 1차 근거를 찾지 못했다.** 등급 임계값으로 쓰지 않는다.
 
-### D-I ⭐ 진행 중인 하루에는 등급을 매기지 않는다 (설계 §2.6)
+### D-K ⭐ 진행 중인 하루에는 등급을 매기지 않는다 (설계 §2.6)
 
 `gradeDay` 는 **그날이 끝났는지**를 인자로 받는다. 날짜 판단을 도메인 함수 안에서 `new Date()` 로
 하지 않는다(순수 규약 위반이고 테스트가 시계에 묶인다).
@@ -148,7 +148,7 @@ closed: false  오늘    → grade = null, ratable = false.
 - 오늘 화면은 등급 대신 **무엇이 비었는지**를 보여준다 — `missingLogChecklist(now, today, yesterday)`
   (`diet-read.ts:233`)가 이미 시각 기반으로 그 일을 한다. 재구현하지 않는다.
 
-### D-J ratable 게이트 — 쓰인 축이 2개 미만이면 false (설계 §2.2 2판)
+### D-L ratable 게이트 — 쓰인 축이 2개 미만이면 false (설계 §2.2 2판)
 
 `absent_behavioral` 이 하나라도 있으면 false — 여기에 조건을 **하나 더** 얹는다.
 **채점에 실제로 쓰인 축(present)이 2개 미만이어도 false.**
@@ -156,21 +156,15 @@ closed: false  오늘    → grade = null, ratable = false.
 자동 축 둘이 다 결측이면 재정규화가 섭취 하나로 A 를 만들어 준다. 재정규화 규칙은 그대로 두고
 ratable 만 끈다 — 점수와 비교 가능성은 다른 장치다.
 
-### D-K 단백질 — 등급 임계값과 화면 값을 분리한다
+**이미 구현돼 있다** — `web/lib/domain/day-grade.ts` `ratable: !hasBehavioralGap && presentCount >= 2`.
+이 절은 그 코드의 근거를 사후에 문서로 고정한 것이다(리뷰와 구현이 같은 결론에 독립적으로 도달했다).
 
-조사 결과(§6) 코드의 `체중×1.6` 은 **일반 인구 기준(IOM 0.8 · KDRIs 0.91)의 약 2배**이고
-**ISSN 2017 스포츠영양 범위(1.4–2.0)에만** 들어간다. 그런데 §7 은 `diet-read.ts` 수정을 금지한다.
+### (단백질) → **D-I 로 통일.** 별도 결정을 두지 않는다
 
-| | 규칙 |
-|---|---|
-| 기존 화면 | `recommendedProteinG`(×1.6) **그대로 둔다.** 고치지 않는다 |
-| 등급 임계값 | `day-grade-thresholds.ts` 가 **자기 값을 갖고**, 어느 기관 근거인지 주석에 적는다 |
-| 두 값이 다를 때 | 그것이 정상이다. 목적이 다르다(화면=목표 제시, 등급=권장 충족 판정) |
+리뷰 단계에서 같은 취지의 결정을 중복 작성했다가 D-I 로 합쳤다. 요지는 D-I 와 같다 —
+등급 임계값은 KDRIs 0.91 g/kg, 식단 화면의 `recommendedProteinG`(×1.6)는 **고치지 않는다**.
 
-**같은 값을 억지로 맞추려고 `diet-read.ts` 를 고치지 않는다.** 고치면 기존 골든이 깨지고
-이번 범위를 넘는다.
-
-### D-L metric 집계 규칙 — 하루에 행이 여러 개다
+### D-M metric 집계 규칙 — 하루에 행이 여러 개다
 
 `DaySnapshot.metrics` 는 배열이다. 기존 코드는 수면을 **마지막 값 하나**로 고른다
 (`latestSleepHours` `diet-read.ts:261`, `sleepPick` `:803`). 새 필드도 규칙을 명시한다.
@@ -190,7 +184,7 @@ ratable 만 끈다 — 점수와 비교 가능성은 다른 장치다.
 
 | 파일 | 현재 | 할 일 |
 |---|---|---|
-| `web/lib/domain/day-grade.ts` | 없음 | 신규 — 축 상태·재정규화·채점(순수) |
+| `web/lib/domain/day-grade.ts` | **206행 작성됨**(미커밋) | D-K(`closed`) 미반영 — 그 인자만 추가한다 |
 | `web/lib/domain/day-grade-thresholds.ts` | 없음 | 신규 — §6 조사로 확정된 임계값 + 출처 주석 |
 | `web/lib/domain/diet-read.ts` | 1111행 | **읽기만.** `DaySnapshot`·`Profile`·`recommended*` 를 입력으로 쓴다 |
 | `web/lib/health-ingest.ts` | — | `steps` · `active_energy_kcal` 수용 |
