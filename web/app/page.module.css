@@ -70,6 +70,68 @@
   margin: var(--toss-space-4) 0;
 }
 
+.gradeHead {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--toss-space-3);
+}
+
+.gradeLetter {
+  font-size: 40px;
+  font-weight: 700;
+  color: var(--toss-blue-500);
+  line-height: 1;
+}
+
+.gradeScore {
+  font-size: var(--toss-font-body-size);
+  font-weight: 600;
+  color: var(--toss-grey-700);
+}
+
+.gradePending {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--toss-grey-700);
+}
+
+
+
+.gradeAxisList {
+  margin-top: var(--toss-space-4);
+  padding-top: var(--toss-space-4);
+  border-top: 1px solid var(--toss-grey-200);
+}
+
+.gradeAxisRow {
+  display: flex;
+  align-items: baseline;
+  gap: var(--toss-space-2);
+  padding: var(--toss-space-1) 0;
+}
+
+.gradeAxisLabel {
+  flex: none;
+  width: 36px;
+  font-size: var(--toss-font-caption-size);
+  font-weight: 700;
+  color: var(--toss-blue-500);
+}
+
+.gradeAxisReason {
+  flex: 1;
+  font-size: 14px;
+  color: var(--toss-grey-700);
+}
+
+.gradeAxisScore {
+  flex: none;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--toss-grey-900);
+}
+
 .gapRow {
   display: flex;
   align-items: center;

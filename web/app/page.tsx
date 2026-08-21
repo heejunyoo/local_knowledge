@@ -1,6 +1,6 @@
 import Link from "next/link";
-import { assistant_today } from "@/lib/rpc/handlers";
-import { Card, ListRow } from "@/components/ui";
+import { assistant_today, day_grade } from "@/lib/rpc/handlers";
+import { Card, ListRow, Badge } from "@/components/ui";
 import styles from "./page.module.css";
 
 interface AssistantToday {
@@ -15,14 +15,42 @@ interface AssistantToday {
   next_actions: { kind: string; label: string; subtitle?: string; slot?: string }[];
 }
 
+interface DayGradeAxis {
+  id: string;
+  state: string;
+  score?: number;
+  reason: string;
+}
+
+interface DayGradeResult {
+  grade: string | null;
+  score: number | null;
+  ratable: boolean;
+  confidence: number;
+  breakdown: DayGradeAxis[];
+}
+
 const ACTION_HREF: Record<string, string> = {
   gap: "/diet",
   diet_suggest: "/diet",
   inbox: "/inbox",
 };
 
+const AXIS_LABEL: Record<string, string> = {
+  recovery: "회복",
+  activity: "활동",
+  intake: "섭취",
+};
+
+// confidence 는 3축(회복·활동·섭취) 중 실제로 아는 축의 비중이라 0, 0.33, 0.67, 1
+// 넷 중 하나다. 절반 미만(0·0.33)만 알면 "추정치"로 표시한다.
+const LOW_CONFIDENCE = 0.5;
+
 export default async function HubPage() {
-  const today = (await assistant_today()) as unknown as AssistantToday;
+  const [today, grade] = await Promise.all([
+    assistant_today() as unknown as Promise<AssistantToday>,
+    day_grade({}) as unknown as Promise<DayGradeResult>,
+  ]);
   const primaryAction = today.next_actions[0];
   const primaryHref = primaryAction ? (ACTION_HREF[primaryAction.kind] ?? "/diet") : "/diet";
 
@@ -33,6 +61,40 @@ export default async function HubPage() {
           {today.knowledge.inbox_open > 0 ? "확인할 게 있어요" : "오늘의 나"}
         </h1>
         <p className={styles.greetingBody}>몸·지식·다음 할 일을 한곳에서 이어가요.</p>
+      </div>
+
+      <div className={styles.section}>
+        <p className={styles.sectionLabel}>오늘의 등급</p>
+        <Card>
+          <div className={styles.gradeHead}>
+            {grade.grade !== null ? (
+              <>
+                <span className={styles.gradeLetter}>{grade.grade}</span>
+                {grade.score !== null ? <span className={styles.gradeScore}>{Math.round(grade.score)}점</span> : null}
+              </>
+            ) : (
+              <span className={styles.gradePending}>아직 진행 중</span>
+            )}
+            {grade.confidence < LOW_CONFIDENCE ? <Badge kind="neutral">추정치예요</Badge> : null}
+            {grade.grade !== null && !grade.ratable ? (
+              <Badge kind="neutral">다른 날과 비교할 수 없어요</Badge>
+            ) : null}
+          </div>
+
+          {/* 빠진 기록 목록은 여기 두지 않는다. 아래 "빠진 기록" 섹션이 같은 today.gaps 를
+              /diet 링크와 함께 이미 보여주고, 무엇이 비었는지는 바로 아래 축별 reason
+              ("식사 기록 없음")이 말한다 — 한 화면에 같은 목록을 두 번 두지 않는다. */}
+
+          <div className={styles.gradeAxisList}>
+            {grade.breakdown.map((axis) => (
+              <div key={axis.id} className={styles.gradeAxisRow}>
+                <span className={styles.gradeAxisLabel}>{AXIS_LABEL[axis.id] ?? axis.id}</span>
+                <span className={styles.gradeAxisReason}>{axis.reason}</span>
+                {axis.score != null ? <span className={styles.gradeAxisScore}>{Math.round(axis.score)}</span> : null}
+              </div>
+            ))}
+          </div>
+        </Card>
       </div>
 
       <div className={styles.section}>
