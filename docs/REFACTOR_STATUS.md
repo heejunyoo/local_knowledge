@@ -59,15 +59,37 @@
 
 검증: `npm run test` **27 files / 274 tests** · `npx next build` 성공.
 
-### 👤 오너만 할 수 있는 것 — 이 순서대로
+### ✅ 적용까지 끝났다 (2026-08-21)
 
-1. **마이그레이션 적용 승인** — 대상은 ingreed **프로덕션** DB 다(안전 바닥: DB 스키마 = Ask-Before-Act)
-2. **PostgREST 노출 스키마에 `today` 추가** — 대시보드 → Settings → API → Exposed schemas.
-   안 하면 앱이 `PGRST106`. 이것만으로 데이터가 새지는 않는다(anon 은 USAGE 없음)
-3. **owner 계정 생성** (`scripts/create-owner-user.ts`) → 그 uuid 로 복원 실행
-4. **Vercel 환경변수 교체** — `NEXT_PUBLIC_SUPABASE_URL`·`ANON_KEY`·`SERVICE_ROLE_KEY`·`SUPABASE_DB_URL`
-   을 ingreed 프로젝트 것으로. `knowledge-backup` 리포의 `SUPABASE_DB_URL` 시크릿도 같이
-5. 그 뒤 `npm run test:regression` · `/diet`·'오늘' 화면 실렌더링 확인
+| 단계 | 결과 |
+|---|---|
+| 드라이런 | 트랜잭션 안에서 000~009 실행 후 rollback — 문법·권한·확장 전부 통과, 흔적 0 |
+| 마이그레이션 적용 | 테이블 14 · 인덱스 25 · 정책 14 · RLS 14 · 함수 1. **`ingreed` 스키마 8테이블 그대로** |
+| PostgREST 노출 | `db_schema` = `public,graphql_public,today` (Management API) |
+| owner 계정 | `f7da16fd-9394-4967-8010-db236d49dadf` (naheejun87@gmail.com) |
+| 데이터 복원 | 8/9 덤프 **1,583행** 전량 · 14테이블 행수 판정 전부 일치 · `state_event` 시퀀스 212 · `search_doc.tsv` 236행 재생성 |
+| 용량 | DB 231 → **243MB / 500MB** · `today` **11MB** (추정 "10MB 안팎"과 일치) |
+
+**보안 두 겹을 실제로 확인했다.** anon 키로 `Accept-Profile: today` 를 붙여 직접
+찔렀더니 `42501 permission denied for schema today` — 노출 설정이 켜져 있어도
+바깥 겹이 막는다.
+
+**ingreed 는 영향받지 않았다.** 적용 전·후·PostgREST 재빌드 후 3회 `smoke_rpc.ts`
+7종 전부 통과(134~830ms, 이전과 같은 구간).
+
+검증: `npm run test` 274 · `npm run test:regression` **6 files / 35 tests 통과**
+(실 DB · RLS · 골든 비교 포함) · `npx next build` 성공.
+
+### 👤 남은 것 — 오너만 할 수 있다
+
+1. **Vercel 환경변수 4종 교체** — `NEXT_PUBLIC_SUPABASE_URL` · `NEXT_PUBLIC_SUPABASE_ANON_KEY` ·
+   `SUPABASE_SERVICE_ROLE_KEY` · `SUPABASE_DB_URL` 을 ingreed 프로젝트 것으로.
+   **이걸 하기 전까지 `hj-knowledge.vercel.app` 은 죽은 프로젝트를 계속 가리킨다.**
+   로컬 `.env.local` 은 이미 교체했다
+2. **`knowledge-backup` 리포의 `SUPABASE_DB_URL` 시크릿** 도 같이 교체 — 안 하면
+   다음 일요일 백업이 계속 실패한다. 워크플로는 이미 `--schema today` 로 좁혀 뒀다
+3. **로그인 비밀번호 설정** — `npx tsx scripts/set-password.ts` (계정은 만들어 뒀다)
+4. 그 뒤 `/diet`·'오늘' 화면 실렌더링 확인
 
 ### ⑶ ingreed 쪽 부하는 그대로 남는다
 
