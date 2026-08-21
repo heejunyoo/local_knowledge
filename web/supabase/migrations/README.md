@@ -33,11 +33,27 @@
 1. **PostgREST 노출 스키마에 `today` 추가** 👤 대시보드 → Settings → API →
    Exposed schemas. 이것을 안 하면 앱이 `PGRST106`(schema not found)을 받는다.
    반대로 이것만으로 데이터가 새지는 않는다 — anon 은 스키마 USAGE 가 없다(000).
-2. **owner 계정 생성** — `scripts/create-owner-user.ts`
-3. **데이터 복원** — `scripts/restore-into-today.sh <덤프> `
+2. **Auth 설정을 옮긴다** 👤 — ⚠ **2026-08-21 에 이것을 빠뜨려 로그인이 깨졌다.**
+   프로젝트 이전은 DB 만 옮기는 일이 아니다. ingreed 프로젝트는 Auth 를 쓴 적이
+   없어 전부 기본값이었고, `site_url` 이 `http://localhost:3000` 이라 프로덕션
+   로그인이 성립하지 않았다. 대시보드 → Authentication → URL Configuration,
+   또는 Management API `PATCH /v1/projects/{ref}/config/auth`:
+
+   | 키 | 값 |
+   |---|---|
+   | `site_url` | `https://hj-knowledge.vercel.app` |
+   | `uri_allow_list` | `https://hj-knowledge.vercel.app/**,http://localhost:3000/**` |
+   | `disable_signup` | `true` — 오너 1인 앱이다. 기본값은 **열려 있다** |
+
+   > 이 설정을 바꾸면 Auth 서버가 재시작되고, 그 직후 발급된 토큰이
+   > `PGRST303 JWT issued at future` 로 거부될 수 있다(실제로 겪었다).
+   > 1분쯤 뒤 다시 로그인하면 풀린다.
+
+3. **owner 계정 생성** — `scripts/create-owner-user.ts`
+4. **데이터 복원** — `scripts/restore-into-today.sh <덤프> `
    (`NEW_OWNER_ID` 필요. 8/9 덤프는 옛 uuid 를 들고 있어 그대로 넣으면 RLS 가
    전부 걸러 "로그인은 되는데 아무것도 안 보이는" 상태가 된다)
-4. `npm run test:regression`
+5. `npm run test:regression`
 
 ## 왜 `public` 이 아닌가
 
