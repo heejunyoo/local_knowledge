@@ -9,6 +9,7 @@
 // 세션은 scripts/generate-magic-link.ts와 같은 방식(admin.generateLink →
 // verifyOtp)으로 발급한다 — 메일 발송이 없어 무료 티어 rate limit과 무관하다.
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import { DB_SCHEMA } from "@/lib/supabase/schema";
 import dotenv from "dotenv";
 import path from "node:path";
 
@@ -16,14 +17,18 @@ dotenv.config({ path: path.join(__dirname, "..", "..", ".env.local") });
 
 const OWNER_EMAIL = "naheejun87@gmail.com";
 
-let cached: Promise<SupabaseClient> | null = null;
+// 스키마 이름이 타입에 실린다(supabase-js v2). lib/supabase/server.ts 의
+// createClient() 와 같은 스키마여야 handlers 가 이 클라이언트를 받아들인다.
+type OwnerClient = SupabaseClient<any, "public", typeof DB_SCHEMA>;
 
-export function testSupabaseClient(): Promise<SupabaseClient> {
+let cached: Promise<OwnerClient> | null = null;
+
+export function testSupabaseClient(): Promise<OwnerClient> {
   if (!cached) cached = authenticate();
   return cached;
 }
 
-async function authenticate(): Promise<SupabaseClient> {
+async function authenticate(): Promise<OwnerClient> {
   const url = requireEnv("NEXT_PUBLIC_SUPABASE_URL");
   const anonKey = requireEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY");
   const serviceKey = requireEnv("SUPABASE_SERVICE_ROLE_KEY");
@@ -37,7 +42,7 @@ async function authenticate(): Promise<SupabaseClient> {
     throw new Error(`test-client: generateLink failed: ${linkError?.message ?? "no hashed_token"}`);
   }
 
-  const anon = createClient(url, anonKey);
+  const anon = createClient(url, anonKey, { db: { schema: DB_SCHEMA } });
   const { data: verified, error: verifyError } = await anon.auth.verifyOtp({
     type: "magiclink",
     token_hash: linkData.properties.hashed_token,

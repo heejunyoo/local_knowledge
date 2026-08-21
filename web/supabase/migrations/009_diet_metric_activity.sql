@@ -9,6 +9,6 @@
 -- 기존 행이 있으므로 not null 제약을 걸지 않는다. RLS 정책은 004_rls.sql의
 -- owner_all 정책이 테이블 단위로 이미 적용되었으므로 재정의하지 않는다.
 
-alter table diet_metric
+alter table today.diet_metric
   add column steps integer,
   add column active_energy_kcal numeric;

@@ -4,12 +4,15 @@
 // 한해서만 SUPABASE_SERVICE_ROLE_KEY로 RLS를 우회하고 owner_id를 코드에서
 // 명시적으로 고정한다 — 이 예외를 다른 파일로 넓히지 말 것(docs/ENV_VARS.md).
 import { createClient } from "@supabase/supabase-js";
+import { DB_SCHEMA } from "@/lib/supabase/schema";
 
 // docs/ENV_VARS.md·REFACTOR_STATUS.md에 기록된 오너 auth.uid() 고정값.
 const OWNER_ID = "47e5b22d-a1f1-4266-b4e5-cd2524b0a37f";
 
 function serviceClient() {
-  return createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
+  return createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!, {
+    db: { schema: DB_SCHEMA },
+  });
 }
 
 export interface IngestSample {

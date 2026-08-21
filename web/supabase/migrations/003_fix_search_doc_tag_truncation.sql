@@ -7,8 +7,11 @@
 -- 대응: 색인 대상 텍스트에서 '<' '>' 를 공백으로 치환한 뒤 tsvector를 생성한다.
 -- 이는 언어적 튜닝(형태소·동의어 등)이 아니라 파서 오탐 방지이며, D-4가 금지한
 -- "품질 개선"이 아니라 FTS5와의 동등성 확보에 해당한다.
-alter table search_doc drop column tsv;
-alter table search_doc add column tsv tsvector generated always as (
+--
+-- 2026-08-21 스키마 이전: `today` 로 옮겼다. 001 을 직접 고치지 않고 이 파일을
+-- 남겨 두는 이유는 위 발견 자체가 기록이기 때문이다.
+alter table today.search_doc drop column tsv;
+alter table today.search_doc add column tsv tsvector generated always as (
   to_tsvector('simple', replace(replace(coalesce(title,'') || ' ' || coalesce(body,''), '<', ' '), '>', ' '))
 ) stored;
-create index search_doc_tsv_idx on search_doc using gin (tsv);
+create index search_doc_tsv_idx on today.search_doc using gin (tsv);

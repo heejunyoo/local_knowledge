@@ -9,22 +9,71 @@
 | 미해결 이슈 | `docs/REFACTOR_BACKLOG.md` |
 | 작업 브랜치 | `refactor/web-p0` |
 
-## ⚠ 먼저 읽을 것 — 차단 2건 (2026-08-20)
+## ⚠ 먼저 읽을 것 — DB 이전 진행 중 (2026-08-21)
 
-**⑴ Knowledge Supabase 프로젝트 `gppklwzcmfuuhsefdeik` 가 일시정지 상태다.**
-`dig` 에 DNS 레코드가 없고 REST 는 HTTP 000. 무료 티어 7일 무활동 정지로 보인다
-(마지막 활동 2026-07-31). `/api/cron/keepalive` 가 막기로 돼 있었는데 **작동하지 않았다** —
-왜 안 돌았는지는 아직 안 봤다. 복구는 오너가 대시보드에서 **Resume project** 클릭 1회.
+### ⑴ 옛 Knowledge 프로젝트는 정지가 아니라 **삭제**됐다
 
-그래서 지금 **못 하는 것**: `npm run test:regression` · 마이그레이션 008 적용 ·
-`/diet` 화면 실렌더링 확인. 재개되면 이 셋을 먼저 한다.
+8/20 기록은 "무료 티어 7일 무활동 정지로 보인다 → Resume 클릭 1회"였다.
+**그 진단이 틀렸다.** 교차 확인한 것:
 
-**⑵ ingreed 프로젝트가 불안정하다** (연동 대상, `pzatcwqxlwiearxcsyxm`).
-3일 유휴 뒤 `ingreed_search` 가 `57014 canceling statement due to statement timeout`
-을 오갔다 — 실측 8.5s→500 · 49.6s→200 · 14.8s→500. 몇 번 두드리면 warm 이 되고
-그 뒤엔 1.7s 다. **우리 쪽 폴백이 이 상태를 견디는 것은 확인했다**(예외 없이 빈 목록).
-다만 ingreed 가 이 상태면 식단 기록이 자주 LLM 추정으로 떨어진다 — ingreed 리포 쪽
-과제다.
+| 증거 | 내용 |
+|---|---|
+| ingreed `docs/ops/05-migration.md` §8 · `NEXT.md` | "옛 프로젝트 삭제 — 완료(2026-08-11)" |
+| ingreed `packages/ui/src/config.ts` 주석 | 그 옛 프로젝트가 곧 **`gppklwzcmfuuhsefdeik`(뭄바이)** |
+| `knowledge-backup` 워크플로 | 8/9 성공 → **8/16 실패**, `tenant/user postgres.gppklwzcmfuuhsefdeik not found` |
+| DNS·REST | A 레코드 없음 · HTTP 000 (정지라면 도메인은 살아 540 을 준다) |
+
+두 앱이 **한 Supabase 프로젝트를 공유**하고 있었고, ingreed 를 싱가포르로 옮기며
+그 프로젝트를 지울 때 Knowledge DB 가 함께 사라졌다. Resume 버튼은 없다.
+
+**데이터 손실은 없다.** 옛 DB 의 마지막 활동이 7/31 이라 8/2 와 8/9 덤프는 바이트가
+같다(1,493,017). 8/9 덤프에 public 데이터 **1,583행**이 전부 들어 있다.
+
+### ⑵ 새 자리 — ingreed 프로젝트 안의 `today` 스키마
+
+프로젝트를 새로 세우지 않는다. 개인 앱은 트래픽이 없어 무활동 정지 대상이 되고
+이번에 실제로 그렇게 잃었다(keepalive cron 도 못 막았다). **ingreed 는 공개
+서비스라 깨어 있다** — 거기 얹히면 같이 산다. 실측으로 확인한 여유:
+
+| | |
+|---|---|
+| ingreed DB | **231MB / 500MB** · dead tuple 0 · 캐시 히트율 heap 99.74% |
+| 오늘의 나가 쓸 자리 | 1,583행 · 테이블 14 · 인덱스 10 → **10MB 안팎**(추정) |
+| 진짜 예산 | 용량이 아니라 `shared_buffers` **229MB**. 지금 DB 231MB 가 거기 딱 맞아 저하가 멎었다 |
+
+그래서 **ingreed NEXT.md 13번(소스 검색 커버리지 복구 · +63MB 추정)은 뒤로 미룬다** —
+캐시를 깨는 순간 그 대가를 오늘의 나가 같이 문다.
+
+### 코드·마이그레이션은 준비 끝 (브랜치 `feat/today-schema-on-ingreed-project`)
+
+| 한 것 | |
+|---|---|
+| `000_schema.sql` 신설 | 스키마·권한. **anon 에게 USAGE 조차 주지 않는다** — ingreed 의 "두 겹"과 같은 층수를 RLS 바깥에 하나 더 세운 것 |
+| `001`~`005`·`008`·`009` | 전 객체 `public` → `today`. 테이블 14 · 정책 14 |
+| `002` | `today.search_docs()` 로 옮기며 `search_path` 고정. SECURITY INVOKER 유지(DEFINER 로 바꾸면 RLS 를 넘는다) |
+| `006`·`007` | **적용 제외.** 006 을 007 이 전부 되돌리므로 건너뛰면 결과가 같다. 적용하면 ingreed 프로덕션에 pg_cron·pg_net 이 심긴다 |
+| 확장 | `vector` 제거 — 8/9 덤프 전수 확인 결과 **vector 컬럼이 하나도 없다**. `pg_trgm` 만 남긴다 |
+| 코드 | `lib/supabase/schema.ts` 의 `DB_SCHEMA` 한 곳. supabase-js 가 Accept-Profile 헤더로 보내므로 **`.from()` 61곳·`.rpc()` 을 고치지 않았다** |
+| `scripts/restore-into-today.sh` | 8/9 덤프 → `today` 적재 + **owner_id 재매핑** + 행수 판정 |
+| 백업 워크플로 | `--schema today` 로 좁히고 혼입 가드 2개(실동작 3케이스 확인). 안 고치면 ingreed 218MB 가 매주 커밋된다 |
+
+검증: `npm run test` **27 files / 274 tests** · `npx next build` 성공.
+
+### 👤 오너만 할 수 있는 것 — 이 순서대로
+
+1. **마이그레이션 적용 승인** — 대상은 ingreed **프로덕션** DB 다(안전 바닥: DB 스키마 = Ask-Before-Act)
+2. **PostgREST 노출 스키마에 `today` 추가** — 대시보드 → Settings → API → Exposed schemas.
+   안 하면 앱이 `PGRST106`. 이것만으로 데이터가 새지는 않는다(anon 은 USAGE 없음)
+3. **owner 계정 생성** (`scripts/create-owner-user.ts`) → 그 uuid 로 복원 실행
+4. **Vercel 환경변수 교체** — `NEXT_PUBLIC_SUPABASE_URL`·`ANON_KEY`·`SERVICE_ROLE_KEY`·`SUPABASE_DB_URL`
+   을 ingreed 프로젝트 것으로. `knowledge-backup` 리포의 `SUPABASE_DB_URL` 시크릿도 같이
+5. 그 뒤 `npm run test:regression` · `/diet`·'오늘' 화면 실렌더링 확인
+
+### ⑶ ingreed 쪽 부하는 그대로 남는다
+
+3일 유휴 뒤 `ingreed_search` 가 `57014 statement timeout` 을 오간다(8.5s→500 · 49.6s→200).
+우리 폴백이 견디는 것은 확인했다. **같은 인스턴스에 얹은 뒤에도 폴백을 걷지 않는다** —
+"ingreed 가 느리다 = 나도 느리다"가 되므로 오히려 더 필요하다.
 
 ## ingreed 제품 영양 연동 1단계 (2026-08-17~20, 커밋 `f18a50b`·`9f9617e`·`d3cc2c5`)
 

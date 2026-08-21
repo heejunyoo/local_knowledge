@@ -1,2 +1,5 @@
 .vercel
 .env*
+
+# supabase CLI 가 --help 실행만으로도 만드는 캐시. 리포에 들어갈 것이 아니다.
+supabase/.temp/
