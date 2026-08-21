@@ -913,6 +913,86 @@
         "retry": 1,
         "partial_ok": false
       }
+    },
+    {
+      "task_id": "day-grade-rpc-tests",
+      "kind": "implement",
+      "phase": "p4-pipe",
+      "model_hint": "sonnet",
+      "depends_on": [
+        "wire-day-grade-rpc"
+      ],
+      "objective": "day.grade 핸들러의 조립 로직을 테스트로 고정한다.",
+      "done_when": [
+        "closed 판정이 요청 날짜와 Asia/Seoul 오늘 비교로 갈리는지 검증한다",
+        "7일 창이 스냅샷 7개의 운동 분 합계인지 검증한다",
+        "metrics 가 여러 행일 때 sleepH=최신·steps=최댓값으로 집계되는지 검증한다",
+        "프로필 미완성이면 섭취 축이 absent_behavioral 인지 검증한다(D-Q)",
+        "포화지방은 kcal 이 0이면 그 하위항목만 빠지는지 검증한다"
+      ],
+      "acceptance": {
+        "command": "npm run test",
+        "expect_exit_code": 0,
+        "expect_contains": [
+          "passed"
+        ],
+        "cwd": "/Users/heejunyoo/IdeaProjects/KnowledgeApp/web"
+      },
+      "files_to_create": [
+        "web/tests/domain/day-grade-rpc.test.ts"
+      ],
+      "edit_points": [
+        {
+          "path": "web/tests/domain/day-grade-rpc.test.ts",
+          "symbol": "describe('day.grade')",
+          "what": "Supabase 클라이언트를 mock 해 day_grade 를 실제로 실행하고 위 다섯 가지를 검증한다."
+        }
+      ],
+      "reference_impl": {
+        "path": "web/tests/domain/diet-estimate-nutrition-rpc.test.ts",
+        "why": "이 리포가 RPC 핸들러를 테스트하는 방식이다. mock 구성과 파일 배치를 그대로 따른다"
+      },
+      "already_tried": [
+        {
+          "what": "wire-day-grade-rpc 완료 후 테스트 수 확인",
+          "result": "268 로 그대로다 — 핸들러 테스트가 추가되지 않았다. 이 리포는 diet-dashboard·diet-estimate-nutrition-rpc 로 핸들러를 테스트하는 관례가 있다"
+        }
+      ],
+      "context": {
+        "spec_ref": ".claude/specs/daily-grade/spec.md",
+        "facts": [
+          "day_grade 는 채점하지 않는다 — 조립만 한다. 테스트도 조립을 겨눈다",
+          "등급을 저장하지 않으므로 저장 검증은 없다"
+        ],
+        "files": [
+          "web/lib/rpc/handlers.ts",
+          "web/tests/domain/diet-estimate-nutrition-rpc.test.ts"
+        ],
+        "excluded": "채점 로직 자체는 day-grade.test.ts 가 이미 덮는다"
+      },
+      "constraints": {
+        "must": [
+          "기존 268개가 계속 통과해야 한다"
+        ],
+        "must_not": [
+          "핸들러 구현을 고치지 않는다 — 테스트만 쓴다",
+          "실 DB 에 붙지 않는다"
+        ]
+      },
+      "tools_allowed": [
+        "Read",
+        "Write",
+        "Edit",
+        "Bash",
+        "Grep"
+      ],
+      "budget": {
+        "max_turns": 35
+      },
+      "on_failure": {
+        "retry": 1,
+        "partial_ok": false
+      }
     }
   ]
 }

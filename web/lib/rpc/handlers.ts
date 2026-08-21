@@ -8,6 +8,8 @@
 import { createClient } from "@/lib/supabase/server";
 import * as dietRead from "@/lib/domain/diet-read";
 import * as nutritionCalc from "@/lib/domain/diet-nutrition-calc";
+import { gradeDay, attainmentScore, limitScore, type AxisInput, type DayGradeInput } from "@/lib/domain/day-grade";
+import { DEFAULT_THRESHOLDS, thresholdsFor, satFatLimitG } from "@/lib/domain/day-grade-thresholds";
 import { enrichWithLlm } from "@/lib/diet/nutrition-enrich";
 import { searchProducts, fetchProductDetail } from "@/lib/diet/ingreed-client";
 import { toServingNutrition, type IngreedProductNutrition, type IngreedNutrition } from "@/lib/domain/ingreed-nutrition";
@@ -609,6 +611,143 @@ export async function diet_plan() {
   }
   const plan = await computePlanProjection(profile);
   return dietRead.planProjectionDict(plan!);
+}
+
+/** null·undefined 를 걷어내고 있으면 합, 하나도 없으면 null(D-P — 그 하위항목만 결측). */
+function sumIfAnyPresent(values: (number | null | undefined)[]): number | null {
+  const present = values.filter((v): v is number => v != null);
+  if (present.length === 0) return null;
+  return present.reduce((s, v) => s + v, 0);
+}
+
+/** steps·activeEnergyKcal 최댓값 집계(D-M) — 누적 스냅샷이라 합치면 중복 집계된다. */
+function maxIfAnyPresent(values: (number | null | undefined)[]): number | null {
+  const present = values.filter((v): v is number => v != null);
+  if (present.length === 0) return null;
+  return Math.max(...present);
+}
+
+function average(values: number[]): number {
+  return values.reduce((s, v) => s + v, 0) / values.length;
+}
+
+function axisResultDict(a: { id: string; state: string; score: number | null; reason: string }) {
+  const d: Record<string, unknown> = { id: a.id, state: a.state, reason: a.reason };
+  if (a.score != null) d.score = a.score;
+  return d;
+}
+
+/**
+ * day.grade — D-F: 등급을 저장하지 않는다. 매번 계산해서 RULESET_VERSION 과 함께 돌려준다.
+ * 도메인(day-grade.ts)·임계값(day-grade-thresholds.ts)·읽기(diet.ts)를 여기서 조립만 한다 —
+ * 채점 로직 자체는 새로 만들지 않는다.
+ *
+ * closed 판정(D-K)과 7일 활동 창(D-J) 모음은 도메인이 아니라 이 핸들러의 책임이다.
+ */
+export async function day_grade(params: unknown) {
+  const p = (params ?? {}) as { date?: string };
+  const now = new Date();
+  const todayKey = dietRead.dayKey(now);
+  const requestedKey = typeof p.date === "string" && p.date.trim() ? p.date.trim() : todayKey;
+  // closed(D-K): 요청 날짜가 Asia/Seoul 기준 "오늘"이면 진행 중(false), 아니면 확정일(true).
+  // 시계 판정은 여기서만 한다 — gradeDay에는 이미 판정된 결과만 넘긴다.
+  const closed = requestedKey !== todayKey;
+
+  // fetchRecentDietSnapshots는 now로부터 ms를 빼서 날짜를 센다. 오늘 요청이면 실제
+  // now를 그대로 쓰고, 과거 날짜 요청이면 그 날짜의 Asia/Seoul 정오로 앵커를 고정한다
+  // (한국은 서머타임이 없어 정오 고정이 날짜 경계에서 항상 안전하다).
+  const anchor = closed ? new Date(`${requestedKey}T12:00:00+09:00`) : now;
+  // 활동 축의 7일 롤링 창(D-J) — today-first 7개 스냅샷을 그대로 합산 창으로 쓴다.
+  const snapshots = await fetchRecentDietSnapshots(6, anchor);
+  const todaySnap = snapshots[0];
+
+  const profile = await fetchDietProfile();
+  const profileComplete = profile != null && dietRead.profileIsComplete(profile);
+
+  // 회복(수면) — 그날 스냅샷의 최신 1건(D-M). 기존 latestSleepHours를 하루짜리
+  // 배열로 불러 재사용한다(새 집계 로직을 만들지 않는다).
+  const sleepH = dietRead.latestSleepHours([todaySnap]);
+  const recovery: AxisInput =
+    sleepH == null
+      ? { state: "absent_structural", score: null, reason: "수면 기록 없음" }
+      : {
+          state: "present",
+          // D-N: 하한형(7h 미만만 감점, 초과 감점 없음) — attainmentScore가 그 형태와
+          // 정확히 같다(하한 이상이면 100 상한, 미만이면 비율로 감점). 상한 감점을
+          // 넣지 않은 채로 rangeScore를 쓰려면 없는 fullPenaltyAt 값을 지어내야 해서
+          // 쓰지 않는다.
+          score: attainmentScore(sleepH, DEFAULT_THRESHOLDS.recovery.sleepMinHours),
+          reason: `수면 ${sleepH}h · 권장 ${DEFAULT_THRESHOLDS.recovery.sleepMinHours}h 이상`,
+        };
+
+  // 활동 — 최근 7일 누적 운동 분(D-J). 걸음·활동에너지는 009 적용 전까지 조사도
+  // 불확실해 채점에 넣지 않는다(D-G) — 하루치 참고값으로만 응답에 실어 보낸다.
+  const weeklyMinutes = snapshots.reduce((s, d) => s + d.workoutMinutes, 0);
+  const activityTarget = DEFAULT_THRESHOLDS.activity.weeklyModerateMinutesTarget;
+  const activity: AxisInput = {
+    state: "present",
+    score: attainmentScore(weeklyMinutes, activityTarget),
+    reason: `최근 7일 운동 ${weeklyMinutes}분 · 목표 ${activityTarget}분(WHO 2020 중강도, D-J)`,
+  };
+  const stepsToday = maxIfAnyPresent(todaySnap.metrics.map((m) => m.steps));
+  const activeEnergyToday = maxIfAnyPresent(todaySnap.metrics.map((m) => m.activeEnergyKcal));
+
+  // 섭취 — kcal·단백질(목표형) + 당·나트륨·포화지방(상한형). 프로필이 불완전하면
+  // 목표(kcal·단백질)를 계산할 수 없어 축 전체를 결측 처리한다(수동 축이라
+  // absent_behavioral — AXIS_SUPPLY.intake와 같은 자리).
+  let intake: AxisInput;
+  if (!profileComplete) {
+    intake = { state: "absent_behavioral", score: null, reason: "프로필 미완성 — 섭취 목표를 계산할 수 없음" };
+  } else if (todaySnap.meals.length === 0) {
+    intake = { state: "absent_behavioral", score: null, reason: "식사 기록 없음" };
+  } else {
+    const t = thresholdsFor(profile!);
+    const kcalScore = attainmentScore(todaySnap.kcal, t.intake.kcalTarget);
+    const proteinScore = attainmentScore(todaySnap.proteinG, t.intake.proteinGTarget);
+    const sugarTotal = sumIfAnyPresent(todaySnap.meals.map((m) => m.sugarG));
+    const sodiumTotal = sumIfAnyPresent(todaySnap.meals.map((m) => m.sodiumMg));
+    const satFatTotal = sumIfAnyPresent(todaySnap.meals.map((m) => m.satFatG));
+    // D-P: 포화지방 상한은 그날 kcal의 비율이다 — kcal이 없거나 0이면 이 하위항목만
+    // 결측으로 두고 0으로 나누지 않는다(satFatLimitG가 그 계약을 지킨다).
+    const satFatLimit = satFatLimitG(todaySnap.kcal, t);
+    const sugarScore = sugarTotal != null ? limitScore(sugarTotal, t.intake.sugarGLimit) : null;
+    const sodiumScore = sodiumTotal != null ? limitScore(sodiumTotal, t.intake.sodiumMgLimit) : null;
+    const satFatScore = satFatTotal != null && satFatLimit != null ? limitScore(satFatTotal, satFatLimit) : null;
+    const subScores = [kcalScore, proteinScore, sugarScore, sodiumScore, satFatScore].filter(
+      (s): s is number => s != null,
+    );
+    const reasonParts = [
+      `kcal ${todaySnap.kcal}/${t.intake.kcalTarget}`,
+      `단백질 ${todaySnap.proteinG}g/${t.intake.proteinGTarget}g`,
+    ];
+    if (sugarScore != null) reasonParts.push(`당 ${sugarTotal}g/${t.intake.sugarGLimit}g`);
+    if (sodiumScore != null) reasonParts.push(`나트륨 ${sodiumTotal}mg/${t.intake.sodiumMgLimit}mg`);
+    if (satFatScore != null) reasonParts.push(`포화지방 ${satFatTotal}g/${satFatLimit!.toFixed(1)}g`);
+    intake = { state: "present", score: average(subScores), reason: `섭취 ${reasonParts.join(" · ")}` };
+  }
+
+  const input: DayGradeInput = { recovery, activity, intake };
+  const result = gradeDay(input, DEFAULT_THRESHOLDS.cuts, { closed });
+
+  const activityInfo: Record<string, unknown> = {
+    weekly_minutes: weeklyMinutes,
+    weekly_target_minutes: activityTarget,
+  };
+  if (stepsToday != null) activityInfo.steps = stepsToday;
+  if (activeEnergyToday != null) activityInfo.active_energy_kcal = activeEnergyToday;
+
+  return {
+    date: requestedKey,
+    closed,
+    score: result.score,
+    grade: result.grade,
+    ratable: result.ratable,
+    confidence: result.confidence,
+    breakdown: result.breakdown.map(axisResultDict),
+    reasons: result.reasons,
+    ruleset_version: result.rulesetVersion,
+    activity: activityInfo,
+  };
 }
 
 export async function diet_coach(params: unknown) {

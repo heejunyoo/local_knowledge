@@ -26,6 +26,7 @@ const REGISTRY: Record<string, Handler> = {
   "diet.fasting.start": h.diet_fasting_start,
   "diet.fasting.end": h.diet_fasting_end,
   "diet.plan": h.diet_plan,
+  "day.grade": h.day_grade,
   "diet.coach": h.diet_coach,
   "diet.suggest": h.diet_suggest,
   "diet.goals.set": h.diet_goals_set,

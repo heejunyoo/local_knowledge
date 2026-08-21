@@ -29,6 +29,8 @@ interface MetricRow {
   weight_kg: number | null;
   sleep_h: number | null;
   context: string | null;
+  steps: number | null;
+  active_energy_kcal: number | null;
 }
 
 function toMeal(r: MealRow): dietRead.Meal {
@@ -50,7 +52,15 @@ function toWorkout(r: WorkoutRow): dietRead.Workout {
 }
 
 function toMetric(r: MetricRow): dietRead.Metric {
-  return { id: r.id, ts: r.ts, weightKg: r.weight_kg, sleepH: r.sleep_h, context: r.context };
+  return {
+    id: r.id,
+    ts: r.ts,
+    weightKg: r.weight_kg,
+    sleepH: r.sleep_h,
+    context: r.context,
+    steps: r.steps,
+    activeEnergyKcal: r.active_energy_kcal,
+  };
 }
 
 async function fetchWindow(supabase: SupabaseClient, sinceISO: string) {
@@ -61,7 +71,11 @@ async function fetchWindow(supabase: SupabaseClient, sinceISO: string) {
       .gte("ts", sinceISO)
       .order("ts"),
     supabase.from("diet_workout").select("id,ts,kind,minutes,intensity").gte("ts", sinceISO).order("ts"),
-    supabase.from("diet_metric").select("id,ts,weight_kg,sleep_h,context").gte("ts", sinceISO).order("ts"),
+    supabase
+      .from("diet_metric")
+      .select("id,ts,weight_kg,sleep_h,context,steps,active_energy_kcal")
+      .gte("ts", sinceISO)
+      .order("ts"),
   ]);
   if (mealsRes.error) throw mealsRes.error;
   if (workoutsRes.error) throw workoutsRes.error;
@@ -140,7 +154,10 @@ export async function fetchDietProfile(): Promise<dietRead.Profile | null> {
 /** 전체 이력, ts 오름차순 — weightForPlan()/healthReference()가 필요로 하는 전체 스캔용(개인 앱이라 무제한 조회 허용). */
 export async function fetchAllMetrics(): Promise<dietRead.Metric[]> {
   const supabase = await createClient();
-  const { data, error } = await supabase.from("diet_metric").select("id,ts,weight_kg,sleep_h,context").order("ts");
+  const { data, error } = await supabase
+    .from("diet_metric")
+    .select("id,ts,weight_kg,sleep_h,context,steps,active_energy_kcal")
+    .order("ts");
   if (error) throw error;
   return ((data ?? []) as MetricRow[]).map(toMetric);
 }
@@ -385,7 +402,7 @@ export async function insertMetric(params: {
   if (trimmedId) {
     const { data, error } = await supabase
       .from("diet_metric")
-      .select("id,ts,weight_kg,sleep_h,context")
+      .select("id,ts,weight_kg,sleep_h,context,steps,active_energy_kcal")
       .eq("id", id)
       .maybeSingle();
     if (error) throw error;
