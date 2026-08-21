@@ -80,16 +80,36 @@
 검증: `npm run test` 274 · `npm run test:regression` **6 files / 35 tests 통과**
 (실 DB · RLS · 골든 비교 포함) · `npx next build` 성공.
 
+### 배선까지 끝났다 (2026-08-21)
+
+| | 결과 |
+|---|---|
+| Vercel 프로덕션 env | 4종 교체 + **`INGREED_URL`·`INGREED_ANON_KEY` 신규**. 이 둘이 로컬·Vercel 어디에도 없어 **1단계 ingreed 연동이 실제로는 꺼져 있었다** |
+| 재배포 | `knowledge-faah52ast` Ready. 배포된 번들에서 새 프로젝트 URL 확인 · 옛 ref 잔존 0 |
+| `knowledge-backup` | 시크릿 교체 + 워크플로 전환. 첫 성공본 `knowledge-20260821.sql.gz` (473KB · today COPY 14블록 · ingreed 혼입 0) |
+
+**백업 워크플로는 세 번 실패하고서 고쳤다. 둘 다 내가 심은 것이다.**
+
+1. `--schema today` 를 준 **supabase CLI 덤프에 데이터가 하나도 담기지 않았다**(2회 재현).
+   `--dry-run` 으로 뽑은 pg_dump 인자는 정상이었고 같은 인자를 로컬 pg_dump 17.10 으로
+   실행하면 COPY 14블록이 나온다. `--exclude-schema ""` 유무도 갈라 봤지만 둘 다 14였다.
+   차이가 "CLI 가 도커 안에서 감싼다"뿐이라 **CLI 를 걷고 같은 이미지를 직접 부른다.**
+2. 그 다음 실행은 덤프가 정상(data 1,404,938바이트)인데도 실패했다. 가드가
+   `gunzip -c | grep -q` 였다 — grep -q 가 첫 매치에서 끝나면 gunzip 이 SIGPIPE 로
+   죽고 `pipefail` 이 파이프라인 실패로 잡는다. **매치가 있을 때만 실패하는 가드**였다.
+   압축 푼 것을 파일로 놓고 세는 쪽으로 바꿨다.
+
 ### 👤 남은 것 — 오너만 할 수 있다
 
-1. **Vercel 환경변수 4종 교체** — `NEXT_PUBLIC_SUPABASE_URL` · `NEXT_PUBLIC_SUPABASE_ANON_KEY` ·
-   `SUPABASE_SERVICE_ROLE_KEY` · `SUPABASE_DB_URL` 을 ingreed 프로젝트 것으로.
-   **이걸 하기 전까지 `hj-knowledge.vercel.app` 은 죽은 프로젝트를 계속 가리킨다.**
-   로컬 `.env.local` 은 이미 교체했다
-2. **`knowledge-backup` 리포의 `SUPABASE_DB_URL` 시크릿** 도 같이 교체 — 안 하면
-   다음 일요일 백업이 계속 실패한다. 워크플로는 이미 `--schema today` 로 좁혀 뒀다
-3. **로그인 비밀번호 설정** — `npx tsx scripts/set-password.ts` (계정은 만들어 뒀다)
-4. 그 뒤 `/diet`·'오늘' 화면 실렌더링 확인
+1. **로그인** — 비밀번호가 아직 없다. 둘 중 하나
+   ```bash
+   cd web && npx tsx scripts/set-password.ts            # 직접 정한다(입력은 가려진다)
+   cd web && npx tsx scripts/generate-magic-link.ts naheejun87@gmail.com https://hj-knowledge.vercel.app
+   ```
+2. **`/diet`·'오늘' 화면 실렌더링 확인** — 서버 라우트가 새 DB 를 보는지는 로그인 뒤에야
+   눈으로 확인된다. 클라이언트 번들이 새 프로젝트를 가리키는 것까지는 확인했다
+3. **ingreed 제품 검색 왕복 재확인** — 위 env 두 개가 이제야 붙었다. `/diet` 에서
+   "김치사발면" → 80g(용기) → 354kcal 이 8/20 실측값이다
 
 ### ⑶ ingreed 쪽 부하는 그대로 남는다
 
