@@ -1,0 +1,16 @@
+.title {
+  font-size: var(--toss-font-title-size);
+  font-weight: var(--toss-font-title-weight);
+  color: var(--toss-grey-900);
+  margin: var(--toss-space-6) 0 var(--toss-space-1);
+}
+
+.subtitle {
+  font-size: var(--toss-font-body-size);
+  color: var(--toss-grey-500);
+  margin: 0 0 var(--toss-space-5);
+}
+
+.section {
+  margin-bottom: var(--toss-space-6);
+}

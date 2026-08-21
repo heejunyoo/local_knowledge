@@ -5,12 +5,9 @@ import { usePathname } from "next/navigation";
 import styles from "./BottomNav.module.css";
 
 const TABS = [
-  { href: "/", label: "홈", icon: "🏠" },
-  { href: "/chat", label: "채팅", icon: "💬" },
-  { href: "/search", label: "검색", icon: "🔍" },
-  { href: "/diet", label: "식단", icon: "🍽️" },
-  { href: "/inbox", label: "인박스", icon: "📥" },
-  { href: "/settings", label: "설정", icon: "⚙️" },
+  { href: "/", label: "오늘", icon: "🏠" },
+  { href: "/review", label: "돌아보기", icon: "📅" },
+  { href: "/ask", label: "묻기", icon: "💬" },
 ] as const;
 
 export function BottomNav() {
