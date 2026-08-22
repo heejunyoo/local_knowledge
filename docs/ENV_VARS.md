@@ -10,6 +10,7 @@
 | Vercel 프로젝트 | `luckyhyun/knowledge-web` (scope `luckyhyun` = 오너 개인 계정) |
 | Root Directory | `web` (API로 명시 설정, `sourceFilesOutsideRootDirectory: true`로 리포 루트의 `docs/`·`config/` 정적 import 포함) |
 | 프로덕션 URL | `https://web-rho-lovat-34.vercel.app`(alias) — 원 배포 URL은 `https://<deployment-id>-luckyhyun.vercel.app` 패턴 |
+| 함수 리전 | **`sin1`(싱가포르)** — `web/vercel.json` 의 `regions`. Supabase 가 `ap-southeast-1` 이라 함수를 DB 옆에 붙인 것이다. 기본값 `iad1`(버지니아)로 두면 요청마다 서울→버지니아→싱가포르를 왕복해 DB 왕복 한 번이 ~230ms 가 된다(2026-08-22 확인). 확인법: `curl -D- <url>/api/cron/keepalive` 의 `x-vercel-id` 가 `icn1::sin1::…` 인지 본다. Hobby 는 단일 리전만 허용한다 |
 | 로컬 CLI 링크 | 리포 루트(`KnowledgeApp/.vercel/`)에서 배포할 것 — `web/` 안에서 `vercel --prod`를 실행하면 리포 루트 밖(`docs/`, `config/`) 파일이 업로드에서 빠져 빌드가 깨진다(아래 "Turbopack/Vercel 배포 함정" 참고) |
 
 ### ★ Turbopack/Vercel 배포 함정 — 리포 루트 정적 import는 반드시 리포 루트에서 배포할 것
