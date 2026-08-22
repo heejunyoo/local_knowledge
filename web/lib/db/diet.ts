@@ -479,3 +479,54 @@ export async function endActiveFastIfDue(reason: string, at: Date): Promise<diet
 export async function endFast(reason = "manual", at: Date = new Date()): Promise<dietRead.FastingSession | null> {
   return endActiveFastIfDue(reason, at);
 }
+
+/**
+ * 채널별 마지막 유입 시각 — 유입이 살아 있는지 판정하는 데만 쓴다
+ * (lib/domain/health-freshness.ts).
+ *
+ * 값이 있는 행만 센다. `diet_metric` 한 행에 수면만 있고 걸음수는 null 인 경우가
+ * 정상이라(단축어가 항목별로 따로 POST 한다) 행의 존재가 아니라 **칼럼의 값**을
+ * 기준으로 봐야 한다. 그래서 채널마다 `.not(col, "is", null)` 로 따로 묻는다.
+ *
+ * workout 은 값 칼럼이 아니라 행 자체가 유입 단위라 최신 1건이면 된다.
+ */
+export async function fetchHealthLastSeen(): Promise<{ id: string; lastTs: string | null }[]> {
+  const supabase = await createClient();
+
+  async function latestMetricTs(column: string): Promise<string | null> {
+    const { data, error } = await supabase
+      .from("diet_metric")
+      .select("ts")
+      .not(column, "is", null)
+      .order("ts", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (error) throw error;
+    return (data as { ts: string } | null)?.ts ?? null;
+  }
+
+  const [sleep, steps, activeEnergy, weight, workout] = await Promise.all([
+    latestMetricTs("sleep_h"),
+    latestMetricTs("steps"),
+    latestMetricTs("active_energy_kcal"),
+    latestMetricTs("weight_kg"),
+    (async () => {
+      const { data, error } = await supabase
+        .from("diet_workout")
+        .select("ts")
+        .order("ts", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (error) throw error;
+      return (data as { ts: string } | null)?.ts ?? null;
+    })(),
+  ]);
+
+  return [
+    { id: "sleep", lastTs: sleep },
+    { id: "steps", lastTs: steps },
+    { id: "active_energy", lastTs: activeEnergy },
+    { id: "weight", lastTs: weight },
+    { id: "workout", lastTs: workout },
+  ];
+}

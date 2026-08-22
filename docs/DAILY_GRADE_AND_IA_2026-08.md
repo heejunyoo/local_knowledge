@@ -198,6 +198,15 @@ iOS 단축어가 HealthKit 에서 읽어 Bearer 로 POST 하는 구조라 **우�
 | 하루 등급 코드 존재 여부 | **0줄.** `weekReview` 는 합계, `dayBarFrom` 은 카운트 |
 | `/api/health/ingest` 수용 필드 | `workout(kind,minutes)` · `metric(weight_kg, sleep_h)` 뿐 |
 | 건강 데이터 유입 경로 | iOS 단축어 → Bearer(`INGEST_API_TOKEN`) → POST. 네이티브 HealthKit 리더는 리포에 없다(`HKQuantityTypeIdentifier` 0건) |
+
+> **정정(2026-08-22)**: 위 "`HKQuantityTypeIdentifier` 0건 → 네이티브 리더 없음" 판정은 **근거가 틀렸다.**
+> 그 리터럴이 나오는 파일은 이 문서를 포함한 문서 4개뿐이고, 실제 코드는
+> `HKQuantityType.quantityType(forIdentifier: .bodyMass)` 형태라 그 grep 에 걸리지 않는다.
+> 네이티브 리더는 `Apps/KnowledgeMobile/Sources/HealthKitBridge.swift` 에 **있다**(운동·수면·체중, pull-on-open).
+> 다만 그 경로의 목적지는 클라우드가 아니라 Tailscale 너머의 맥이고 Mac 앱은 쓰기 동결(P0-8)이라,
+> **"웹으로 들어오는 경로는 단축어뿐"이라는 결론 자체는 유효하다.** 근거만 교체한다.
+> 설정 절차는 `docs/HEALTH_INGEST_SHORTCUT.md`.
+
 | 현 탭 구성 | 홈 · 채팅 · 검색 · 식단 · 인박스 · 설정 (6개) |
 | 개인 권장치 함수 | `bmr`·`tdee`·`recommendedKcal`·`recommendedProteinG`·`recommendedWeeklyWorkouts` 존재 |
 | ingreed 재사용 가능 구조 | `ratable`·`confidence`·`mode`·축별 `breakdown`·`reasons` |

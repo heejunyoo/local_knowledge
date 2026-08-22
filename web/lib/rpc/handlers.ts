@@ -14,6 +14,7 @@ import { enrichWithLlm } from "@/lib/diet/nutrition-enrich";
 import { searchProducts, fetchProductDetail } from "@/lib/diet/ingreed-client";
 import { toServingNutrition, type IngreedProductNutrition, type IngreedNutrition } from "@/lib/domain/ingreed-nutrition";
 import * as dietDb from "@/lib/db/diet";
+import * as healthFreshness from "@/lib/domain/health-freshness";
 import { fetchDietGoals, fetchDietProfile, fetchRecentDietSnapshots } from "@/lib/db/diet";
 import {
   fetchInboxOpenCount,
@@ -461,6 +462,22 @@ export async function inbox_promote(params: unknown) {
  */
 export async function health_sync_status() {
   return { ok: true, mirror: "diet", pull_mode: "app_open", mac_healthkit: false };
+}
+
+/**
+ * 유입이 살아 있는지 — `health.sync_status` 와 달리 **실제 DB 를 본다.**
+ *
+ * 별도 메서드로 나눈 이유: `health.sync_status` 는 원본 Swift 와 diff 0 을 지키는
+ * 골든 계약(`tests/golden/read/health.sync_status.json`)이라 필드를 늘리면 그 계약이
+ * 깨진다. 그리고 그 응답의 `pull_mode: "app_open"` 은 지금 사실이 아니다 — 아이폰
+ * 앱을 열 때 동기화하던 경로(Apps/KnowledgeMobile)는 맥을 향하고 있고 Mac 앱은 쓰기
+ * 동결(P0-8) 상태다. 웹으로 들어오는 경로는 iOS 단축어뿐이다
+ * (docs/HEALTH_INGEST_SHORTCUT.md). 그 고정값은 원본 재현으로 남겨두고, 진짜 상태는
+ * 이 메서드가 답한다.
+ */
+export async function health_freshness() {
+  const lastSeen = (await dietDb.fetchHealthLastSeen()) as healthFreshness.ChannelLastSeen[];
+  return healthFreshness.healthFreshness(lastSeen);
 }
 
 // ---------------------------------------------------------------------------

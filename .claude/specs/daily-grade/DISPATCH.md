@@ -172,7 +172,7 @@
   "already_tried": [
     {
       "what": "리포에 네이티브 HealthKit 리더가 있는지 확인",
-      "result": "HKQuantityTypeIdentifier 0건. iOS 단축어 → Bearer POST 가 유일한 유입 경로다"
+      "result": "HKQuantityTypeIdentifier 0건. iOS 단축어 → Bearer POST 가 유일한 유입 경로다 [정정 2026-08-22: 이 grep 은 빗나갔다 — 실제 코드는 HKQuantityType.quantityType(forIdentifier:) 형태이고 네이티브 리더는 Apps/KnowledgeMobile/Sources/HealthKitBridge.swift 에 있다. 다만 목적지가 맥(Tailscale)이고 Mac 앱은 쓰기 동결이라 웹 유입 경로가 단축어뿐이라는 결론은 유효하다. docs/HEALTH_INGEST_SHORTCUT.md 참고]"
     },
     {
       "what": "앞선 기준 조사 태스크",

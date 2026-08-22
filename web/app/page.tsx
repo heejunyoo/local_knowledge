@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { assistant_today, day_grade } from "@/lib/rpc/handlers";
+import { assistant_today, day_grade, health_freshness } from "@/lib/rpc/handlers";
+import { humanizeAge, type HealthFreshness } from "@/lib/domain/health-freshness";
 import { Card, ListRow, Badge } from "@/components/ui";
 import styles from "./page.module.css";
 
@@ -47,9 +48,10 @@ const AXIS_LABEL: Record<string, string> = {
 const LOW_CONFIDENCE = 0.5;
 
 export default async function HubPage() {
-  const [today, grade] = await Promise.all([
+  const [today, grade, freshness] = await Promise.all([
     assistant_today() as unknown as Promise<AssistantToday>,
     day_grade({}) as unknown as Promise<DayGradeResult>,
+    health_freshness() as Promise<HealthFreshness>,
   ]);
   const primaryAction = today.next_actions[0];
   const primaryHref = primaryAction ? (ACTION_HREF[primaryAction.kind] ?? "/diet") : "/diet";
@@ -62,6 +64,20 @@ export default async function HubPage() {
         </h1>
         <p className={styles.greetingBody}>몸·지식·다음 할 일을 한곳에서 이어가요.</p>
       </div>
+
+      {freshness.state !== "fresh" ? (
+        <div className={styles.section}>
+          <div className={styles.staleBanner}>
+            <p className={styles.staleBannerText}>{freshness.message}</p>
+            <p className={styles.staleBannerSub}>
+              {freshness.channels
+                .filter((c) => c.monitored)
+                .map((c) => `${c.label} ${humanizeAge(c.ageHours)}`)
+                .join(" · ")}
+            </p>
+          </div>
+        </div>
+      ) : null}
 
       <div className={styles.section}>
         <p className={styles.sectionLabel}>오늘의 등급</p>

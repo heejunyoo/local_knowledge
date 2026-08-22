@@ -9,6 +9,35 @@
 | 미해결 이슈 | `docs/REFACTOR_BACKLOG.md` |
 | 작업 브랜치 | `refactor/web-p0` |
 
+## ⚠ 건강 데이터 유입이 41일간 끊겨 있었다 (2026-08-22, 조치 완료)
+
+**증상**: 라이브 DB 조회 결과 `diet_metric` 의 마지막 건강 샘플이 **2026-07-12**.
+`steps`·`active_energy_kcal` 은 마이그레이션 009 로 칼럼이 생긴 뒤 **유입 0건**.
+지금 DB 의 `intensity: "healthkit"` 행은 전부 `scripts/migrate-from-sqlite.ts` 로 옮겨온
+과거 데이터이고, `/api/health/ingest` 로 실제 유입된 흔적은 없다.
+
+**원인**: 경로 교체가 완결되지 않았다. 예전 유입은 아이폰 앱(`Apps/KnowledgeMobile`,
+HealthKitBridge → pull-on-open → Tailscale → 맥)이었고 웹 이관 후 그 자리를 채울
+경로(iOS 단축어)를 **아무도 실제로 설정하지 않았다.** 오너에게 보고된 기록도 없다.
+
+**부수 발견 — 문서 4곳의 근거가 틀렸다**: "`HKQuantityTypeIdentifier` 0건 → 네이티브
+리더 없음" 판정은 grep 키워드가 실제 코드(`HKQuantityType.quantityType(forIdentifier:)`)를
+못 잡은 것이다. 리더는 `HealthKitBridge.swift` 에 있다. 결론("웹 유입은 단축어뿐")은
+목적지가 맥이라는 이유로 유효해서 근거만 교체했다 —
+`DAILY_GRADE_AND_IA_2026-08.md` · `HEALTHKIT_SHORTCUTS_2026-08.md` ·
+`.claude/specs/daily-grade/{spec.md,plan.json,DISPATCH.md}` 에 정정 주석.
+
+**조치**:
+
+| | |
+|---|---|
+| 유입 절차 | `docs/HEALTH_INGEST_SHORTCUT.md` 신설 — 단축어 2개 + 시각 자동화(하루 2회, 「실행 전 확인」 끔). **오너 실기기 작업 대기** |
+| 끊김 감지 | `web/lib/domain/health-freshness.ts` — 채널별 마지막 유입으로 fresh/stale(36h)/broken(7d)/never 판정. 감시 대상은 수면·걸음수만(체중·운동은 behavioral, 활동에너지는 단축어 지원 불확실) |
+| RPC | `health.freshness` 신설. 기존 `health.sync_status` 는 골든 계약(diff 0)이라 **건드리지 않았다** — 그 응답의 `pull_mode: "app_open"` 은 이미 사실이 아니지만 원본 재현으로 남긴다 |
+| 화면 | 홈 최상단 배너(`app/page.tsx`) — `fresh` 가 아닐 때만, 등급 카드보다 위. 재정규화(D-A) 때문에 유입이 죽어도 등급은 그럴듯하게 나오므로 등급보다 먼저 보여야 한다 |
+| 검증 | `npm run test` 28 files / **285 tests** 통과(신규 `tests/domain/health-freshness.test.ts` 11개 포함) · `npx next build` Compiled successfully · 채널별 last-seen 쿼리는 라이브 DB 에 직접 질의해 의미 확인 |
+| 미검증 | **배너의 실제 렌더링**. 홈은 세션 뒤라 오너 로그인으로만 확인 가능 |
+
 ## ⚠ 먼저 읽을 것 — DB 이전 진행 중 (2026-08-21)
 
 ### ⑴ 옛 Knowledge 프로젝트는 정지가 아니라 **삭제**됐다

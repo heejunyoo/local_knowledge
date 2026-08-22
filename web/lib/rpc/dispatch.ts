@@ -52,6 +52,7 @@ const REGISTRY: Record<string, Handler> = {
   "inbox.create": h.inbox_create,
   "inbox.promote": h.inbox_promote,
   "health.sync_status": h.health_sync_status,
+  "health.freshness": h.health_freshness,
 };
 
 export interface RpcError {

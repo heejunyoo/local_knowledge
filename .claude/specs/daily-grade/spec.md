@@ -318,4 +318,13 @@ D-A 대로면 자동 축 결측은 `absent_structural` 이어야 하지만, 그�
 | 하루 등급 코드 존재 확인 | 0건 |
 | `/api/health/ingest` 수용 필드 확인 | `workout(kind,minutes)` · `metric(weight_kg, sleep_h)` |
 | HealthKit 네이티브 리더 확인 | `HKQuantityTypeIdentifier` 0건 — 단축어 경유가 유일 |
+
+> **정정(2026-08-22)**: 위 "`HKQuantityTypeIdentifier` 0건 → 네이티브 리더 없음" 판정은 **근거가 틀렸다.**
+> 그 리터럴이 나오는 파일은 이 문서를 포함한 문서 4개뿐이고, 실제 코드는
+> `HKQuantityType.quantityType(forIdentifier: .bodyMass)` 형태라 그 grep 에 걸리지 않는다.
+> 네이티브 리더는 `Apps/KnowledgeMobile/Sources/HealthKitBridge.swift` 에 **있다**(운동·수면·체중, pull-on-open).
+> 다만 그 경로의 목적지는 클라우드가 아니라 Tailscale 너머의 맥이고 Mac 앱은 쓰기 동결(P0-8)이라,
+> **"웹으로 들어오는 경로는 단축어뿐"이라는 결론 자체는 유효하다.** 근거만 교체한다.
+> 설정 절차는 `docs/HEALTH_INGEST_SHORTCUT.md`.
+
 | 탭 구성 확인 | 6개 (`BottomNav.tsx`) |

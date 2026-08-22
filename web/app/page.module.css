@@ -172,3 +172,28 @@
   flex-direction: column;
   padding: 0 var(--toss-space-4);
 }
+
+/* 건강 데이터 유입이 끊겼을 때만 뜬다(lib/domain/health-freshness.ts).
+   등급 카드보다 위에 둔다 — 유입이 죽은 상태에서 나온 등급은 재정규화(D-A)로
+   계속 그럴듯하게 나오기 때문에, 등급을 읽기 전에 먼저 보여야 한다. */
+.staleBanner {
+  /* Badge 의 danger(red-500 on red-50)와 같은 토큰 조합. 다크모드는 theme.css 가
+     red-50 을 덮으므로 여기서 따로 다루지 않는다. */
+  background: var(--toss-red-50);
+  border-radius: var(--toss-radius-card);
+  padding: var(--toss-space-4) var(--toss-space-5);
+}
+
+.staleBannerText {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--toss-red-500);
+  margin: 0;
+  line-height: 1.45;
+}
+
+.staleBannerSub {
+  font-size: 13px;
+  color: var(--toss-grey-700);
+  margin: var(--toss-space-2) 0 0;
+}
