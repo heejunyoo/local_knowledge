@@ -107,7 +107,7 @@ export default function DietPage() {
   const [toast, setToast] = useState<string | null>(null);
   const [selectedSlot, setSelectedSlot] = useState<Slot>("점심");
   const [quickLine, setQuickLine] = useState("");
-  const [panel, setPanel] = useState<"log" | "week" | "goals" | "profile" | "product" | null>(null);
+  const [panel, setPanel] = useState<"log" | "week" | "goals" | "profile" | "product" | "fasting" | null>(null);
   const [weightKg, setWeightKg] = useState("");
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -301,108 +301,29 @@ export default function DietPage() {
         </button>
       </div>
 
-      <div className={styles.section}>
-        {dash.plan ? (
-          <Card>
-            <p className={styles.planEta}>{dash.plan.eta_text}</p>
-            <p className={styles.planMeta}>
-              기초대사 {Math.round(dash.plan.bmr)} · 유지 {Math.round(dash.plan.tdee)}kcal · 권장 섭취{" "}
-              {Math.round(dash.plan.recommended_kcal)}kcal · 단백질 {Math.round(dash.plan.recommended_protein_g)}g
-            </p>
-            <p className={styles.planPace}>{dash.plan.pace_text}</p>
-            <p className={styles.planNote}>규칙 계산 (Mifflin + 적자) · AI API 미사용</p>
-          </Card>
-        ) : (
-          <button type="button" className={styles.ctaCard} onClick={() => setPanel("profile")}>
-            <span className={styles.ctaIcon} aria-hidden="true">
-              👤
-            </span>
-            <span style={{ flex: 1 }}>
-              <p className={styles.ctaTitle}>건강 정보 입력하기</p>
-              <p className={styles.ctaBody}>키·몸무게·나이·성별·목표 체중만 넣으면 칼로리·단백질·도달 시점을 알아서 잡아 줘요.</p>
+      {fasting.active ? (
+        <div className={styles.section}>
+          <button type="button" className={styles.fastingBanner} onClick={() => setPanel("fasting")}>
+            <span className={styles.fastingBannerTexts}>
+              <span className={styles.fastingBannerLabel}>
+                {fasting.goal_met ? "✓ " : ""}
+                {fasting.label}
+              </span>
+              {typeof fasting.progress === "number" ? (
+                <span className={styles.fastingBannerTrack}>
+                  <span
+                    className={`${styles.fastingBannerFill} ${fasting.goal_met ? styles.progressFillGoalMet : ""}`}
+                    style={{ width: `${Math.min(1, Math.max(0, fasting.progress)) * 100}%` }}
+                  />
+                </span>
+              ) : null}
             </span>
             <span className={styles.chevron} aria-hidden="true">
               ›
             </span>
           </button>
-        )}
-      </div>
-
-      <div className={styles.section}>
-        <Card>
-          <p className={styles.sectionLabel}>간헐적 단식</p>
-          {fasting.goal_met ? <p className={styles.fastingGoalBadge}>✓ 목표 달성</p> : null}
-          <p className={styles.fastingLabel}>{fasting.label}</p>
-          {fasting.preview_line ? <p className={styles.fastingPreview}>{fasting.preview_line}</p> : null}
-          {!fasting.active ? (
-            <>
-              <p className={styles.smallNote}>공복 시간</p>
-              <div className={styles.chipRow}>
-                {fasting.hour_presets.map((h) => (
-                  <button
-                    key={h}
-                    type="button"
-                    className={`${styles.chip} ${Math.trunc(fasting.target_hours) === h ? styles.chipActive : ""}`}
-                    onClick={() => pickFastingHours(h)}
-                  >
-                    {h}시간
-                  </button>
-                ))}
-              </div>
-            </>
-          ) : null}
-          {fasting.hint ? <p className={styles.fastingHint}>{fasting.hint}</p> : null}
-          {fasting.active && typeof fasting.progress === "number" ? (
-            <div className={styles.progressTrack}>
-              <div
-                className={`${styles.progressFill} ${fasting.goal_met ? styles.progressFillGoalMet : ""}`}
-                style={{ width: `${Math.min(1, Math.max(0, fasting.progress)) * 100}%` }}
-              />
-            </div>
-          ) : null}
-          <div className={styles.refLines}>
-            <p className={styles.smallNote}>참고 정보 (없어도 됨)</p>
-            {fasting.health_reference.lines.length === 0 ? (
-              <p className={styles.refLine}>건강·식사 참고 없음. 직접 기록만으로 동작해요.</p>
-            ) : (
-              fasting.health_reference.lines.slice(0, 8).map((line, i) => (
-                <p key={i} className={styles.refLine}>
-                  · {line}
-                </p>
-              ))
-            )}
-          </div>
-          {fasting.active ? (
-            <button type="button" className={styles.linkAction} onClick={endFast}>
-              단식 종료
-            </button>
-          ) : (
-            <button type="button" className={styles.linkAction} onClick={() => startFast(fasting.target_hours)}>
-              {Math.trunc(fasting.target_hours)}시간 단식 시작
-            </button>
-          )}
-          <p className={styles.smallNote}>첫 식사 기록 시 단식이 자동 종료돼요.</p>
-        </Card>
-      </div>
-
-      <div className={styles.section}>
-        <Card>
-          <p className={styles.sectionLabel}>아침 공복 체중</p>
-          <p className={styles.smallNote}>{fasting.weight_prompt ?? "매일 아침 공복에 재면 목표 도달 예상이 안정적이에요."}</p>
-          <div className={styles.inlineRow}>
-            <input
-              className={styles.weightInput}
-              type="number"
-              placeholder="kg"
-              value={weightKg}
-              onChange={(e) => setWeightKg(e.target.value)}
-            />
-            <button type="button" className={styles.linkAction} disabled={!weightKg} onClick={saveMorningWeight}>
-              공복 체중 저장
-            </button>
-          </div>
-        </Card>
-      </div>
+        </div>
+      ) : null}
 
       <div className={styles.section}>
         <Card>
@@ -547,7 +468,37 @@ export default function DietPage() {
       </div>
 
       <div className={styles.section}>
+        {dash.plan ? (
+          <Card>
+            <p className={styles.planEta}>{dash.plan.eta_text}</p>
+            <p className={styles.planMeta}>
+              기초대사 {Math.round(dash.plan.bmr)} · 유지 {Math.round(dash.plan.tdee)}kcal · 권장 섭취{" "}
+              {Math.round(dash.plan.recommended_kcal)}kcal · 단백질 {Math.round(dash.plan.recommended_protein_g)}g
+            </p>
+            <p className={styles.planPace}>{dash.plan.pace_text}</p>
+            <p className={styles.planNote}>규칙 계산 (Mifflin + 적자) · AI API 미사용</p>
+          </Card>
+        ) : (
+          <button type="button" className={styles.ctaCard} onClick={() => setPanel("profile")}>
+            <span className={styles.ctaIcon} aria-hidden="true">
+              👤
+            </span>
+            <span style={{ flex: 1 }}>
+              <p className={styles.ctaTitle}>건강 정보 입력하기</p>
+              <p className={styles.ctaBody}>키·몸무게·나이·성별·목표 체중만 넣으면 칼로리·단백질·도달 시점을 알아서 잡아 줘요.</p>
+            </span>
+            <span className={styles.chevron} aria-hidden="true">
+              ›
+            </span>
+          </button>
+        )}
+      </div>
+
+      <div className={styles.section}>
         <div className={styles.secondaryRow}>
+          <button type="button" className={styles.secondaryButton} onClick={() => setPanel("fasting")}>
+            단식 · 공복 체중
+          </button>
           <button type="button" className={styles.secondaryButton} onClick={() => setPanel("week")}>
             주간 보기
           </button>
@@ -571,6 +522,79 @@ export default function DietPage() {
             ✕
           </button>
         </div>
+      ) : null}
+
+      {panel === "fasting" ? (
+        <Panel title="단식 · 공복 체중" onClose={() => setPanel(null)}>
+          {fasting.goal_met ? <p className={styles.fastingGoalBadge}>✓ 목표 달성</p> : null}
+          <p className={styles.fastingLabel}>{fasting.label}</p>
+          {fasting.preview_line ? <p className={styles.fastingPreview}>{fasting.preview_line}</p> : null}
+          {!fasting.active ? (
+            <>
+              <p className={styles.smallNote}>공복 시간</p>
+              <div className={styles.chipRow}>
+                {fasting.hour_presets.map((h) => (
+                  <button
+                    key={h}
+                    type="button"
+                    className={`${styles.chip} ${Math.trunc(fasting.target_hours) === h ? styles.chipActive : ""}`}
+                    onClick={() => pickFastingHours(h)}
+                  >
+                    {h}시간
+                  </button>
+                ))}
+              </div>
+            </>
+          ) : null}
+          {fasting.hint ? <p className={styles.fastingHint}>{fasting.hint}</p> : null}
+          {fasting.active && typeof fasting.progress === "number" ? (
+            <div className={styles.progressTrack}>
+              <div
+                className={`${styles.progressFill} ${fasting.goal_met ? styles.progressFillGoalMet : ""}`}
+                style={{ width: `${Math.min(1, Math.max(0, fasting.progress)) * 100}%` }}
+              />
+            </div>
+          ) : null}
+          <div className={styles.refLines}>
+            <p className={styles.smallNote}>참고 정보 (없어도 됨)</p>
+            {fasting.health_reference.lines.length === 0 ? (
+              <p className={styles.refLine}>건강·식사 참고 없음. 직접 기록만으로 동작해요.</p>
+            ) : (
+              fasting.health_reference.lines.slice(0, 8).map((line, i) => (
+                <p key={i} className={styles.refLine}>
+                  · {line}
+                </p>
+              ))
+            )}
+          </div>
+          {fasting.active ? (
+            <button type="button" className={styles.linkAction} onClick={endFast}>
+              단식 종료
+            </button>
+          ) : (
+            <button type="button" className={styles.linkAction} onClick={() => startFast(fasting.target_hours)}>
+              {Math.trunc(fasting.target_hours)}시간 단식 시작
+            </button>
+          )}
+          <p className={styles.smallNote}>첫 식사 기록 시 단식이 자동 종료돼요.</p>
+
+          <div className={styles.formSection}>
+            <p className={styles.formSectionTitle}>아침 공복 체중</p>
+            <p className={styles.smallNote}>{fasting.weight_prompt ?? "매일 아침 공복에 재면 목표 도달 예상이 안정적이에요."}</p>
+            <div className={styles.inlineRow}>
+              <input
+                className={styles.weightInput}
+                type="number"
+                placeholder="kg"
+                value={weightKg}
+                onChange={(e) => setWeightKg(e.target.value)}
+              />
+              <button type="button" className={styles.linkAction} disabled={!weightKg} onClick={saveMorningWeight}>
+                공복 체중 저장
+              </button>
+            </div>
+          </div>
+        </Panel>
       ) : null}
 
       {panel === "week" ? (

@@ -816,3 +816,49 @@
   font-size: 15px;
   font-family: var(--toss-font-family);
 }
+
+/* 진행 중인 단식만 상단에 한 줄로 남긴다. 카드 본체(공복 시간 칩·참고 정보·
+   공복 체중 입력)는 「단식 · 공복 체중」 패널로 옮겼다 — 식단 입력이 화면
+   맨 위에 오게 하려는 것이고, 「내 정보」·「목표」가 이미 쓰던 패턴이다.
+   button 의 콘텐츠 모델은 phrasing content 라 내부는 전부 span 이고,
+   .progressTrack/.progressFill 대신 display:block 을 준 전용 클래스를 쓴다. */
+.fastingBanner {
+  display: flex;
+  align-items: center;
+  gap: var(--toss-space-3);
+  width: 100%;
+  border: none;
+  text-align: left;
+  border-radius: var(--toss-radius-card);
+  background: var(--toss-white);
+  padding: var(--toss-space-4);
+  cursor: pointer;
+}
+
+.fastingBannerTexts {
+  display: block;
+  flex: 1;
+  min-width: 0;
+}
+
+.fastingBannerLabel {
+  display: block;
+  font-size: var(--toss-font-body-size);
+  font-weight: 600;
+  color: var(--toss-grey-900);
+}
+
+.fastingBannerTrack {
+  display: block;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--toss-grey-200);
+  overflow: hidden;
+  margin: var(--toss-space-2) 0 0;
+}
+
+.fastingBannerFill {
+  display: block;
+  height: 100%;
+  background: var(--toss-blue-500);
+}
